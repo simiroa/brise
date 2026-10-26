@@ -1,0 +1,17 @@
+{
+  "bar_label": "Actions sur la sélection",
+  "n_selected": "{{n}} sélectionné(s)",
+  "progress": "{{done}} / {{total}} traité(s)…",
+  "clear": "Effacer la sélection",
+  "add_tags": "Ajouter des étiquettes",
+  "add_tags_hint": "Séparez-les par des virgules. Les étiquettes existantes sont conservées.",
+  "add_tags_placeholder": "voyage, 2024",
+  "delete": "Supprimer",
+  "ai_organize": "Organiser par IA",
+  "delete_confirm_title": "Supprimer {{n}} notes ?",
+  "delete_confirm_body": "Elles vont à la corbeille et peuvent en être restaurées.",
+  "delete_attachments_title": "Supprimer {{n}} pièces jointes ?",
+  "delete_attachments_body": "Elles sont effacées du disque et ne peuvent pas être récupérées.",
+  "batch_done": "{{n}} terminé(s)",
+  "batch_partial": "{{ok}} terminé(s), {{failed}} en échec — les éléments en échec restent sélectionnés"
+}

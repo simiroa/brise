@@ -1,0 +1,30 @@
+# 커맨드 계약: sources (읽기 전용 원문 사료) — 규약: _conventions.yaml
+# 본문은 생성/가져오기 시에만 기록되고 이후 수정 커맨드가 없다 (read-only 원칙)
+commands:
+  source_add_text:                # 텍스트 직접 붙여넣기로 추가
+    input:  { note_id: uuid, name: string, body: string }
+    output: Source
+    errors: [NOT_FOUND, VALIDATION]
+
+  source_add_file:                # 파일에서 가져오기 (.txt/.md/.pdf/.docx/.hwpx/.pptx — Wave 4 추출: service/extraction.yaml)
+    http: false   # file_path는 로컬 파일 다이얼로그가 고른 경로 — 원격 클라이언트엔 의미 없음
+    input:  { note_id: uuid, file_path: string,
+              original_policy: "'keep'|'discard'|omit=settings.source_original_policy" }
+    output: Source
+    errors: [NOT_FOUND, IO, VALIDATION]  # VALIDATION: 지원 외 확장자/형식별 추출 상한 초과/추출 텍스트 없음(스캔본)
+    notes: >
+      추출 텍스트가 1MB 를 넘으면 **에러가 아니다** — 앞부분만 저장하고 `Source.truncated`
+      로 알린다(attachment_read_text 와 같은 계약). 잘렸다는 사실은 본문과 함께 DB 에
+      남는다(sources.truncated, v81) — 조회할 때마다 필요하고, 본문 안 문구로 박으면 저장
+      시점 로케일로 굳는다.
+
+  source_rename:
+    input:  { id: uuid, name: string }
+    output: Source
+    errors: [NOT_FOUND, VALIDATION]
+
+  source_delete:
+    input:  { id: uuid }
+    output: { deleted: boolean }
+    errors: [NOT_FOUND]
+    notes: FTS upsert

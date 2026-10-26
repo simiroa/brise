@@ -1,0 +1,559 @@
+# 커맨드 계약: pet (W6-d2 채팅 코어) — 규약: _conventions.yaml
+# http 규칙(오너 결정 2026-10-06, 개인 앱): **사이드바 채팅 코어만 http: true** — 폰/웹(/app)이
+# PC 의 sync_server 를 통해 AI 채팅을 쓴다(pet_chat(실패 기록 포함) · 히스토리/세션 · rewind/delete ·
+# 메모로 저장 · 대화 저장). 나머지(펫 창·말풍선·에셋/패키지·스크린샷·테마·위치·가시성·알림·
+# pet_open_main/pet_close · pet_chat_read_attach)는 **계속 http: false** — 서버 머신의 창/OS/
+# 로컬 경로를 조작하는 표면이라 원격에 의미가 없거나 위험하다(pet_chat_read_attach 는 서버 로컬
+# 경로를 읽는다 → 원격이면 임의 파일 읽기. 브라우저는 File→base64 를 클라이언트에서 한다).
+# 레이트리밋은 두지 않는다(개인 앱) — 대신 실패는 반드시 진단 싱크에 남고(call()/callSilent →
+# logError, Rust crate::diag) 폰 사용자에게 보인다. 이전엔 "pet_chat 은 레이트리밋 밖 로컬 경로"
+# 전제로 전체 false 였다(docs/PLAN-2026-08-04-dashboard-pet.md §P, dictation.yaml 과 같은 판단).
+# "pet-chat-updated" 는 AppHandle 파라미터 없이 crate::events::publish_event 로 낸다(데스크톱
+# 웹뷰 + SSE) — dispatch.gen.rs 는 제네릭 런타임 AppHandle<R> 만 가진다.
+commands:
+  pet_chat:
+    http: true
+    input:
+      message: string                     # 사용자가 채팅 입력창에 친 한 줄
+      active_note_id: "string?"           # 프론트가 넘기는 활성 노트. 없으면 [활성 노트] 블록 없음
+      active_note_title: "string?"
+      active_note_excerpt: "string?"      # 본문 앞부분. 백엔드가 ~4k자로 재캡. HTML 이스케이프
+      image_base64: "string?"             # 턴 한정 1장. raw base64 또는 data URL. 히스토리에 바이트 없음
+      image_mime: "string?"               # image/jpeg|png|webp|gif. 없으면 data URL/디코드로 추론
+      display_text: "string?"             # 유저 행 meta.display_text. 비면 저장하지 않음
+      allow_write: "boolean?"             # false 면 create_note 도 DB에 쓰지 않음. 생략=true. 실효=클라 AND chat_write_enabled
+      show_evidence: "boolean?"           # true 면 action=answer 에 프롬프트에 넣은 근거 노트를 hits 로. 생략=false
+      fail_text: "string?"                # 실패 시 시작 세션에 남길 어시스턴트 행 문구(i18n, meta {"failed":true}). 생략=백엔드 기본 문구
+    output:
+      reply: string                       # 말풍선에 그대로 렌더할 텍스트
+      action: "'answer'|'create_note'|'create_section'|'search'|'propose_plan'"
+      note_id: "string?"                  # action=create_note 일 때만
+      note_title: "string?"               # action=create_note 일 때만
+      section_title: "string?"            # action=create_section — 앱이 새 섹션으로 넣을 제목
+      section_body: "string?"             # action=create_section — 본문. meta 에는 넣지 않음(8KB)
+      hits: "PetSearchHit[]"              # action=search: 그 질의의 검색 결과. action=answer + show_evidence: 근거로 주입한 노트(chat_read_files 켜짐일 때만). 그 외 빈 배열
+      plan_kind: "'fill_note'|'rename_plan'|'prune_plan'?"  # action=propose_plan 일 때만
+      plan_id: "string?"                  # 검토 칩이 들고 다닐 임시 id. DB에 계획을 쓰지 않는다
+      vision_status: "'used'|'fallback_text'?"              # 이미지 없을 때 생략. 비전 불가면 텍스트+힌트
+      user_created_at: "string?"          # 턴 시작 시 저장한 user 행 created_at
+      assistant_created_at: "string?"     # append_message 가 저장한 assistant 행 created_at
+    errors: [VALIDATION, IO]              # VALIDATION: 빈 메시지 / 프라이버시 게이트 거부, IO: 프로바이더
+    notes: |
+      한 번의 왕복으로 끝난다(스트리밍 없음, 도구사용 라운드트립 없음):
+      1. settings 에서 provider/endpoint/api_key/model/ai_enabled/페르소나를 읽고
+         ai_* 커맨드와 **동일한** 프라이버시 게이트(repo::ai::privacy_gate_ok)를 통과시킨다.
+      2. 간이 하이브리드 RAG: 사용자 메시지로 FTS를 돌리고, 시맨틱 인덱스가 켜져 있고
+         로컬 임베딩 모델이 준비된 경우에만 질의 벡터를 추가해 상위 몇 건의 제목+스니펫을
+         시스템 프롬프트에 <untrusted_data> 로 감싸 주입한다. 모델 미준비/오류 시 FTS로
+         우아하게 강등한다.
+      3. 시스템 프롬프트 = 페르소나(프리셋 상수 또는 자유 편집) + 액션 JSON 계약
+         + (있으면) [활성 노트] + RAG 컨텍스트.
+         사용자 텍스트 = 최근 N턴(pet_messages) + 이번 메시지.
+         활성 노트는 프론트 optional 인자(useNotesStore.activeNote excerpt). 백엔드는
+         열린 노트를 모른다 — 비어 있으면 블록을 아예 안 넣는다.
+      4. 응답을 repo::ai::extract_json 으로 파싱 → action 실행:
+         create_section = **쓰기를 실행하지 않는다**. 짧은 reply + section_title/section_body.
+         활성 노트가 있고 수정 권한이 켜져 있으면 프론트가 insertAiSection 으로 새 섹션을 만든다.
+         create_note = Inbox 노트 생성. 활성 노트가 열려 있거나 allow_write=false 면
+         create_section 으로 강등(인박스에 새 노트를 만들지 않음).
+         search = FTS 재조회, answer = 없음. 단 show_evidence=true 이고 answer 이면 2. 에서
+         프롬프트에 넣은 근거 노트를 그대로 hits 로 돌려준다(다시 검색하지 않는다 — 카드 = 모델이
+         실제로 본 근거). chat_read_files 가 꺼져 있으면 근거 주입도 카드도 없다.
+         채팅 턴의 노트 검색은 이 한 번뿐이다(2026-10-09 Wave S — 프런트 사전 검색·유사어 확장 제거).
+         propose_plan = **쓰기를 실행하지 않는다**. 짧은 reply + plan_kind/plan_id 만 돌려주고,
+         프론트 툴 칩이 기존 aiAgentActions + AiAgentReviewModal 로 실제 계획을 만든다
+         (본문 작성은 create_section. rename_plan/prune_plan 만 메타·삭제·이동 검토.
+         구 fill_note 는 새 섹션 삽입으로 처리. 삭제·개명은 모델이 직접 하지 못한다 — docs/AI.md).
+         JSON 이 아니면 통째로 answer 로 폴백한다
+         (작은 로컬 모델이 계약을 못 지켜도 대화가 끊기지 않게 — 조용한 실패가 아니라 평문 답변).
+      5. 이미지가 있으면 VisionTransport(provider_send_vision). 스크린샷 비전과 같은 긴 변
+         1024 JPEG 캡. 프로바이더/모델이 비전을 못 하면 텍스트만 보내고 vision_status=fallback_text.
+         이미지 바이트는 pet_messages 에 넣지 않는다.
+      0. 턴 **시작** 시(설정 읽기와 같은 락) 사용자 행을 그 시점의 라이브 세션(= 시작 세션)에 쓴다.
+         히스토리는 그 전에 읽는다. 응답 대기 중 새 세션이 열리면 시작 세션은 사용자 행 덕에 비어
+         있지 않아 보관되고(pet_session_new), 폰의 세션 열기도 "빈 라이브 버리기"에 걸지 않는다.
+         어시스턴트 행(성공 답 또는 실패 행)은 완료 시 **시작 세션**에 쓴다. 시작 세션이 그새
+         사라졌으면(대화 지우기 = 사용자가 직접 지움, 보관 상한 정리) 아무것도 쓰지 않고 진단만 남긴다.
+         실패(프라이버시 게이트 거부·프로바이더 오류 포함)도 여기서 기록한다 — 어시스턴트 행 텍스트
+         fail_text, meta {"failed":true}. 별도 실패 기록 커맨드는 없다(옛 pet_chat_record_failure 흡수).
+         시작 직후 "pet-chat-updated" ({ reason: "append" }) 를 한 번 더 낸다(다른 창이 질문을 본다).
+      6. 어시스턴트 턴을 시작 세션에 append (텍스트 + 선택 meta).
+         유저 행: display_text 가 비어 있지 않으면 {"display_text":"..."} 만.
+         어시스턴트 행: 결과의 plan_kind/plan_id/note_id/note_title/hits(최대 8,
+         스니펫 짧게)/vision_status. 빈 객체는 NULL. 이미지 바이트는 넣지 않는다.
+         프론트가 클라이언트 ISO 로 히스토리를 다시 맞춰 칩을 잃지 않도록
+         저장된 created_at 을 user_created_at / assistant_created_at 으로 돌려준다.
+      7. 완료 후(성공·실패 모두) "pet-chat-updated" ({ reason: "append" }) 를 emit 한다.
+         메인 창 사이드바와 펫 말풍선이 같은 스레드를 맞춘다. pending 중인
+         창은 자기 응답을 덮어쓰지 않도록 이벤트를 무시한다.
+
+  pet_chat_history:
+    http: true
+    input:
+      limit: "integer|omit=30"
+    output:
+      messages: "PetMessage[]"            # 오래된 것 → 최신 순
+    notes: |
+      펫 창을 다시 열었을 때 이전 대화를 그대로 복원하기 위한 조회.
+      활성 노트북의 **라이브 세션**만 (닫힌 보관 세션은 pet_session_open).
+
+  pet_chat_clear:
+    http: true
+    input: {}
+    output: { cleared: integer }          # 지운 메시지 행 수
+    notes: |
+      설정의 "전체 삭제". 활성 노트북의 **모든** pet_sessions + pet_messages 를 지운다
+      (세션 헤더 포함). 지금 라이브만 지우는 게 아니다.
+      성공 후 "pet-chat-updated" ({ reason: "clear" }) 를 emit 한다.
+
+  # ── 세션 보관·불러오기 (사이드바 도구 메뉴). 펫 창 allowlist 에는 넣지 않는다. ──
+  pet_session_list:
+    http: true
+    input: {}
+    output:
+      sessions: "PetSessionSummary[]"     # 최신 활동순. 라이브 포함
+    notes: |
+      활성 노트북의 세션 목록. 라이브는 live:true. 펫 창은 미러만
+      (목록/새세션/열기는 사이드바) — PET_ALLOWED_COMMANDS 에 넣지 않는다.
+
+  pet_session_new:
+    http: true
+    input: {}
+    output:
+      session_id: string
+      archived_id: "string?"              # 라이브를 닫았을 때만
+      messages: "PetMessage[]"            # 항상 빈 배열
+    notes: |
+      라이브에 메시지가 있으면 닫아 보관(제목=첫 사용자 줄 40자, 없으면 날짜)하고
+      빈 라이브를 만든다. 라이브가 비어 있으면 그 id 그대로(no-op).
+      성공 후 "pet-chat-updated" ({ reason: "session" }) 를 emit 한다.
+
+  pet_session_open:
+    http: true
+    input:
+      session_id: string
+    output:
+      session_id: string
+      messages: "PetMessage[]"            # 연 세션, 오래된 것 → 최신 순
+    errors: [VALIDATION]                  # 빈 session_id / 그 노트북에 없음
+    notes: |
+      다른 세션이면 현재 라이브를 먼저 보관(메시지 있으면)한 뒤
+      고른 세션의 closed_at 을 지워 라이브로 만든다.
+      성공 후 "pet-chat-updated" ({ reason: "session" }) 를 emit 한다.
+
+  # ── T3 rewind / delete (사이드바 버블 툴바). pet_chat 입력·비전·propose_plan(T4)과 별개. ──
+  pet_chat_rewind:
+    http: true
+    input:
+      created_at: string                  # inclusive cutoff (ISO). 그 시각부터 잘라 재생성
+    output:
+      truncated: integer
+      messages: "PetMessage[]"            # 남은 히스토리, 오래된 것 → 최신 순
+    errors: [VALIDATION]                  # 빈 created_at
+    notes: |
+      활성 노트북 pet_messages 에서 created_at >= 인자인 행을 전부 지운다.
+      같은 밀리초의 user+assistant 한 턴은 함께 떨어진다. 사이드바 리와인드:
+      truncate 후 그 턴의 사용자 문구를 입력창에 올려 수정·재전송한다.
+      pet_chat 의 활성 노트/이미지 인자와 무관하다.
+      성공 후 "pet-chat-updated" ({ reason: "rewind" }) 를 emit 한다.
+
+  pet_chat_delete:
+    http: true
+    input:
+      created_at: string
+      role: string                        # 'user' | 'assistant'
+    output:
+      deleted: integer
+      messages: "PetMessage[]"
+    errors: [VALIDATION]                  # 빈 created_at / role 이 user|assistant 가 아님
+    notes: |
+      해당 메시지와 짝 턴을 히스토리에서 실제로 지운다(표시만 숨기지 않음).
+      created_at+role 로 행을 고르고, 같은 노트북의 rowid 이웃이
+      user면 다음 assistant, assistant면 이전 user 일 때만 짝으로 같이 지운다.
+      성공 후 "pet-chat-updated" ({ reason: "delete" }) 를 emit 한다.
+
+  pet_chat_read_attach:
+    http: false   # path는 데스크톱 파일 드롭이 준 로컬 OS 경로 — 원격 클라이언트엔 의미 없음
+    input:
+      path: string
+    output:
+      kind: string                        # 'image' | 'doc' | 'file'
+      name: string
+      mime: "string?"                     # image 일 때 image/jpeg|png|webp|gif
+      base64: "string?"                   # image 일 때 raw base64. 히스토리에 쓰지 않음
+      excerpt: "string?"                  # pdf/docx/txt/md/pptx 발췌. 추출 실패면 생략
+    errors: [VALIDATION, IO]
+    notes: |
+      사이드바 챗 파일 드롭. 첨부 테이블에 쓰지 않고 미리보기/추출만 한다.
+      이미지는 8MB 상한 + jpeg/png/webp/gif. pdf/docx/txt/md/pptx 는
+      repo::extraction::extract_markdown 을 감싼다(추출기 중복 금지).
+      그 외 확장자는 kind=file, 이름만.
+
+  pet_note_create:
+    http: true
+    input:
+      text: string                        # 메모 본문 (필수)
+      title: "string|omit=본문 첫 줄"
+    output: { note_id: string, title: string }
+    errors: [VALIDATION]                  # 빈 본문
+    notes: |
+      AI 를 전혀 타지 않는 직접 저장 경로("메모로 저장" 버튼 · 받아쓰기 메모) — 오프라인에서도
+      동작해야 한다. 폴더는 repo::folders::ensure_inbox_folder_id(모바일 빠른 메모와 같은 규약).
+      펫 창은 풀 부팅을 안 해 프론트의 ensureInboxId(스토어)를 쓸 수 없어 서버측 미러를 재사용한다.
+
+  pet_conversation_save:
+    http: true
+    input:
+      messages: "PetMessage[]"            # 종료 시점까지의 대화 원문(오래된 것 → 최신 순)
+      title: "string?"                    # 생략 시 AI가 제안한 제목, 그것도 없으면 기록 날짜
+    output: { note_id: string, title: string }
+    errors: [VALIDATION, IO]
+    notes: |
+      대화 종료 후 사용자가 저장을 확인했을 때 호출한다. 서버가 먼저 AI에 구조화 요약
+      (title+summary)을 요청하고, 성공한 경우에만 Inbox 노트를 만든다. 저장은 "대화 원문"과
+      "대화 정리" 두 섹션을 하나의 트랜잭션으로 생성하며 각 섹션에 기록 시각·출처·메시지 수를
+      자동 주입한다. AI 호출 실패/빈 응답이면 노트를 만들지 않는다. 원문은 최대 100,000자,
+      메시지는 최대 200개이며 AI 요약 요청은 비용 보호를 위해 별도 상한을 적용한다.
+
+  pet_notifications:
+    http: false
+    input: {}
+    output:
+      items: "PetNotification[]"
+    notes: |
+      AI 호출 0 · 템플릿 문구(페르소나 톤 변형)만. 소스 2종:
+      (a) 리마인드 도래 — repo::dashboard 의 핀 판정(is_pinned)과 **같은** 규칙:
+          remind=1 AND 종료일이 연·월·일 풀 정밀도 AND 오늘보다 과거 AND status != 'done'.
+      (b) 백업 넛지 — settings.backup_nudge_pending(BackupNudgeBanner 와 같은 조건).
+      펫 프론트가 ~5분 간격으로 폴링한다(푸시 채널을 새로 만들지 않는다).
+
+  pet_open_main:
+    http: false
+    input:
+      note_id: "string?"                  # 있으면 메인 창이 그 노트를 연다
+    output: { ok: boolean }
+    notes: |
+      트레이의 "열기"와 같은 tray::show_and_focus 재사용 + note_id 가 있으면 메인 창에
+      "pet-open-note" 이벤트를 emit 한다(App.tsx 가 받아 selectNote). 펫 창이 메인 앱의
+      스토어에 직접 닿을 수 없으므로(별 웹뷰) 이벤트가 유일한 경로다.
+
+  pet_close:
+    http: false
+    input: {}
+    output: { closed: boolean }
+    notes: |
+      우클릭 메뉴의 "펫 끄기". W8-g: 마스터(pet_enabled)가 아니라 표시/숨김(pet_visible)만
+      끈다(tray::set_pet_visible) — "눈앞에서 치워라"지 "기능을 꺼라"가 아니다. 마스터까지
+      끄면 타이틀바 버튼/트레이 항목이 통째로 사라져 Settings > 펫 을 다시 열어야만 되돌릴 수
+      있다(원래 신고 증상). 트레이 "펫 표시/숨기기"·타이틀바 버튼과 같은 경로.
+
+  pet_menu_popup:
+    http: false
+    input: {}
+    output: { ok: boolean }
+    errors: [IO]
+    notes: |
+      펫 우클릭 = 트레이 우클릭(오너 2026-10-16 "정확히 같은 내용을 상속"). 항목 목록은
+      tray::build_tray_menu 하나뿐이고 이 커맨드는 그 메뉴를 호출한 펫 창 위에 네이티브로 띄운다.
+      클릭은 트레이 아이콘의 on_menu_event 가 받는다(Tauri 메뉴 이벤트는 전역). 펫이 떠 있을 때의
+      "클립보드 저장"·"화면 저장"은 Rust 가 "pet-menu-run" 이벤트로 펫 웹뷰에 돌려준다.
+
+  pet_theme:
+    http: false
+    input: {}
+    output:
+      theme: string                       # 'dark' | 'light'
+      accent: string                      # hex
+      font_scale: number
+      capture_screenshot: boolean         # 우클릭 "화면 저장" 항목 노출 여부(capture_screenshot_enabled)
+      surface_style: string               # 'flat' | 'acrylic' (그 외는 flat)
+      sheet_alpha: number                 # acrylic 시트 알파(0~1)
+      ai_enabled: boolean                 # 클라우드 AI 게이트. 꺼져 있으면 펫은 메모 저장만
+      pet_dblclick_action: string          # 'chat'|'new_note'|'off' (W18) — 저장값 그대로, 구값(search/open_note) 흡수는 프런트에서
+      chat_write_enabled: boolean         # 비서/펫 노트 쓰기 게이트. 펫 창 읽기(settings_get_all 금지)
+    notes: |
+      W8-h(펫 대화창 스타일 상속). 펫 창은 settings_get_all 이 금지돼 있다(pet_window.rs 헤더 —
+      기본 거부 allowlist에서 범용 설정 읽기를 뺀 것) — 그래서 앱 테마 중 펫이 실제로 쓰는
+      값만 좁게 노출한다. 순수 DB 읽기라 커맨드 자체는 동기(async 규칙은 창을 만들거나 창
+      getter 를 부르는 커맨드에만 적용된다, commands/pet.rs "async 인 이유" 참고).
+      프런트(src/plugins/pet/usePetTheme.ts)가 마운트 시 이걸 부르고, settings_set 이 노출 키를
+      바꿀 때 쏘는 "pet-theme-changed" 브로드캐스트(commands/settings.rs)를
+      들으면 다시 부른다 — 폴링 없이 라이브 반영. capture_screenshot / surface_style /
+      sheet_alpha / ai_enabled / pet_dblclick_action 도 같은 이유로 여기 얹혔다(docs/PET.md).
+      W18 B2: PetApp.tsx 의 반응 설정 읽기가 금지 커맨드 settings_get_all 을 불러 게이트에
+      막혀 영구 초기값이던 사고(AUDIT-2026-08-22-debris.md §1.1)의 수정 — settings_get_all 을
+      더 넓히지 않고 이 좁은 읽기에 값 하나를 얹는 쪽을 택했다.
+      chat_write_enabled 는 펫 창의 쓰기 게이트 읽기(F-P01) — settings_get_all 이 금지라
+      pet_theme 에 얹는다. 실효 게이트는 pet_chat 이 클라 allow_write 와 AND.
+
+  pet_screenshot_capture:
+    http: false
+    input: {}
+    output:
+      title: string                       # 캡처한 창 제목
+      name: string                        # 첨부 파일명 screenshot-YYYYMMDD-HHMMSS.png
+      data_base64: string                 # PNG 원본 — 호출자가 attachment_add_bytes 로 넘긴다
+      summary: string                     # 비전 요약. 비어 있으면 ai_summary_status가 이유를 설명한다.
+      ai_summary_status: "'generated'|'disabled'|'unsupported_or_failed'|'timeout'"
+    errors: [VALIDATION, IO]              # VALIDATION: 설정 OFF / 캡처할 창 없음, IO: 캡처 실패
+    notes: |
+      펫이 떠 있을 때의 "화면 저장" 카드 경로(트레이/펫 메뉴 공용). 게이트·캡처·폴더 저장
+      (capture_screenshot_dir, 기본 <사진>/Brise)·OS 알림은 tray::capture_to_folder 한 곳이고
+      펫이 없을 때의 트레이 직행 경로도 같은 함수다 — 이 커맨드는 거기에 비전 요약만 얹는다.
+      (docs/PLAN-2026-08-09-pet-capture.md Phase 1, Q1 수동 트리거만 ·
+      Q8 캡처 범위는 활성 창). pet_bubble_clip 과 같은 이유로 **메인 창이 부른다** — 저장·검색
+      경로가 전부 PET_ALLOWED_COMMANDS 밖이라 다리(src/plugins/pet/bridge/petScreenshotBridge.ts)가 대행한다.
+      그래서 이 커맨드도 펫 allowlist 에 넣지 않는다.
+
+      함정: 우클릭 순간의 포그라운드 창은 펫 자신이다 — 자기 프로세스 창(펫·말풍선·메인)을 전부
+      빼고 z-order 최상위 일반 창을 고른다(repo::screenshot::pick_capture_target). 후보가 없으면
+      조용히 성공하지 않고 VALIDATION.
+
+      게이트는 여기서 강제한다(Q7): capture_screenshot_enabled != "1" 이면 VALIDATION.
+      비전 요약은 기존 provider/endpoint/api_key 설정과 ai_* 와 **동일한** privacy_gate_ok 를
+      탄다. 캡처 저장은 요약 실패와 독립적이라 summary가 비어 있어도 계속 가능하다.
+      ai_summary_status는 generated(요약 생성), disabled(외부 AI 게이트 닫힘),
+      unsupported_or_failed(이미지 변환/프로바이더/응답 실패), timeout(전체 비전 deadline 초과) 중
+      하나다. 캡처 화면·창 제목·요약 원문을 넣지 않은 상태 요약을 ai_history
+      action_type='pet_screenshot'으로 남긴다.
+
+  # ── W7-h: 창 분리 · 설정 섹션 · 에셋 ──────────────────────────────────────────
+
+  pet_set_enabled:
+    http: false
+    input: { enabled: boolean }
+    output: { ok: boolean }
+    notes: |
+      설정 화면(Settings > 펫)의 마스터 온오프("펫 사용", W8-g 2단계 노출 모델). 트레이
+      항목의 존재 자체와 타이틀바 버튼의 렌더 여부가 이 값에 물려 있다(tray::set_pet_enabled
+      → 트레이 메뉴 재구성). 표시/숨기기(pet_visible)는 건드리지 않는다 — 그건
+      pet_set_visible 전용. "pet-enabled-changed" 이벤트({enabled, visible})를 emit하므로
+      반대 방향(트레이 → 설정)도 맞는다.
+
+  pet_set_visible:
+    http: false
+    input: { visible: boolean }
+    output: { ok: boolean }
+    notes: |
+      타이틀바(App.tsx, Pin 옆 — 마스터가 켜져 있을 때만 렌더됨)의 펫 표시/숨기기(W8-g).
+      트레이 "펫 표시/숨기기"와 **같은** tray::set_pet_visible 을 지난다 — 마스터는 건드리지
+      않는다. 펫 창을 만들거나 파괴하므로(AppHangB1, 큰 주석 commands/pet.rs 참고) async.
+
+  pet_set_position:
+    http: false
+    input: { x: integer, y: integer }
+    output: { ok: boolean }
+    notes: |
+      펫 창을 드래그로 옮긴 뒤의 좌표 영속(로지컬 px). 펫 창이 범용 settings_set 을 부르지
+      않게 하려고 만든 좁은 표면이다 — 펫 창의 커맨드 allowlist
+      (pet_window::PET_ALLOWED_COMMANDS) 에서 settings_set 을 빼는 것이 목적.
+      저장 후 펫 창이 떠 있으면 그 좌표로 **실제로 옮긴다**(멱등 — 드래그 경로에서는 이미 그
+      자리라 no-op, 설정의 위치 선택기(P7)에서는 이게 이동 그 자체다). 창을 조작하므로 async.
+
+  pet_bubble_toggle:
+    http: false
+    input: {}
+    output: { open: boolean }
+    notes: |
+      펫을 클릭했을 때의 채팅 창 토글. 열림 여부의 진실은 **창의 존재 여부**(Rust)다 —
+      프런트에 플래그를 두면 말풍선이 스스로 닫혔을 때 어긋난다. 이미 채팅이 열려 있으면
+      즉시 파괴하지 않고 `pet-bubble-close-request` 이벤트를 보내 대화 저장 확인을 먼저
+      띄운다. 사용자가 저장하지 않고 닫기를 선택한 경우에만 `pet_bubble_close`가 파괴한다.
+
+  pet_bubble_notice:
+    http: false
+    input:
+      text: string
+      note_id: "string?"
+    output: { shown: boolean }
+    notes: 알림 말풍선. 채팅이 이미 열려 있으면 밀어내지 않는다(shown=false).
+
+  pet_bubble_clip:
+    http: false
+    input:
+      payload: string                     # 카드가 그대로 렌더할 JSON (ClipCardPayload)
+    output: { ok: boolean }
+    errors: [IO]
+    notes: |
+      펫 우클릭 "클립보드 저장"의 확인 카드(docs/PLAN-2026-08-08-presets-schedule.md Q9).
+      **메인 창이 부른다** — 펫 창은 라우팅에 필요한 link_preview/search_semantic 을 부를 수
+      없으므로(PET_ALLOWED_COMMANDS 좁은 표면) 메인 창의 다리(src/plugins/pet/bridge/petClipboardBridge.ts)가
+      대행하고, 그 결과를 이 커맨드로 펫 말풍선에 돌려준다. 그래서 이 커맨드 자체도 펫
+      allowlist 에 넣지 않는다.
+
+      알림(pet_bubble_notice)과 달리 채팅이 떠 있어도 밀어낸다 — 방금 사용자가 명시적으로
+      요청한 액션이라 조용히 무시하면 "눌렀는데 아무 일도 안 남"이 된다. 대화 원문은 이미
+      pet_messages 에 있어 잃는 게 없다. 창 크기는 notice 와 같은 실측 경로(pet_bubble_resize).
+
+  pet_bubble_close:
+    http: false
+    input: {}
+    output: { ok: boolean }
+    notes: 말풍선 창 파괴 + 펫 창에 "pet-bubble-closed" emit(펫이 alert 표정을 푼다).
+
+  pet_bubble_state:
+    http: false
+    input: {}
+    output:
+      mode: string                        # 'chat' | 'notice'
+      text: string
+      note_id: "string?"
+    notes: 말풍선 창이 마운트 직후 자기 내용을 가져간다(URL 로 텍스트를 실으면 이스케이프 문제).
+
+  pet_bubble_resize:
+    http: false
+    input: { height: number }
+    output: { ok: boolean }
+    notes: |
+      알림 말풍선이 잰 내용 높이로 창을 맞추고 다시 배치한다. 예전에는 CSS
+      `max-height: 84px; overflow: hidden` 이라 긴 알림이 조용히 잘렸다.
+
+  pet_assets_list:
+    http: false
+    input: {}
+    output:
+      items: "PetAsset[]"
+    notes: |
+      등록된 동작 에셋을 데이터 URL 로 돌려준다(asset: 프로토콜 스코프를 새로 열지 않는다).
+      파일이 사라진 항목은 조용히 빠진다 → 프런트가 코드 SVG 로 폴백.
+
+  pet_asset_set:
+    http: false
+    input:
+      mood: string                        # 'idle' | 'happy' | 'alert'
+      path: string                        # 드래그앤드롭/파일선택이 준 OS 경로 — 앱 데이터 폴더로 복사한다
+      frames: "integer?"                  # PNG 스프라이트 시트일 때 필수(2~64)
+      cycle_ms: "integer?"                # PNG 재생 속도(200~5000ms). 미지정 시 900ms 기본값
+    output: { ok: boolean }
+    errors: [VALIDATION, IO]
+    notes: |
+      저장 위치는 `<app_data_dir>/pet_assets/<mood>.<ext>`. 백업/내보내기에는 **포함하지 않는다**
+      (pet_pos_* 와 같은 기기-로컬 장식). 파일당 2 MB 상한. GIF/APNG/WebP 는 프레임 수·재생 속도가
+      필요 없고(컨테이너가 자체 타이밍을 가진다) PNG 만 필요하다 — PNG 가 아니면 둘 다 무시된다.
+
+  pet_asset_preview:
+    http: false
+    input:
+      path: string                        # 드래그앤드롭/파일선택이 준 OS 경로 (등록 전)
+    output: { kind: string, data_url: string }
+    errors: [VALIDATION, IO]
+    notes: |
+      등록 전 미리보기 — pet_asset_set 과 같은 검증(형식/2MB)만 거치고 저장하지 않는다. 설정
+      화면이 PNG 스프라이트 시트의 프레임 수·재생 속도를 확정하기 전에(등록 버튼을 누르기 전에)
+      실제로 움직이는 모습을 보여주는 용도.
+
+  pet_asset_clear:
+    http: false
+    input: { mood: string }
+    output: { ok: boolean }
+    notes: 등록 해제 — 파일과 설정 항목을 함께 지운다. 해당 동작은 코드 SVG 로 돌아간다.
+
+  pet_packages_list:
+    http: false
+    input: {}
+    output:
+      items: "PetPackage[]"
+    notes: |
+      앱 데이터의 `pets/<id>/pet.json + spritesheet`를 Codex v2 규격으로 검증해 metadata만
+      반환한다 — 아틀라스는 pet_package_asset. 선택된 패키지는 selected=true다. 잘못된 로컬
+      패키지는 목록에서 제외한다.
+
+  pet_package_asset:
+    http: false
+    input:
+      id: "string|omit=선택된 패키지"
+      preview: "boolean|omit=false"       # true 면 preview.png (없으면 VALIDATION)
+    output: { data_url: string }
+    errors: [VALIDATION, IO]
+    notes: |
+      설치 패키지 1개의 아틀라스(또는 preview)만 Base64 data URL로 반환한다 —
+      pet_packages_list가 모든 패키지의 8MiB 스프라이트를 실어 나르던 것을 분리.
+      id 생략 시 pet_selected_package. 해당 패키지가 없으면 VALIDATION.
+
+  pet_package_install:
+    http: false
+    input:
+      path: string                        # pet.json · 폴더 · zip · 단일 이미지
+    output: { ok: boolean }
+    errors: [VALIDATION, IO]
+    notes: |
+      펫 패키지 설치. 입력은 **한 경로**. 방언은 설치기가 인식하고 디스크에는
+      brise-pet/1 정규 매니페스트로 저장한다.
+      - Codex v1: 1536×1872, spriteVersionNumber 생략/1 허용. pet.json 4필드만 있어도 됨.
+      - Codex v2: 1536×2288 (또는 1872 compact), spriteVersionNumber 2.
+      - 단일 GIF/APNG/WebP/PNG(아틀라스가 아닌 것): idle-image 패키지(클립 idle 하나).
+      폴더/zip 은 루트에 pet.json 이 없으면 **한 층만** 내려가 찾고, `__MACOSX/` 와 `._*` 는
+      건너뛴다. zip 압축폭탄 상한 64MiB. 스프라이트시트 + 있으면 preview.png(512KiB 이하)만 복사.
+      모르는 JSON 키는 무시. description 빈 값 허용. id 의 `_` 는 허용(소문자·숫자·하이픈·밑줄).
+      실패 message 는 `pet_install:<code>` 안정 토큰(프론트 i18n 매핑). 치수 오류는
+      `pet_install:bad_atlas:WxH`. serde 원문을 그대로 올리지 않는다.
+
+  pet_package_install_url:
+    http: false
+    input:
+      url: string                         # http(s) zip 또는 직접 pet 폴더가 아닌 파일 URL
+    output: { ok: boolean }
+    errors: [VALIDATION, IO]
+    notes: |
+      카탈로그 zip URL 설치. http/https 만. 다운로드 32MiB 상한, 리다이렉트는 http(s)만.
+      받은 바이트를 스테이징 zip 으로 저장한 뒤 pet_package_install 과 같은 install_from_path.
+      펫 창 allowlist 밖(설정 창 전용).
+
+  pet_packages_import_codex:
+    http: false
+    input: {}
+    output:
+      installed: "string[]"
+      failed: "PetInstallFailure[]"
+    errors: [IO]
+    notes: |
+      `%USERPROFILE%\\.codex\\pets` 또는 `$CODEX_HOME/pets` 또는 `$HOME/.codex/pets` 를
+      스캔해 각 하위 폴더를 install_from_path 한다. 이미 같은 id 가 있으면 덮어쓰고 선택
+      은 마지막 성공 항목. 실패한 폴더는 failed 에 name+reason(`pet_install:…`).
+      펫 창 allowlist 밖.
+
+  pet_package_select:
+    http: false
+    input:
+      id: string                          # 빈 문자열 또는 "default" = 선택 해제(기본 SVG)
+    output: { ok: boolean }
+    errors: [VALIDATION]
+    notes: |
+      설치된 패키지를 현재 아바타로 선택한다. id 가 비었거나 `default` 이면
+      pet_selected_package 행을 지워 코드 SVG 기본 캐릭터로 돌아간다.
+
+  pet_package_remove:
+    http: false
+    input:
+      id: string
+    output: { ok: boolean }
+    errors: [VALIDATION, IO]
+    notes: |
+      PLAN-2026-09-15 P4. `pets/<id>/` 를 지운다. 되돌릴 수 없으므로 UI 가 확인 다이얼로그를
+      1회 띄운다. 선택 중이던 패키지를 지우면 `pet_selected_package` 를 비워 기본 캐릭터로
+      돌아간다(빈 문자열은 설정 스키마가 거부하므로 행 자체를 지운다). 성공 후
+      "pet-packages-changed" 를 emit 한다.
+
+  pet_position_reset:
+    http: false
+    input: {}
+    output: { x: integer, y: integer }    # 적용된 기본 위치(로지컬 px)
+    notes: |
+      PLAN-2026-09-15 P7 "기본 위치로". 기본 위치 규칙(주 모니터 작업영역 우하단)은
+      `pet_window::default_position` 한 곳에만 있고 이 커맨드는 그걸 그대로 노출한다 —
+      프런트가 같은 계산을 두 번 구현하지 않는다. 좌표를 pet_pos_x/y 에 저장하고 펫 창이
+      떠 있으면 즉시 옮긴다(창을 조작하므로 async).
+
+shared_types:
+  PetSearchHit: "{ note_id: string, title: string, snippet: string }"
+  # frames/cycle_ms 는 PNG 스프라이트 시트일 때만 실린다(GIF/APNG/WebP 는 스스로 움직인다).
+  PetAsset: "{ mood: string, kind: string, frames?: number, cycle_ms?: number, data_url: string }"
+  # dialect: codex-v1 | codex-v2 | idle-image. clips 는 행 단위 재생 정보. 없는 클립은 idle 폴백.
+  PetPackageClip: "{ name: string, row: integer, frames: integer }"
+  PetInstallFailure: "{ name: string, reason: string }"
+  PetPackage: "{ id: string, display_name: string, description: string, sprite_version_number: number, rows: number, selected: boolean, dialect: string, has_preview: boolean, clips: PetPackageClip[] }"
+  PetMessage: "{ role: string, text: string, created_at: string, meta?: string }"
+  # preview = 마지막 메시지 앞 80자. live = closed_at IS NULL.
+  PetSessionSummary: "{ id: string, title: string, live: boolean, created_at: string, closed_at?: string, message_count: integer, preview: string }"
+  # kind: 'reminder' | 'backup' — note_id 는 reminder 일 때만.
+  PetNotification: "{ kind: string, note_id?: string, text: string }"

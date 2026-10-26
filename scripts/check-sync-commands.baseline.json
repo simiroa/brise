@@ -1,0 +1,4 @@
+{
+  "max": 198,
+  "note": "동기 `#[tauri::command] pub fn` 개수 상한(2026-10-10, Wave CMD 직후). 줄이면 이 값을 낮춘다 — 늘리지 않는다. scripts/check-sync-commands.mjs 참고."
+}

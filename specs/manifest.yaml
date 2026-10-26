@@ -1,0 +1,118 @@
+# Brise — 역사 콘텐츠 노트 앱 (History Content Notes)
+# 전역 프로젝트 메타데이터 및 도메인 인덱스 루트 (SSOT 라우터 — 세부 스펙은 각 파일 참조)
+project:
+  name: brise
+  title: Brise — History Content Notes
+  version: 0.1.0
+  language_default: en          # i18n 추상화, 리소스: src/i18n/en/<namespace>.json
+
+stack:
+  shell: tauri@2                # 데스크톱 셸 (Windows 우선)
+  frontend: react@19 + typescript + vite
+  editor: tiptap (markdown 직렬화, 저장 포맷은 항상 markdown 텍스트)
+  state: zustand
+  backend: rust (tauri commands)
+  db: sqlite (rusqlite, bundled, WAL) + fts5
+  test: rust integration tests (specs/tests/*.yaml 1:1 구현) + vitest
+
+architecture:
+  ipc: tauri-invoke             # HTTP 서버 없음. 커맨드 계약 = specs/commands/*.yaml
+  spec_substitutions:           # keel 표준 구조의 데스크톱 치환 매핑
+    openapi: specs/commands/    # invoke 커맨드 계약 (입출력 JSON Schema + 에러)
+    hurl_tests: specs/tests/    # 불변성 시나리오 YAML ↔ src-tauri/tests/*.rs 1:1
+  fts_sync: repository-layer    # FTS 갱신은 트리거가 아닌 Rust 저장소 계층이 동일 트랜잭션에서 수행
+
+scope_wave1:
+  included: [folders, notes, sections, sources, attachments, tags, fts-search,
+             year-filter, export-md-html, import-bundle, settings, theming, i18n-en]
+scope_wave2:
+  included: [ai-organize]   # LLM 정리: ollama/openai/claude/gemini/minimax, confidence 게이트,
+                             # note_update+note_set_tags 단일 tx, 8KB 본문 cap
+scope_wave3:
+  included: [multi-workspace-ui, voice-dictation]   # 2026-07-19 확정 (뷰보다 우선)
+  removed: [vector-search]   # 2026-07-19 shipped → 2026-07-29 owner 결정으로 서브시스템 전체 제거
+scope_wave4:
+  included: [document-extraction, source-original-policy, folder-files-view,
+             folder-export, i18n-fr, i18n-ko, era-presets]         # 실사용자 프랑스인 (2026-07-19)
+scope_wave6:
+  included: [seed-history-fr, draft-lifecycle, safeguards-10]
+  deferred: [sharing-backend, timeline-view, ocr, pptx-xlsx-extraction]
+  ui_placeholders: [timeline-view]                                 # 배치하되 비활성
+scope_wave7:                                                       # P29/P30
+  included: [related-notes-scoring, workspace-year-presets, themed-prompt-dialog]
+scope_wave8:
+  included: [attachments-related-notes-unification, favorites-folder,
+             sidebar-collapsible, tag-remove-and-suggest]
+  removed: [search-background-semantic-append]   # vector-search 서브시스템 제거와 함께 폐기(2026-07-29)
+scope_wave10:
+  included: [attachment-kind-note, attachment-kind-internal]        # Attachment.kind 확장
+scope_wave11:
+  included: [note-title-bar-restructure, note-status]   # 3행 타이틀바 + 진행 상태(작성중/내보냄/완료)
+  notes: [note.status 는 workspace_regions/eras 와 동일한 사용자 확장 패턴(workspace_statuses,
+          migration v9) — search.yaml YearFilter의 4번째 모드('status')로 다중선택 OR 필터]
+localization:
+  ui_lang: "'en'|'fr'|'ko' — 기본 ko (2026-07-29 릴리즈 결정). 리소스 src/i18n/{en,fr,ko}/<namespace>.json (파일명=네임스페이스), 폴백 체인 →en"
+terminology:
+  export_not_share: '"share" 용어 금지 — UI/스펙/커맨드 전부 "export" (2026-07-19 확정)'
+
+domains:                        # 인덱스만 — 중복 기술 금지
+  notes:
+    features: features/notes.yaml
+    commands: commands/notes.yaml
+    db: [db/schemas/notes.sql, db/schemas/folders.sql]
+    service: service/notes.yaml
+    states: states/note-lifecycle.md
+    tests: [tests/invariant-related.yaml,   # Wave 7 (P30): note_related 스코어링
+            tests/invariant-status.yaml]    # Wave 15: 노트 진행 상태(status)
+    resolved_issues:
+      - "folder_files: 구현·스펙·프론트 호출은 있었는데 lib.rs invoke_handler! 등록만 누락되어
+         '폴더 파일 보기'가 런타임 실패하고 있었다 (2026-07-20 스펙 감사 중 발견). 등록 완료.
+         재발 방지: tests/invariant-command-registry.yaml"
+  content:
+    commands: [commands/sections.yaml, commands/sources.yaml, commands/attachments.yaml]
+    db: [db/schemas/content.sql]
+  search:
+    features: features/search.yaml
+    commands: commands/search.yaml
+    db: [db/schemas/fts.sql]
+    service: service/search.yaml
+  transfer:
+    commands: commands/export.yaml
+    service: service/export.yaml
+    resolved_issues:
+      - "export_folder: folder_files 와 동일한 등록 누락으로 '폴더 내보내기'가 런타임 실패하고
+         있었다 (2026-07-20 발견). 등록 완료. 재발 방지: tests/invariant-command-registry.yaml"
+  settings:
+    commands: commands/settings.yaml
+    db: [db/schemas/settings.sql]
+    tests: [tests/invariant-settings-keys.yaml]   # scripts/check-settings-keys.mjs 드리프트 검사
+    notes: [settings keys SSOT = src-tauri/src/db/migrations.rs::validate_setting; mirrored in
+            db/schemas/settings.sql comment. Includes ai_enabled, ai_api_key, ai_model and
+            sidebar_collapsed/favorites_open (UI 영속 상태)]
+  ai:
+    commands: commands/ai.yaml
+    service: service/ai.yaml
+    risks_additional: [R9-timeout, R10-bypass, R11-privacy]
+    tests: [tests/invariant-ai-organize.yaml, tests/invariant-ai-privacy-gate.yaml]
+  workspaces:
+    commands: commands/workspaces.yaml
+    tests: tests/invariant-workspaces.yaml
+  dictation:
+    commands: commands/dictation.yaml
+    service: service/dictation.yaml
+    risks_additional: [R12-mic-permission, R16-model-download, R17-transcribe-latency]
+    tests: tests/invariant-dictation.yaml
+    notes: [본문 cap: 8192 chars (UTF-8)]
+  extraction:
+    service: service/extraction.yaml    # Wave 4: PDF/DOCX 추출 + 원본 정책 + 폴더 파일
+    tests: tests/invariant-extraction.yaml
+    risks_additional: [R18-young-crates, R19-extraction-fidelity]
+  reliability:
+    service: service/reliability.yaml   # 운영 리스크 레지스터 R1~R8 — Wave 1 필수
+    tests: [tests/invariant-ipc.yaml]
+
+error_codes: [NOT_FOUND, VALIDATION, CONFLICT, IO, DB]   # 모든 커맨드 공통, {code, message} 형태
+
+data_dir:                       # OS 앱 데이터 디렉토리 하위
+  db_file: brise.db
+  attachments_dir: attachments/   # note_id 하위에 파일 복사 저장

@@ -1,0 +1,154 @@
+[package]
+name = "brise"
+version = "0.5.3"
+description = "Brise — History Content Notes"
+license = "Apache-2.0"
+authors = ["Brise"]
+edition = "2021"
+# 보조 바이너리(src/bin/seed_corpus.rs)가 생긴 뒤로 `cargo run` 이 대상을 못 고르고 실패했다
+# (tauri dev 가 --bin 없이 cargo run 을 부른다). 앱 바이너리를 기본값으로 못박는다.
+default-run = "brise"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "brise_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# tray-icon: close_to_tray 설정(백그라운드 상주) — 창을 닫아도 종료 대신 숨기고, 트레이 아이콘의
+# 열기/동기화 상태/종료 메뉴로 되돌아온다(tray.rs).
+tauri = { version = "2", features = ["protocol-asset", "tray-icon"] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+regex = "1"
+rusqlite = { version = "0.40.1", features = ["bundled", "backup"] }
+thiserror = "2.0.18"
+uuid = { version = "1.24.0", features = ["v4"] }
+chrono = "0.4.45"
+fs4 = "0.13"                                  # db_stats.disk_free_bytes — 저장 게이지 분모(볼륨 여유 공간)
+tauri-plugin-single-instance = "2.4.3"
+tauri-plugin-dialog = "2.7.2"
+# 일정 알림 OS 토스트(docs/PLAN-schedule-system.md §4.2). Rust 측(repo::schedule 틱 스레드)에서만
+# 발화한다 — JS 바인딩(@tauri-apps/plugin-notification)은 설치하지 않고, capabilities 도 건드리지
+# 않는다(앱 커맨드는 ACL 을 안 타고 `plugin:notification|*` 를 JS 표면에 열 이유가 없다).
+tauri-plugin-notification = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-clipboard-manager = "2"
+# 자동 업데이트(유료 판매 준비, docs/RELEASING.md) — GitHub 릴리스의 latest.json 을 확인하고
+# 서명된 아티팩트를 내려받아 설치한다. 서명 검증은 tauri.conf.json 의 plugins.updater.pubkey.
+tauri-plugin-updater = "2"
+# 위 updater 가 설치를 마친 뒤 앱을 재시작(relaunch)하는 데 쓴다 — Windows 는 설치 자체가 앱을
+# 종료시키지만 다른 플랫폼 대비 명시적으로 필요.
+tauri-plugin-process = "2"
+reqwest = { version = "0.13.4", default-features = false, features = ["json", "native-tls", "gzip", "stream", "query"] }
+tokio = { version = "1.53.0", features = ["time", "net", "rt-multi-thread", "macros", "sync"] }
+base64 = "0.22"
+# std::sync::Mutex poisons on panic: one panicking command under a tauri catch_unwind would leave
+# EVERY subsequent `.lock()` across the app panicking too (bricked until restart). parking_lot's
+# Mutex has no poisoning — already a resolved transitive dep (tauri/tokio via Cargo.lock),
+# promoted here to a direct dependency for AppState's db locks.
+parking_lot = "0.12"
+# Link attachment "reader view": server-side (Rust) fetch + text extraction so we're not subject to
+# the webview's X-Frame-Options/CSP framing rules. scraper (html5ever-backed) parses the fetched
+# HTML purely to pull out visible text — no script execution, no subresource loading, ever.
+scraper = { version = "0.27", default-features = false }
+# 이미지 첨부의 EXIF GPS → 노트 경유지 자동 등록(repo::attachments::exif_region). lib 이름은 `exif`.
+kamadak-exif = "0.6"
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+sha2 = "0.10"
+pdf-extract = "0.12.0"
+zip = "8.6.0"
+quick-xml = "0.41.0"
+# CSV/TSV 섹션 임포트(repo/csv_import.rs)의 인코딩 폴백 — 엑셀 한국어 저장본은 UTF-8이 아니라
+# CP949(EUC-KR 상위호환)로 떨어진다. 순수 Rust, 의존성 없음, 작다.
+encoding_rs = "0.8"
+# Attachment tile thumbnails (H3): decode common raster formats, encode JPEG only.
+# default-features off keeps the dependency lean; webp/tiff are decode-only here.
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "bmp", "webp", "tiff"] }
+# 동기화(beta): 같은 tailnet 위 다른 기기(휴대폰 브라우저 등)를 위한 임베디드 읽기전용 HTTP
+# 서버. axum은 이미 해석된 hyper 1.x/tower 위에 얇게 얹히므로(Cargo.lock 확인: 새 hyper 트리
+# 없음) 라우팅+정적 응답에 필요한 기능만 켠다(http2/multipart/ws 등 불필요). if-addrs는 바인딩
+# 대상(Tailscale CGNAT 100.64.0.0/10) 판별을 위한 로컬 인터페이스 열거 전용, 가장 작은 크레이트.
+axum = { version = "0.8.9", default-features = false, features = ["tokio", "http1", "json", "query"] }
+# 동기화(beta) 응답 압축 — 노트 목록/JSON 응답을 gzip/br로 줄인다. DefaultPredicate(기본값)가
+# text/event-stream(SSE)/이미지/gRPC 응답은 알아서 건너뛰므로 라우트를 갈라서 레이어를 따로 걸
+# 필요가 없다(sync_server::handlers::build_router 참고) — SSE 스트림이 압축 버퍼링으로 지연되는
+# 사고를 피하는 지점이 바로 이것.
+tower-http = { version = "0.6", default-features = false, features = ["compression-gzip", "compression-br"] }
+if-addrs = "0.15.0"
+tokio-util = { version = "0.7.19", features = ["io"] }
+# 동기화(beta) 설정 카드 QR 코드 — 접속 URL(토큰 포함)을 폰 카메라로 바로 스캔하게 해 준다.
+# SVG 렌더러만 쓰므로(commands/sync.rs) default-features 끔 — 이 crate의 유일한 옵션 기능인
+# "image" 래스터 렌더러(이미 무거운 image crate 의존)는 필요 없다.
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
+# 동기화(beta) 웹 클라이언트 정적 서빙(/app) — release 빌드에서 ../dist(빌드된 프론트)를 컴파일
+# 타임에 바이너리에 통째로 끼워 넣는다(별도 배포 없이 exe 하나로 웹 클라이언트까지 서빙).
+# debug 빌드는 이 crate를 쓰지 않고 디스크에서 바로 읽는다(sync_server/handlers/web_client.rs::app_asset).
+include_dir = "0.7"
+# xlsx → 시트 임포트(section_import_file). "dates" 피처로 계산된 날짜 셀을 chrono::NaiveDateTime
+# 으로 받는다(계산된 값을 쓰는 이유: specs/commands/sections.yaml xlsx 규칙).
+calamine = { version = "0.36.1", features = ["dates"] }
+# 좌표 → IANA 시간대(geo_timezone, repo/geocode.rs). 오프라인 조회(내장 경계 데이터) — 위치를
+# 외부로 보내지 않는다는 프라이버시 방침 때문에 API 붙는 서비스가 아니라 이 크레이트를 골랐다.
+# default(clap CLI 예제 + bundled 데이터)에서 clap 은 끄고 bundled 데이터만 켠다. "full"(전세계
+# 고정밀, ~8MB+)은 안 쓴다 — bundled 데이터로도 Asia/Seoul vs Asia/Tokyo 처럼 현재 오프셋이
+# 같은 인접 구역을 구분한다(실측, tzf-rs 는 병합하지 않음). 실측 릴리스 바이너리 증가량
+# ~4.1MiB(4417024B 완전 링크 exe − 125440B 베이스라인, tzf-rs 2.1.2 bundled) — 상한 ~5MB 안쪽.
+tzf-rs = { version = "2.1.2", default-features = false, features = ["bundled"] }
+
+[features]
+default = []
+# 개발 도구 바이너리(합성 코퍼스 시더 seed_corpus)를 켠다. 기본 빌드에서 빠져야 `tauri build` 가 설치 파일에
+# 담지 않는다 — tauri 는 패키지의 bin 타깃을 전부 번들해서, 릴리스 MSI 에 seed_corpus.exe 가 Program Files 로
+# 깔리고 있었다(2026-10-23, 릴리스에선 실행을 거부하는 껍데기였지만 사용자에게 갈 파일이 아니다).
+# 쓰는 법: cargo run --bin seed_corpus --features dev-tools -- --db <path> --notes N
+dev-tools = []
+
+[[bin]]
+name = "seed_corpus"
+path = "src/bin/seed_corpus.rs"
+required-features = ["dev-tools"]
+
+[dev-dependencies]
+tempfile = "3.27.0"
+# test-util: repo::geocode 의 429 백오프 재시도 테스트가 #[tokio::test(start_paused = true)] 로
+# 가상 시계 자동 전진을 써서 실제 초 단위 sleep 없이 재시도 경로를 검증한다 — 메인 의존성이 아니라
+# dev-dependency 라 테스트 빌드에만 영향(위 tauri "test" feature 주석과 동일한 이유).
+tokio = { version = "1.53.0", features = ["macros", "rt-multi-thread", "test-util"] }
+# dispatch.gen.rs unit tests build a mock AppHandle (MockRuntime) to call real #[tauri::command]
+# fns without a live Wry window — "test" is additive to the main `tauri` dependency's features
+# (Cargo unifies features across dep kinds for the same crate), so this only affects test builds.
+tauri = { version = "2", features = ["test"] }
+
+# Window transparency (real OS compositor effects, not a CSS image) — surface_style preset ↔
+# Windows Mica/Acrylic. Tauri 2's own `Window::set_effects` already wraps window-vibrancy
+# internally but silently discards the apply/clear Result, so an unsupported-OS failure (Mica
+# needs Windows 11 build 22000+) would be invisible to us and we couldn't gracefully fall back
+# to flat/opaque as required. window-vibrancy is already a resolved transitive dependency of
+# tauri itself on Windows (see Cargo.lock) — this just promotes it to a direct dependency so we
+# can inspect the Result ourselves. Windows-only: harmless no-op stub on other targets (commands/window.rs).
+[target.'cfg(windows)'.dependencies]
+window-vibrancy = "0.6"
+# 아크릴 가드의 빌드 판정(commands/window.rs::acrylic_supported). window-vibrancy 가 이미 쓰는 크레이트라
+# 새로 받는 것은 없다.
+windows-version = "0.1"
+# 펫 "화면 저장"(docs/PLAN-2026-08-09-pet-capture.md Phase 1, Q8: 캡처 범위 = 활성 창).
+# ponytail: Windows 전용으로 못 박는다 — xcap 의 Linux 백엔드는 libxcb/libxrandr/libdbus/
+# libpipewire/wayland 개발 패키지를 요구하는데 CI(ubuntu-latest, cargo test)에 그게 없고,
+# macOS 는 화면 기록 TCC 권한 UX가 별개 과제다. 다른 OS 는 repo::screenshot 의 스텁이
+# VALIDATION 으로 거절한다. macOS 를 열려면 여기 cfg 와 그 스텁 두 곳만 고치면 된다.
+xcap = { version = "0.9", default-features = false }
+
+# ponytail: 의존성 크레이트의 디버그 심볼만 끈다 — target/debug 가 47GB 까지 불어난 원인이
+# 400여 개 의존성의 .pdb/.o 였다. brise 자신은 기본값(full debuginfo)을 유지하므로 우리 코드의
+# 백트레이스·중단점은 그대로다. 의존성 내부를 스텝 실행해야 할 일이 생기면 이 블록만 지우면 된다.
+[profile.dev.package."*"]
+debug = false

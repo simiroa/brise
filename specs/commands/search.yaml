@@ -1,0 +1,27 @@
+# 커맨드 계약: search — 규약: _conventions.yaml
+# 검색 활성 조건(프론트): query 비어있지 않음 OR 연대 범위가 전체(900–1960 기본)보다 좁음
+commands:
+  search_notes:
+    input:
+      query: "string"             # 빈 문자열 허용 → 연대 필터만 적용
+      year_from: "integer?"       # inclusive, 생략 시 연도 하한 제한 없음
+      year_to: "integer?"         # inclusive, year_from <= year_to (동일 연도 검색 허용), 생략 시 연도 상한 제한 없음
+      workspace_id: "uuid|omit=active"
+      limit: "integer?|omit=500"  # 기본 500 (SEARCH_RESULT_CAP)
+    output:
+      results: "NoteSummary[]"    # year 오름차순 정렬
+      total: integer
+    errors: [VALIDATION]          # year_from > year_to
+    agent:
+      kind: read
+      description: |
+        노트의 제목, 본문, 출처, 태그를 전문 검색(FTS/LIKE)하여 매칭된 노트 요약 및 하이라이트 스니펫을 조회한다.
+      args:
+        query: "검색할 질의어 (빈 문자열이면 연도 범위 내 모든 노트)"
+        year_from: "사건 연도 하한 (포함, 생략 시 제한 없음)"
+        year_to: "사건 연도 상한 (포함, 생략 시 제한 없음)"
+        workspace_id: "조회할 노트북 id"
+        limit: "가져올 최대 결과 개수. 결과 크기와 토큰 절약을 위해 필요한 만큼 작은 값(예: 10~20)을 권장합니다 (상한 500)"
+    notes: |
+      query가 비어있지 않으면 notes_fts MATCH (title/body/source_body/tag_names 전체 컬럼),
+      결과를 year BETWEEN으로 교집합. 흐름 상세: service/search.yaml

@@ -1,0 +1,10 @@
+{
+  "enlarge": "확대",
+  "collapse": "축소",
+  "collapse_card": "패널 접기",
+  "expand_card": "미리보기 펼치기",
+  "preview_back": "이전 미리보기",
+  "preview_home": "홈(프리셋)으로",
+  "preview_forward": "다음 미리보기",
+  "body_truncated": "원본이 커서 앞부분만 가져왔습니다 — 뒷부분은 저장되지 않았습니다."
+}

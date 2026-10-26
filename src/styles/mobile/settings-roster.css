@@ -1,0 +1,11 @@
+/* mobile/settings-roster.css — sidebar roster rows in Settings (filter_roster) */
+
+/* 사이드바 구성(filter_roster) 행의 라벨 — 아이콘 + 텍스트. 컨트롤(위/아래/체크박스)은
+ * .mobile-settings-value + .mobile-icon-btn(둘 다 기존 클래스)을 그대로 재사용해 새 컨트롤
+ * 스타일을 만들지 않았다(WORKORDER-2026-09-02 W4 §3 — on/off 체크 목록 + 위/아래 이동 버튼). */
+.mobile-roster-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.mobile-roster-label svg { flex: none; color: var(--muted); }

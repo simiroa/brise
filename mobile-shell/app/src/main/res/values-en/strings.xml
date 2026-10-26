@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Brise</string>
+    <string name="shortcut_settings">Connection settings</string>
+
+    <string name="setup_title">Connect to your PC</string>
+    <string name="setup_desc">In Brise on your PC, open Settings &gt; Connection, then copy the connection address and paste it here, or scan the QR code shown there.</string>
+    <string name="setup_hint">Connection address (http://100.x.x.x:port/app?token=…)</string>
+    <string name="setup_scan">Scan QR</string>
+    <string name="setup_test">Test connection</string>
+    <string name="setup_save">Save and open</string>
+    <string name="setup_cancel">Cancel</string>
+    <string name="setup_parsed">Address %1$s · token present</string>
+
+    <string name="err_empty">Enter the connection address.</string>
+    <string name="err_scheme">The address must start with http:// or https://.</string>
+    <string name="err_no_host">Could not find a host in the address.</string>
+    <string name="err_no_token">The address has no token (?token=…). Paste the address from Settings &gt; Connection as it is.</string>
+
+    <string name="test_running">Checking…</string>
+    <string name="test_ok">Connected — Brise on your PC responded.</string>
+    <string name="test_auth">Authentication failed — the token does not match. Copy the connection address from your PC again.</string>
+    <string name="test_unreachable">Unreachable — check that Brise is running on your PC and that Tailscale is connected on this device.</string>
+    <string name="test_other">Unexpected response (HTTP %1$d).</string>
+
+    <string name="warn_title">Not a Tailscale address</string>
+    <string name="warn_body">%1$s is outside the Tailscale (100.64.0.0/10) and localhost ranges. Make sure it is the address of a PC you trust. Continue?</string>
+    <string name="warn_continue">Continue</string>
+
+    <string name="qr_unavailable">The QR scanner could not be opened.</string>
+    <string name="qr_bad">This QR code is not a Brise connection address.</string>
+
+    <string name="error_title">Cannot reach your PC</string>
+    <string name="error_body">Check that Brise is running on your PC and that Tailscale is connected.</string>
+    <string name="error_body_vpn">Tailscale looks off. Turn it on, then come back — Brise reconnects automatically.</string>
+    <string name="error_open_tailscale">Open Tailscale</string>
+    <string name="error_retry">Try again</string>
+    <string name="error_settings">Connection settings</string>
+    <string name="error_retrying">Reconnecting…</string>
+
+    <string name="perm_camera">Camera</string>
+    <string name="perm_mic">Microphone</string>
+    <string name="perm_location">Location</string>
+    <string name="perm_blocked_title">%1$s permission is off</string>
+    <string name="perm_blocked_body">To use this feature, allow the %1$s permission in Android settings.</string>
+    <string name="perm_open_settings">Open settings</string>
+    <string name="perm_not_now">Not now</string>
+
+    <string name="back_again">Press back again to exit</string>
+</resources>

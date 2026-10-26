@@ -1,0 +1,59 @@
+/* mobile/active-chips.css — active filter chips row (MobileActiveFilterChips.tsx) */
+
+/* Active filter chips */
+/* 서브바와 목록 사이의 가로 스크롤 한 줄. 칩 자체는 작은 pill(.mobile-badge 와 같은 언어, 활성 상태는
+ * .mobile-filter-pill[data-active] 와 같은 accent 톤)이고, 48px 히트존은 ::after 로 칩 밖에 둔다. */
+.mobile-active-chips {
+  flex: none;
+  display: flex;
+  align-items: center;
+  /* --space-5 so the × hit zone below (13px past the chip edge) never reaches the next chip. */
+  gap: var(--space-5);
+  min-height: 48px;
+  padding: 0 var(--m-gutter);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.mobile-active-chips::-webkit-scrollbar { display: none; }
+.mobile-active-chip {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--m-accent-text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.mobile-active-chip-label,
+.mobile-active-chip-x {
+  position: relative;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.mobile-active-chip-label {
+  max-width: 40vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mobile-active-chip-x { display: grid; place-items: center; width: 22px; height: 22px; }
+.mobile-active-chip-label::after,
+.mobile-active-chip-x::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  height: 48px;
+  transform: translateY(-50%);
+}
+.mobile-active-chip-label::after { left: 0; right: 0; }
+.mobile-active-chip-x::after { left: -13px; right: -13px; } /* 22 + 26 = 48 wide (red-team V10) */

@@ -1,0 +1,18 @@
+{
+  "header_button": "Historique d'activité",
+  "header_button_with_state": "{{button}} · {{state}}",
+  "modal_title": "Historique d'activité",
+  "empty_state": "Aucune activité pour l'instant — créez, modifiez ou restaurez une note pour la voir ici.",
+  "kind_create": "Créée",
+  "kind_delete": "Supprimée",
+  "kind_edit": "Modifiée",
+  "kind_restore": "Instantané restauré",
+  "kind_import": "Importée",
+  "kind_collect": "Collecte",
+  "note_gone": "Note indisponible",
+  "gone_tag": "Supprimée",
+  "view_snapshots": "Sauvegardes auto",
+  "view_snapshots_hint": "Voir les versions sauvegardées automatiquement - choisissez un point à restaurer",
+  "back_to_activity": "Retour à l'activité",
+  "restore_failed": "Échec de la restauration de l'instantané : {{message}}"
+}

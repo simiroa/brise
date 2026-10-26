@@ -1,0 +1,990 @@
+# 기능 카탈로그: 수집 관문. 유형별 입력→출력 기대값이 여기 산다.
+# 게이트는 cases.expect 문자열이 covered_by 테스트 파일에 그대로 있는지로 연결을 강제한다.
+features:
+  - id: F-C01
+    name: RSS/Atom 어댑터
+    status: shipped
+    commands: commands/collect.yaml
+    verify:
+      rust:
+        - src-tauri/src/collect/rss.rs
+        - src-tauri/src/collect/config.rs
+    cases:
+      - id: rss2-guid-html-strip
+        given:
+          kind: rss
+          feed: RSS 2.0 item with CDATA HTML description and <guid>
+        expect:
+          guid: "urn:uuid:first-1"
+          title: "First Post"
+          body_md: "Hello world"
+          source_url: "https://example.com/first"
+          published_at: "Mon, 01 Jan 2024 00:00:00 GMT"
+        covered_by: parses_rss2_items_including_guid_link_cdata_html_and_plain_description
+
+      - id: rss2-guid-falls-back-to-link
+        given:
+          kind: rss
+          feed: RSS 2.0 item with <link> but no <guid>
+        expect:
+          guid: "https://example.com/second"
+          body_md: "Plain text summary, no CDATA & no HTML."
+        covered_by: parses_rss2_items_including_guid_link_cdata_html_and_plain_description
+
+      - id: atom-id-and-href
+        given:
+          kind: rss
+          feed: Atom entry with <id> and link rel=alternate href
+        expect:
+          guid: "tag:example.com,2024:atom-1"
+          title: "Atom Entry"
+          source_url: "https://example.com/atom-entry"
+          body_md: "An atom summary."
+          published_at: "2024-01-02T00:00:00Z"
+        covered_by: parses_atom_entries_including_href_link_attribute_and_id
+
+      - id: rss-skip-item-without-guid-or-link
+        given:
+          kind: rss
+          feed: item with title+description only
+        expect:
+          reason: "No identity"
+        covered_by: items_missing_both_guid_and_link_are_skipped
+
+      - id: rss-entities-resolved
+        given:
+          kind: rss
+          title: "A &amp; B &lt;C&gt; &#38; &#x26;"
+        expect:
+          title: "A & B <C> & &"
+        covered_by: entity_references_are_resolved_across_named_and_numeric_forms
+
+      - id: rss-rejects-loopback-before-connect
+        given:
+          kind: rss
+          url: "http://127.0.0.1/feed.xml"
+        expect:
+          blocked: "http://127.0.0.1/feed.xml"
+        covered_by: collect_rejects_loopback_and_private_feed_hosts_before_connecting
+
+      - id: rss-schema-rejects-unknown-fields
+        given:
+          kind: rss
+          config: '{"url":"https://example.com/feed","dir":"C:/"}'
+        expect:
+          url: "https://example.com/feed"
+        covered_by: rss_schema_rejects_unknown_fields_and_invalid_urls
+
+  - id: F-C02
+    name: Claude 세션 프롬프트 어댑터
+    status: shipped
+    commands: commands/collect.yaml
+    verify:
+      rust:
+        - src-tauri/src/collect/claude_prompts.rs
+        - src-tauri/src/collect/config.rs
+    cases:
+      - id: claude-user-only-no-assistant-leak
+        given:
+          kind: claude_prompts
+          jsonl: user string + user array + assistant + queue-operation
+        expect:
+          prompt_a: "첫 번째 프롬프트"
+          prompt_b: "배열 형태 프롬프트"
+          leaked: "ignored"
+        covered_by: extracts_only_user_messages_string_and_array_content
+
+      - id: claude-dir-must-stay-under-projects
+        given:
+          kind: claude_prompts
+          dir: "C:/Users/Public"
+        expect:
+          dir: "C:/Users/Public"
+        covered_by: claude_schema_rejects_unknown_fields_and_outside_dir
+
+      - id: oversized-session-file-yields-a-skip-notice-not-silence
+        given:
+          kind: claude_prompts
+          file: session file over MAX_FILE_BYTES (500MB)
+        expect:
+          notice_contains: "건너뜀"
+          guid_contains: ":skipped:"
+        covered_by: a_file_over_the_new_cap_yields_exactly_one_skip_notice_part
+
+      - id: file-under-the-raised-500mb-cap-is-parsed-not-skipped
+        given:
+          kind: claude_prompts
+          file: 60MB session file (over the OLD 50MB cap, under the new 500MB one)
+        expect:
+          prompt: "large file prompt survives"
+        covered_by: a_file_up_to_the_new_500mb_cap_is_no_longer_skipped_wholesale
+
+  - id: F-C10
+    name: Codex CLI 세션 프롬프트 어댑터
+    status: shipped
+    commands: commands/collect.yaml
+    verify:
+      rust:
+        - src-tauri/src/collect/codex_prompts.rs
+        - src-tauri/src/collect/config.rs
+    notes: ~/.codex/sessions/YYYY/MM/DD/*.jsonl — claude_prompts와 같은 자세(user 메시지만,
+      raw 전문 저장 안 함)지만 프로젝트는 디렉터리가 아니라 session_meta.payload.cwd에서 뽑는다.
+    cases:
+      - id: codex-user-only-project-from-cwd
+        given:
+          kind: codex_prompts
+          jsonl: session_meta(cwd=brise) + event_msg echo + response_item(user)
+        expect:
+          guid_prefix: "codex:brise:"
+          leaked: "ignored duplicate"
+        covered_by: extracts_only_response_item_user_messages_and_derives_project_from_cwd
+
+      - id: codex-environment-context-filtered
+        given:
+          kind: codex_prompts
+          jsonl: injected <environment_context> + real prompt + today's prompt
+        expect:
+          body_md: "- 09:01 real prompt survives"
+        covered_by: filters_the_injected_environment_context_and_includes_today
+
+      - id: codex-dir-must-stay-under-sessions-root
+        given:
+          kind: codex_prompts
+          dir: "C:/Users/Public"
+        expect:
+          dir: "C:/Users/Public"
+        covered_by: codex_schema_rejects_unknown_fields_and_outside_dir
+
+      - id: oversized-session-file-yields-a-skip-notice-under-unknown-project
+        given:
+          kind: codex_prompts
+          file: session file over MAX_FILE_BYTES (500MB), cwd unreadable since the file itself is skipped
+        expect:
+          guid_prefix: "codex:unknown:"
+          guid_contains: ":skipped:"
+        covered_by: a_file_over_the_new_cap_yields_exactly_one_skip_notice_part_under_unknown_project
+
+      - id: file-under-the-raised-500mb-cap-is-parsed-not-skipped
+        given:
+          kind: codex_prompts
+          file: 60MB session file (over the OLD 50MB cap, under the new 500MB one)
+        expect:
+          prompt: "large file prompt survives"
+        covered_by: a_file_up_to_the_new_500mb_cap_is_no_longer_skipped_wholesale
+
+  - id: F-C03
+    name: 웹페이지 어댑터
+    status: shipped
+    commands: commands/collect.yaml
+    verify:
+      rust: src-tauri/src/collect/config.rs
+    notes: fetch 본문은 web_reader(SSRF 가드) 재사용. 네트워크 왕복은 여기 케이스가 아님.
+    cases:
+      - id: web-rejects-unknown-fields-file-and-loopback
+        given:
+          kind: web
+          urls: ["file:///etc/passwd", "http://127.0.0.1/page"]
+        expect:
+          file: "file:///etc/passwd"
+          loopback: "http://127.0.0.1/page"
+          ok: "https://example.com/page"
+        covered_by: web_schema_rejects_unknown_fields_and_invalid_urls
+
+  - id: F-C04
+    name: 유튜브(yt-dlp) 자막 수집
+    status: shipped
+    commands: commands/collect.yaml
+    verify:
+      rust:
+        - src-tauri/src/collect/ytdlp.rs
+        - src-tauri/src/collect/config.rs
+    notes: yt-dlp 사이드카 fetch는 여기 케이스가 아님. 스키마·VTT 정제만.
+    cases:
+      - id: vtt-strips-headers-timestamps-dupes
+        given:
+          kind: youtube
+          vtt: WEBVTT captions with duplicate cue
+        expect:
+          # 싱글쿼트: rust 소스의 `\n` 이스케이프와 바이트 단위로 같아야 한다 (더블쿼트면 YAML이 실제 개행으로 푼다).
+          body_md: '안녕하세요 여러분\n오늘 소개해드릴 내용은\n브리즈의 새로운 수집 기능입니다.'
+        covered_by: clean_vtt_removes_headers_timestamps_and_duplicate_lines
+
+      - id: youtube-rejects-unknown-fields-file-and-loopback
+        given:
+          kind: youtube
+          urls: ["file:///etc/passwd", "http://127.0.0.1/page"]
+        expect:
+          file: "file:///etc/passwd"
+          loopback: "http://127.0.0.1/page"
+          ok: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        covered_by: youtube_schema_rejects_unknown_fields_and_invalid_urls
+
+  - id: F-C05
+    name: 수집 러너 — ingest · seen · dry_run · 주기
+    status: shipped
+    commands: commands/collect.yaml
+    verify:
+      rust:
+        - src-tauri/src/collect/mod.rs
+        - src-tauri/src/repo/collect.rs
+    cases:
+      - id: ingest-creates-note-appends-source-footer
+        given:
+          item: { guid: g1, title: "Title A", body: "Body A", url: "https://example.com/a" }
+        expect:
+          title: "Title A"
+          body: "Body A"
+          footer: "https://example.com/a"
+        covered_by: ingest_item_creates_an_inbox_note_and_marks_the_guid_seen
+
+      - id: ingest-same-guid-is-idempotent
+        given:
+          second_ingest: { guid: g1, title: "Title A (edited)" }
+        expect:
+          reason: "the second ingest of the same guid must not create a second note"
+        covered_by: ingest_item_skips_a_guid_already_seen_for_that_source
+
+      - id: dry-run-zero-writes-then-real-run-still-ingests
+        given:
+          kind: claude_prompts
+          dry_run: true
+        expect:
+          preview: "dry run test"
+          no_seen: "dry_run must not claim seen"
+          no_notes: "dry_run must not create notes"
+          no_clock: "dry_run must not advance last_run_at"
+        covered_by: dry_run_does_not_claim_seen_or_write_notes_and_keeps_last_run_at_null
+
+      - id: delete-source-cleans-seen
+        given:
+          after: collect_source_delete
+        expect:
+          cleanup: "collect_seen must be cleaned up on delete"
+        covered_by: create_list_set_enabled_delete_round_trip
+
+      - id: unknown-kind-does-not-touch-status
+        given:
+          kind: some_future_kind
+        expect:
+          reason: "unimplemented adapter kinds must not mark ok/error"
+        covered_by: run_one_skips_a_source_whose_kind_has_no_adapter_yet_without_touching_status
+
+  - id: F-C06
+    name: 수집 설정 UI (목록 · 로컬 소스 감지/고스트 · 챗 등록 허용 토글 · 지금 실행 · 드라이런)
+    status: shipped
+    commands: commands/collect.yaml
+    notes: 소스 추가 옆 "로컬 소스 감지" 버튼 하나(PLAN-2026-09-04-local-import §3b) —
+      collect_detect_local 결과 중 source_id 가 null 인 후보를 고스트 행으로 보여주고, "가져오기"는
+      collect_import_local → 기존 드라이런 모달(확인 모드) → "이대로 가져오기" → run_now 순이다.
+      모달을 그냥 닫으면 소스는 남되 실행하지 않는다. 어댑터/seen 계약은 F-C12~F-C15.
+    verify:
+      vitest: src/components/settings/CollectSection.test.tsx
+    cases:
+      - id: ui-add-source-action-only-no-quick-collect-input
+        given:
+          ui: settings > collect
+        expect:
+          table_add_testid: "collect-table-add-row"
+          absent_testid: "collect-quick-url-input"
+        covered_by: "renders the add-source action and does not render chatbot register toggle here"
+
+      - id: ui-run-now-toasts-added-count
+        given:
+          run_now: { ok: true, added: 3 }
+        expect:
+          command: collect_source_run_now
+        covered_by: "run now calls collect_source_run_now and toasts the added count"
+
+      - id: ui-dry-run-opens-preview
+        given:
+          action: test fetch
+        expect:
+          command: collect_source_dry_run
+        covered_by: "clicking test fetch (dry run) opens preview modal with dry run items"
+
+      - id: ui-detect-renders-ghost-rows-for-unregistered-candidates
+        given:
+          action: click "로컬 소스 감지"; collect_detect_local returns one candidate with source_id null and one with a source_id
+        expect:
+          ghost_rows: 1
+        covered_by: "detect button calls collect_detect_local and renders a ghost row per candidate with a null source_id"
+      - id: ui-detect-empty-state
+        given:
+          action: click "로컬 소스 감지"; no candidates
+        expect:
+          text: "No local sources detected."
+        covered_by: "shows the empty-detection line when no candidates come back"
+      - id: ui-ghost-import-dry-run-confirm-runs-now
+        given:
+          action: click "가져오기" on a ghost row, then "이대로 가져오기" in the dry-run modal
+        expect:
+          command: collect_source_run_now
+          arg: '{ id: "created-1" }'
+        covered_by: "import -> dry run -> confirm calls collect_source_run_now with the created source id and refreshes"
+      - id: ui-ghost-import-close-does-not-run
+        given:
+          action: click "가져오기", then close the dry-run modal without confirming
+        expect:
+          command_not_called: collect_source_run_now
+        covered_by: "closing the dry-run modal without confirming does not run the created source"
+      - id: ui-ghost-browser-candidate-shows-open-tabs-hint
+        given:
+          action: import a browser_history candidate
+        expect:
+          text: "Open tabs are only recorded after you close them."
+        covered_by: "shows the open-tabs hint in the dry-run modal for a browser_history candidate"
+
+  - id: F-C07
+    name: 유튜브 자막 보강 (rss 채널 피드 항목)
+    status: shipped
+    commands: commands/collect.yaml
+    verify:
+      rust: src-tauri/src/collect/mod.rs
+    notes: rss 항목의 링크가 유튜브 watch URL이면 yt-dlp 자막으로 본문을 교체. run당 ENRICH_CAP=5,
+      초과 unseen 항목은 결과에서 제거되어 다음 due 주기에 이월. seen 판정은 자체 커넥션 SELECT 후
+      drop(락 규율 유지). 실제 yt-dlp 실행은 여기 케이스가 아님(fetch 클로저 주입).
+    cases:
+      - id: enrich-replaces-body-for-unseen-youtube-item
+        given:
+          kind: rss
+          item_url: "https://www.youtube.com/watch?v=abc123"
+        expect:
+          body_md: "SUBTITLES HERE"
+        covered_by: enrich_youtube_items_replaces_body_for_an_unseen_youtube_item
+
+      - id: enrich-skips-already-seen-guids
+        given:
+          seen: [g1]
+        expect:
+          body_md: "description only"
+          reason: "seen guid must not trigger a fetch"
+        covered_by: enrich_youtube_items_skips_fetch_for_already_seen_guids
+
+      - id: enrich-cap-defers-excess-to-next-cycle
+        given:
+          unseen_youtube_items: ENRICH_CAP + 2
+        expect:
+          reason: "the unseen youtube item past the cap must be dropped, not just left unfetched"
+          non_youtube: "non-youtube items are never capped"
+        covered_by: enrich_youtube_items_drops_unseen_youtube_items_beyond_the_cap_but_keeps_non_youtube_items
+
+      - id: enrich-fetch-failure-keeps-item-with-original-body
+        given:
+          fetch: error
+        expect:
+          reason: "original body must survive a fetch failure"
+        covered_by: enrich_youtube_items_keeps_original_body_and_still_includes_the_item_when_fetch_fails
+
+  - id: F-C08
+    name: 유튜브 채널 해석 (채널 URL → RSS 피드 등록)
+    status: shipped
+    commands: commands/collect.yaml
+    verify:
+      rust: src-tauri/src/commands/collect.rs
+      vitest: src/components/settings/CollectSection.test.tsx
+    notes: 채널 구독은 kind='rss' + feeds/videos.xml 로 저장된다. /channel/UC…는 무네트워크 변환,
+      @handle 등은 채널 페이지에서 channelId 추출(SSRF 가드 홉마다 재검증). 설정 UI의 "유튜브 채널"은
+      UI 전용 의사 kind, collect_source_add_nl 의 채널형 youtube 초안도 저장 전 rss 로 재작성.
+    cases:
+      - id: channel-id-url-resolves-without-network
+        given:
+          url_prefix: "https://www.youtube.com/channel/"
+        expect:
+          feed_url_prefix: "https://www.youtube.com/feeds/videos.xml?channel_id="
+        covered_by: resolves_a_channel_id_url_without_any_network_call
+
+      - id: channel-page-inline-json-yields-channel-id
+        given:
+          html: inline ytInitialData JSON
+        expect:
+          channel_id: "UC_x5XG1OV2P6uZZ5FSM9Ttw"
+        covered_by: extract_channel_id_finds_the_inline_json_channel_id
+
+      - id: already-resolved-feed-url-is-idempotent
+        given:
+          url: feed url itself
+        expect:
+          feed_url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC_x5XG1OV2P6uZZ5FSM9Ttw"
+        covered_by: an_already_resolved_feed_url_is_returned_unchanged
+
+      - id: nl-channel-draft-rewritten-to-rss
+        given:
+          kind: youtube
+          url: channel-shaped
+        expect:
+          rewritten_kind: rss
+          single_video_untouched: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        covered_by: rewrite_converts_a_channel_shaped_youtube_draft_to_rss
+
+      - id: ui-channel-type-resolves-then-creates-rss
+        given:
+          form_kind: youtube_channel
+        expect:
+          command: collect_resolve_youtube_channel
+        covered_by: "saving a youtube channel source resolves the feed url first, then creates it as kind=rss"
+
+  - id: F-C09
+    name: 수집 후처리 제안 소비 (카드 → organize propose)
+    status: shipped
+    commands: commands/suggestions.yaml
+    verify:
+      vitest:
+        - src/plugins/pet/bridge/petSuggestionCards.test.ts
+        - src/plugins/pet/bridge/petCollectBridge.test.ts
+    notes: collect_post_process 제안이 펫/사이드바 카드로 렌더되고, 수락 시 기존 organize 계약
+      (ai_organize_note origin="collect_post_process" → AiConfirmModal → ai_apply_organize)이
+      그 노트에 대해 실행된다. 미지의 kind 는 overlap 폴백 대신 스킵(자기병합 카드 사고의 수리).
+      Rust 쪽 origin 감사·통계 배선은 tests/invariant_ai_history_audit.rs 가 커버.
+    cases:
+      - id: collect-suggestion-parses-into-card
+        given:
+          kind: collect_post_process
+          payload: source_name + post_process_model
+        expect:
+          noteTitle: "회의록"
+          sourceName: "업무 메일함"
+        covered_by: "parses a valid collect_post_process suggestion into a 'collect' card"
+
+      - id: unknown-kind-skipped-not-overlap-fallback
+        given:
+          kinds: [some_future_kind, overlap]
+        expect:
+          skipped_kind: "some_future_kind"
+        covered_by: "skips a future/unknown kind entirely instead of falling back to overlap"
+
+      - id: accept-runs-organize-with-origin-and-model
+        given:
+          action: accept collect card
+        expect:
+          origin: "collect_post_process"
+          guidance: "GUIDANCE"
+        covered_by: "runs accept -> select note -> organize in order, with metadata guidance/silent=false/origin/model"
+
+      - id: accept-failure-still-refreshes-pet-badge
+        given:
+          accept: fails
+        expect:
+          event: "pet-suggestions-refresh"
+        covered_by: "still requests a refresh even if the underlying accept fails — badge must not go 60s stale"
+
+  - id: F-C11
+    name: 챗봇 경유 수집 소스 등록
+    status: shipped
+    commands: commands/collect.yaml
+    verify:
+      rust:
+        - src-tauri/src/repo/pet/mod.rs
+        - src-tauri/src/commands/collect.rs
+      vitest: src/lib/chatPipeline.test.ts
+    notes: pet_chat의 add_collect_source 액션은 URL/kind 판정을 다시 하지 않고 collect_source_add_nl을
+      그대로 재사용한다(lib/chatPipeline.ts). collect_chat_register 킬스위치(기본 OFF) + allow_write가
+      둘 다 켜져야 실제 IPC가 나간다 — repo/pet/mod.rs 쪽은 액션을 라벨링만 하고 아무것도 쓰지 않는다.
+      browser_history로 등록될 때는 local_kind_draft가 프로필을 특정하지 않으므로(항상 기본
+      "Default"), collect_source_add_nl이 등록 직전에 detect::detect_candidates로 그 브라우저의
+      후보를 훑어 pick_most_active_profile로 최근 방문이 가장 많은 프로필을 고른다(F-C15의 감지
+      로직 재사용, 동률·후보 없음은 "Default"로 폴백해 오늘과 같은 실행 시점 에러를 유지).
+    cases:
+      - id: chat-add-collect-source-labeled-not-executed
+        given:
+          action: add_collect_source
+          text: "https://example.com/feed 매일 등록해줘"
+        expect:
+          reply: "https://example.com/feed 매일 등록해줘"
+          fallback: "수집 소스 등록을 시도할게요."
+        covered_by: add_collect_source_action_touches_nothing_and_echoes_the_models_text
+
+      - id: chat-add-collect-source-gated-by-two-flags
+        given:
+          action: add_collect_source
+          gates: [collect_chat_register, allow_write]
+        expect:
+          command: collect_source_add_nl
+          input: "https://example.com/feed 등록해줘"
+        covered_by: "calls collect_source_add_nl with the raw user text when both gates are on"
+
+      - id: chat-browser-history-picks-the-most-active-profile
+        given:
+          candidates: ["chrome:Default (3)", "chrome:Work (10)", "edge:Default (50)"]
+          browser: chrome
+        expect:
+          picked_key: "chrome:Work"
+        covered_by: pick_most_active_profile_prefers_the_highest_recent_count
+
+  - id: F-C12
+    name: 항목 단위 seen (parts) — 로컬 가져오기의 줄 단위 append/클레임
+    status: shipped
+    commands: commands/collect.yaml
+    verify:
+      rust: src-tauri/src/collect/mod.rs
+    notes: claude_prompts/codex_prompts/browser_history 3종만 쓰는 경로(PLAN-2026-09-04-local-import
+      §2.1). CollectedItem.parts가 비어 있으면 기존 "항목 전체 seen" 그대로(F-C05), 비어 있으면
+      item.guid는 절대 클레임되지 않고 각 CollectedPart.guid가 개별로 collect_seen에 남는다. 같은
+      target 폴더의 item.title 노트에 append하고, activity_log는 run당 한 줄(추가된 노트 수 기준,
+      줄 수 아님).
+    cases:
+      - id: parts-append-to-same-day-note-and-claim-each-part
+        given:
+          run1: { parts: [p1, p2] }
+          run2: { parts: [p1, p2, p3] }
+        expect:
+          note_title: "클로드 프롬프트 — proj 2026-09-04"
+          item_guid_never_claimed: "item.guid must never be claimed"
+          reason: "same-day re-ingest must append to the existing note, not create a second one"
+        covered_by: parts_append_to_the_same_day_note_and_claim_each_part
+
+      - id: dedupe-needle-hit-is-claimed-but-not-appended
+        given:
+          kind: browser_history-shaped parts
+          second_visit: same url, different part guid
+        expect:
+          note_title: "브라우징 기록 — 2026-09-04"
+          reason: "dedupe_needle hit must not write"
+          still_claimed: "still claimed even though not appended"
+        covered_by: parts_with_a_dedupe_needle_already_in_the_body_are_claimed_but_not_appended
+
+      - id: dry-run-counts-new-and-seen-by-part-guid-not-item-guid
+        given:
+          parts: [p1 (already seen), p2 (new)]
+        expect:
+          preview: "- 09:10 new prompt"
+          reason: "an item with any unseen part must report seen=false"
+        covered_by: finish_dry_run_counts_new_and_seen_by_part_guid
+
+      - id: one-activity-row-per-run-not-per-part
+        given:
+          items: "g1 and g2 both added in one run"
+        expect:
+          summary: "My Feed 2건"
+          reason: "exactly one row per run, not per item"
+        covered_by: finish_run_now_records_one_activity_row_when_items_were_added
+
+  - id: F-C13
+    name: 브라우저 기록 가져오기 (browser_history)
+    status: shipped
+    commands: commands/collect.yaml
+    verify:
+      rust:
+        - src-tauri/src/collect/browser_history.rs
+        - src-tauri/src/collect/urlfilter.rs
+        - src-tauri/src/collect/config.rs
+        - src-tauri/src/collect/mod.rs
+        - src-tauri/src/repo/collect.rs
+    notes: Windows 전용(Chrome/Edge/Brave/Vivaldi/Whale History sqlite를 임시 복사해 읽기 전용으로
+      연다). 줄 형식은 대시-시각-링크-소요시간 넉 줄짜리 마크다운 한 줄이고, 검색결과/제외 도메인
+      필터는 urlfilter.rs가 소유한다(§2.8). run당
+      500건(VISIT_LIMIT) 캡, 초과는 다음 run으로 자연 이월하되 그 run은 last_status="partial"로
+      기록돼 is_due가 주기와 무관하게 다음 tick에 바로 재수집한다. config 클램프는 min_seconds
+      5~600초, backfill_days 1~90일. 임시 복사본이 손상됐으면(가비지/부분 쓰기) 한 번 재복사해
+      재시도한다.
+    cases:
+      - id: chrome-time-converts-to-local-date-and-line-format
+        given:
+          visit: chrome epoch µs timestamp, 2분 duration
+        expect:
+          body_line: "Example Page"
+        covered_by: converts_chrome_time_to_the_correct_local_date_and_hh_mm
+
+      - id: min-seconds-filters-short-visits
+        given:
+          visits: [5초 방문, 60초 방문]
+        expect:
+          kept: "https://example.com/long"
+        covered_by: filters_visits_shorter_than_min_seconds
+
+      - id: backfill-window-bounds-which-visits-return
+        given:
+          visits: [2시간 전, 10일 전]
+          backfill_days: 1
+        expect:
+          reason: "a visit older than the backfill window must be excluded"
+        covered_by: only_visits_within_the_backfill_window_are_returned
+
+      - id: search-results-and-non-http-schemes-excluded
+        given:
+          visits: ["google.com/search", "chrome://settings", real article]
+        expect:
+          kept: "Real Article"
+        covered_by: search_result_and_non_http_urls_are_excluded
+
+      - id: hidden-urls-excluded
+        given:
+          url: hidden=1
+        expect:
+          reason: "hidden=1 urls must never surface"
+        covered_by: hidden_urls_are_excluded
+
+      - id: part-guid-and-dedupe-needle-follow-the-shared-contract
+        given:
+          visit_id: 42
+        expect:
+          guid: "visit:chrome:Default:42"
+          dedupe_needle: "(https://example.com/a)"
+        covered_by: part_guid_and_dedupe_needle_follow_the_shared_visit_line_contract
+
+      - id: caps-at-500-visits-per-run
+        given:
+          visits: 501
+        expect:
+          reason: "run must cap at VISIT_LIMIT, leaving the rest for the next run"
+        covered_by: caps_at_500_visits_per_run_keeping_the_newest
+
+      - id: temp-history-copy-removed-after-a-run
+        given:
+          action: collect_from_path over a synthetic History db
+        expect:
+          reason: "the temp History copy must be deleted after the run"
+        covered_by: the_temporary_copy_is_removed_after_a_run
+
+      - id: missing-history-file-is-a-named-not-found-error
+        given:
+          path: nonexistent History file
+        expect:
+          error_prefix: "browser history database not found:"
+        covered_by: missing_history_file_is_a_not_found_error_naming_the_path
+
+      - id: config-schema-defaults-and-clamps-out-of-range-values
+        given:
+          config: "{}"
+        expect:
+          default_browser: "chrome"
+          default_profile: "Default"
+        covered_by: browser_history_schema_defaults_clamps_and_rejects_unknown_browser
+
+      - id: brave-vivaldi-whale-are-accepted-browser-values
+        given:
+          config: '{"browser":"brave"}, {"browser":"vivaldi"}, {"browser":"whale"}'
+        expect:
+          browser_variant: "vivaldi"
+        covered_by: browser_history_schema_accepts_brave_vivaldi_and_whale
+
+      - id: user-data-subpath-maps-each-supported-browser
+        given:
+          browsers: [chrome, edge, brave, vivaldi, whale]
+        expect:
+          brave_vendor_app: "Brave-Browser"
+          whale_vendor: "Naver Whale"
+        covered_by: user_data_subpath_maps_each_supported_browser
+
+      - id: stale-temp-history-copies-are-cleaned-up-at-boot
+        given:
+          leftover: "data_dir/tmp/history-abc123.db from a force-killed app"
+        expect:
+          reason: "a leftover history-*.db copy must be deleted"
+        covered_by: cleanup_stale_temp_copies_removes_leftover_history_copies_but_not_other_files
+
+      - id: corrupt-temp-copy-is-retried-once-then-gives-up
+        given:
+          attempt: always returns a "database disk image is malformed" error
+        expect:
+          reason: "must attempt exactly twice: the original attempt plus one retry"
+        covered_by: with_corrupt_copy_retry_retries_once_on_a_corrupt_copy_error_then_gives_up
+
+      - id: non-corruption-errors-are-not-retried
+        given:
+          attempt: always returns a NotFound error
+        expect:
+          reason: "non-corruption errors must not be retried"
+        covered_by: with_corrupt_copy_retry_does_not_retry_other_kinds_of_errors
+
+      - id: hitting-the-visit-cap-marks-the-run-partial-for-immediate-backfill
+        given:
+          parts: exactly VISIT_LIMIT (500) parts in one run
+        expect:
+          reason: "더 가져올 방문이 남아 있다는 뜻이다"
+        covered_by: finish_run_now_marks_browser_history_partial_when_it_hits_the_visit_cap
+
+      - id: below_the_visit_cap_stays_a_plain_ok_run
+        given:
+          parts: 1 part, well under VISIT_LIMIT
+        expect:
+          reason: "below the cap must stay a plain ok run"
+        covered_by: finish_run_now_keeps_ok_status_for_browser_history_below_the_visit_cap
+
+      - id: partial-status-makes-is-due-fire-immediately
+        given:
+          last_status: partial
+          interval_minutes: 999999
+        expect:
+          reason: "a partial run must be due immediately, ignoring the interval"
+        covered_by: is_due_true_immediately_when_last_status_is_partial_regardless_of_interval
+
+  - id: F-C14
+    name: 요약 후처리 (summary)
+    status: shipped
+    commands: commands/collect.yaml
+    verify:
+      rust: src-tauri/src/collect/summary.rs
+    notes: post_process="summary"인 소스는 노트 갱신 직후 프롬프트 줄만(최대 PROMPT_CHAR_CAP=8,000자,
+      넘으면 최신 쪽 유지) 모델에 보내 노트 첫 섹션 맨 위 "## 요약" 블록을 upsert한다 — 원래 AI
+      응답은 절대 읽지 않는다. 재실행 시 새 블록으로 교체(스택 안 됨). 호출 지점은 백그라운드
+      러너(run_one)와 "지금 실행"(commands::collect, 스폰 스레드) 둘 다(§2.6).
+    cases:
+      - id: privacy-gate-closed-skips-the-ai-call
+        given:
+          provider: openai
+          ai_enabled: false
+        expect:
+          unchanged_line: "첫 프롬프트"
+        covered_by: gate_closed_makes_no_ai_call_and_leaves_body_unchanged
+
+      - id: no-dash-prefixed-lines-skips-the-ai-call
+        given:
+          body: plain text, no "- " lines
+        expect:
+          body: "그냥 평문, 프롬프트 줄 아님"
+        covered_by: no_prompt_lines_makes_no_ai_call
+
+      - id: summary-block-is-prepended-above-the-existing-body
+        given:
+          response: "무엇: A\n반복: B\n미해결: C"
+        expect:
+          header: "## 요약"
+          kept_line: "첫 프롬프트"
+        covered_by: fake_transport_response_is_prepended_as_a_summary_block
+
+      - id: rerunning-replaces-the-block-instead-of-stacking
+        given:
+          runs: [first summary, second summary]
+        expect:
+          reason: "must not stack a second block"
+          latest: "무엇: X"
+        covered_by: rerunning_after_the_debounce_window_replaces_the_existing_block_instead_of_stacking_a_second_one
+
+      - id: post-process-model-override-reaches-the-transport
+        given:
+          post_process_model: "override-model"
+        expect:
+          model: "override-model"
+        covered_by: post_process_model_override_reaches_the_transport
+
+      - id: prompt-context-keeps-only-dash-lines-and-caps-to-newest-tail
+        given:
+          body: one short "- " line + one line over PROMPT_CHAR_CAP
+        expect:
+          reason: "must keep the tail (newest), not the head"
+        covered_by: extract_prompt_context_keeps_only_dash_lines_and_caps_to_the_newest_tail
+
+      - id: summary-section-builder-prepends-or-replaces-the-top-block
+        given:
+          existing_body: "- line one"
+        expect:
+          kept_line: "line one"
+        covered_by: build_summary_section_prepends_or_replaces_the_top_block
+
+  - id: F-C15
+    name: 로컬 소스 감지 · 1클릭 가져오기
+    status: shipped
+    commands: commands/collect.yaml
+    verify:
+      rust:
+        - src-tauri/src/collect/detect.rs
+        - src-tauri/src/repo/folders.rs
+    notes: collect_detect_local(순수 조회)이 크롬/엣지 프로필별 History와 클로드/코덱스 세션
+      로그 루트를 훑어 LocalCandidate[]를 반환하고, collect_import_local(key)이 후보 하나를
+      1클릭 등록한다(PLAN-2026-09-04-local-import.md §W7, §2.8). 이미 같은 kind/browser+profile
+      소스가 있으면 새로 만들지 않고 그대로 반환(멱등) — repo::folders::ensure_named_folder_id가
+      평평한 고정 폴더("수집 — AI 대화"/"수집 — 브라우징")를 찾거나 만든다.
+    cases:
+      - id: browser-profile-names-from-local-state-default-first
+        given:
+          profiles: "Default, Profile 1, Guest Profile; Local State names Default/Profile 1 only"
+        expect:
+          order: ["크롬 · Hongoo", "크롬 · Guest Profile", "크롬 · Work"]
+        covered_by: profile_names_come_from_local_state_with_dir_name_fallback_and_default_sorts_first
+
+      - id: profile-without-history-file-omitted
+        given:
+          profiles: "Default has a History file, Profile 1 does not"
+        expect:
+          reason: "a profile dir with no History file must be omitted"
+        covered_by: profiles_without_a_history_file_are_omitted
+
+      - id: browser-recent-count-and-last-seen-from-temp-copy
+        given:
+          visits: [2시간 전, 30일 전]
+        expect:
+          detail_contains: "최근 7일 1건"
+        covered_by: recent_count_and_last_seen_are_computed_from_the_temp_history_copy
+
+      - id: browser-source-id-matches-existing-browser-profile-source
+        given:
+          existing_source: "browser_history chrome/Default"
+        expect:
+          source_id: "s1"
+        covered_by: source_id_is_populated_when_a_matching_browser_source_exists
+
+      - id: claude-candidate-counts-recent-lines-and-all-time-projects
+        given:
+          projects: "ProjA has 2 prompts, ProjB has 1 prompt"
+        expect:
+          reason: "two project directories each with a jsonl file"
+        covered_by: claude_candidate_counts_recent_prompt_lines_and_all_time_projects
+
+      - id: claude-candidate-skips-files-older-than-14-days
+        given:
+          file_mtime: 30일 전
+        expect:
+          reason: "a file untouched for 14+ days must not be opened for counting"
+        covered_by: claude_candidate_excludes_files_older_than_the_detection_backfill_window
+
+      - id: codex-candidate-counts-lines-and-cwd-projects
+        given:
+          session: session_meta cwd=/home/user/brise + one user response_item
+        expect:
+          reason: "counts one distinct cwd project from session_meta"
+        covered_by: codex_candidate_counts_recent_prompt_lines_and_distinct_cwd_projects
+
+      - id: prompts-candidate-omits-missing-root-and-reports-source-id
+        given:
+          root: nonexistent claude projects dir
+        expect:
+          source_id: "cp1"
+        covered_by: detect_prompts_candidate_omits_missing_roots_and_reports_source_id
+
+      - id: import-reuses-an-existing-source-on-a-second-call
+        given:
+          key: "claude_prompts, called twice"
+        expect:
+          folder_name: "수집 — AI 대화"
+        covered_by: import_creates_a_folder_and_source_once_then_reuses_it_on_a_second_call
+
+      - id: import-browser-key-uses-the-browsing-folder
+        given:
+          key: "chrome:Default"
+        expect:
+          folder_name: "수집 — 브라우징"
+        covered_by: import_browser_key_uses_the_browsing_folder_and_none_post_process
+
+      - id: import-rejects-unknown-key
+        given:
+          key: "bogus-key"
+        expect:
+          reason: "unknown local import key"
+        covered_by: import_rejects_an_unknown_key
+
+      - id: ensure-named-folder-id-reuses-exact-name-match
+        given:
+          calls: "create 수집 — AI 대화, create again, create 수집 — 브라우징"
+        expect:
+          reason: "an existing folder with the exact name must be reused, not duplicated"
+        covered_by: ensure_named_folder_id_finds_by_exact_name_or_creates_it
+
+      - id: newly-created-collect-folder-starts-search-excluded
+        given:
+          folder: "수집 — AI 대화 created for the first time"
+        expect:
+          reason: "a newly created collect folder starts search-excluded"
+        covered_by: ensure_named_folder_id_finds_by_exact_name_or_creates_it
+
+      - id: existing-collect-folder-is-never-re-excluded
+        given:
+          sequence: "create folder, user flips search_excluded off, ensure_named_folder_id called again"
+        expect:
+          reason: "an existing folder found by name must not be re-excluded"
+        covered_by: ensure_named_folder_id_does_not_re_exclude_a_folder_the_user_re_included_in_search
+
+  - id: F-C16
+    name: URL 스크럽 (자격증명 쿼리 파라미터 제거)
+    status: shipped
+    commands: commands/collect.yaml
+    verify:
+      rust:
+        - src-tauri/src/collect/urlfilter.rs
+        - src-tauri/src/collect/browser_history.rs
+        - src-tauri/src/sync_server/ingest.rs
+    notes: 노트에 URL이 영구 저장되기 전에 collect/urlfilter.rs::scrub_url이 token/access_token/
+      session/password/oauth_* 등 자격증명 성격 쿼리 파라미터를 없앤다(q 등 일반 파라미터는
+      유지, 다 지워지면 trailing ? 도 사라진다). browser_history 어댑터의 line/dedupe_needle이
+      같은 함수를 쓴다 — 2026-09-09 익스텐션 철수 전에는 sync_server::ingest 의 방문 기록 경로와
+      공유하던 단일 정의(PLAN-2026-09-04-local-import hygiene wave).
+    cases:
+      - id: sensitive-keys-stripped-case-insensitively-others-kept
+        given:
+          url: "https://example.com/a?Token=abc&q=cats&Sid=x"
+        expect:
+          kept_param: "q=cats"
+        covered_by: scrub_url_strips_sensitive_query_keys_case_insensitively_and_keeps_the_rest
+
+      - id: oauth-prefix-family-and_plain_urls
+        given:
+          url: "https://example.com/cb?oauth_token=abc&oauth_verifier=def"
+        expect:
+          reason: "unparseable input is returned unchanged"
+        covered_by: scrub_url_strips_the_oauth_prefix_family_and_leaves_normal_urls_untouched
+
+      - id: browser-history-line-and-dedupe-needle-are-scrubbed
+        given:
+          visit_url: "https://example.com/a?token=secret123&q=cats"
+        expect:
+          reason: "the token query param must not reach the note"
+        covered_by: sensitive_query_params_are_scrubbed_from_the_line_and_dedupe_needle
+
+  - id: F-C17
+    name: 일자 노트 병합 (동기화 수렴 규칙)
+    status: shipped
+    commands: commands/collect.yaml
+    verify:
+      rust:
+        - src-tauri/src/collect/daynote.rs
+        - src-tauri/src/collect/mod.rs
+        - src-tauri/src/sync_server/ingest.rs
+    notes: 동기화 후 같은 폴더에 제목이 똑같은 일자 노트("브라우징 기록 — 날짜", "클로드 프롬프트 —
+      proj 날짜")가 두 개 이상 생기면 collect::daynote::find_or_merge_day_note가 하나로 합친다 —
+      가장 오래된 노트(동률이면 id가 작은 쪽)를 생존자로 삼아 첫 섹션 줄을 오래된 순으로 이어붙이고
+      (정확히 같은 줄·같은 (url) needle은 첫 것만 남김, "## 요약" 블록은 최신 것이 이김), 나머지는
+      deleted_at + fts_delete로 소프트 삭제한다(activity_log는 안 남김 — 사용자가 지운 게 아니라
+      자동 수렴이라). 결정적 노트 id(날짜+제목 해시로 시드)는 기각했다 — 노트 id는 이미 첨부·태그·
+      내부 링크가 참조하는 진짜 식별자라 사후에 결정적으로 바꾸면 그 참조가 깨진다. 이 헬퍼는
+      collect::mod.rs::ingest_item_parts와 sync_server::ingest.rs::append_visit이 공유한다(예전엔
+      각자 `ORDER BY created_at DESC`로 "가장 최근" 노트를 골라 두 경로가 다른 생존자에 합의할 수
+      있었다 — 지금은 둘 다 가장 오래된 쪽으로 통일).
+    cases:
+      - id: a-single-note-is-untouched
+        given:
+          notes: 1
+        expect:
+          reason: "one note must be found"
+        covered_by: a_single_note_is_returned_untouched
+
+      - id: two-notes-merge-into-the-oldest-survivor
+        given:
+          notes: 2 (overlapping + distinct lines each)
+        expect:
+          reason: "the oldest note must survive"
+        covered_by: two_notes_with_overlapping_and_distinct_lines_merge_into_the_oldest_survivor
+
+      - id: three-notes-merge-into-one-survivor
+        given:
+          notes: 3
+        expect:
+          note_title: "클로드 프롬프트 — proj 2026-09-05"
+        covered_by: three_notes_merge_into_a_single_survivor
+
+      - id: tie-on-created-at-breaks-by-smaller-id
+        given:
+          notes: 2 (same created_at)
+        expect:
+          reason: "smaller id wins the tie"
+        covered_by: a_tie_on_created_at_breaks_by_the_smaller_id
+
+      - id: duplicate-url-needles-keep-only-the-first
+        given:
+          notes: 2 (same url needle, different text)
+        expect:
+          reason: "the older visit to the same url must win, the distinct url must still be appended"
+        covered_by: duplicate_url_needles_across_notes_keep_only_the_first
+
+      - id: newest-summary-block-wins
+        given:
+          notes: 2 (each with a "## 요약" block)
+        expect:
+          dropped: "옛 요약"
+        covered_by: the_newest_summary_block_wins_and_old_ones_are_dropped
+
+      - id: ingest-item-parts-merges-pre-existing-duplicates
+        given:
+          pre_existing_duplicates: 2 (device A, device B)
+          new_part: "- 09:30 from this run"
+        expect:
+          reason: "the two pre-existing duplicates must collapse into the older one"
+        covered_by: ingest_item_parts_merges_pre_existing_duplicate_day_notes

@@ -1,0 +1,1307 @@
+# 기능 카탈로그: notes 도메인 (인덱스 — 세부는 $ref 대상이 SSOT)
+features:
+  - id: F-N01
+    name: 폴더 트리 + 노트 CRUD
+    status: shipped
+    commands: commands/notes.yaml
+    db: [db/schemas/notes.sql, db/schemas/folders.sql]
+    service: service/notes.yaml
+    verify:
+      rust: src-tauri/src/repo/notes/mod.rs
+      vitest: src/lib/noteQuery.test.ts
+      smoke: boot
+    cases:
+      - id: create-stamps-now-iso
+        given:
+          title: "Fresh Note"
+        expect:
+          title: "Fresh Note"
+        covered_by: test_create_still_stamps_now_iso
+
+      - id: create-today-default-explicit-ymd
+        given:
+          year: 1592
+          month: 5
+          day: 13
+        expect:
+          year: "1592"
+        covered_by: test_create_today_default_respects_explicit_values
+
+      - id: create-timestamp-leaves-month-day-null
+        given:
+          year: 1592
+          month: omitted
+          day: omitted
+        expect:
+          year: "1592"
+        covered_by: test_create_with_timestamp_leaves_month_day_null_when_omitted
+
+      - id: set-location-persists-and-validates
+        given:
+          title: "Location Note"
+          lat: 48.8566
+          lng: 2.3522
+        expect:
+          title: "Location Note"
+          lat: "48.8566"
+          lng: "2.3522"
+        covered_by: test_note_set_location_persists_and_validates_range
+
+      - id: folder-list-lightweight-tags-via-index
+        given:
+          title: "Light Note"
+          tags: ["alpha", "beta"]
+          image: "x.png"
+        expect:
+          title: "Light Note"
+          tag_a: "alpha"
+          tag_b: "beta"
+          no_tags: "folder_list must not ship tags"
+          no_image: "folder_list must not ship has_image"
+        covered_by: test_folder_list_is_lightweight_tags_via_index
+
+      - id: set-event-end-rejects-invalid-range
+        given:
+          start: 1794-01-01
+          bad: [end_day without end_month, end_month without end_year, end before start]
+        expect:
+          end_day: "end_day requires end_month"
+          end_month: "end_month requires end_year"
+          reverse: "start must not be after"
+        covered_by: test_set_event_end_invariants_and_range
+
+      - id: folder-list-and-query-expose-end
+        given:
+          title: "Exposed"
+          end: 1502-03
+        expect:
+          title: "Exposed"
+          end_year: "1502"
+        covered_by: test_note_query_and_folder_list_expose_end
+
+      - id: set-schedule-roundtrip
+        given:
+          start_time: "09:00"
+          end_time: "10:30"
+          rrule: "FREQ=WEEKLY;BYDAY=MO,WE"
+        expect:
+          start_time: "09:00"
+          end_time: "10:30"
+          rrule: "FREQ=WEEKLY;BYDAY=MO,WE"
+        covered_by: test_set_schedule_persists_and_round_trips
+
+      - id: last7-date-range
+        given:
+          now: "2026-07-28T15:00:00.000Z"
+          dateRange: last7
+        expect:
+          from: "2026-07-22"
+          to: "2026-07-28"
+        covered_by: "last7 spans 7 UTC calendar days inclusive, ending today"
+
+      - id: last7-utc-day-boundary
+        given:
+          now: "2026-01-01T23:30:00.000Z"
+          dateRange: last7
+        expect:
+          from: "2025-12-26"
+          to: "2026-01-01"
+        covered_by: "uses the UTC date, not the local date, near a UTC day boundary"
+
+      - id: omits-updated-range-when-absent
+        given:
+          dateRange: null
+        expect:
+          omitted_from: "updated_from"
+          omitted_to: "updated_to"
+        covered_by: "omits updated_from/updated_to when dateRange is absent or null"
+
+  - id: F-N02
+    name: 멀티 섹션 에디터 (마크다운 자동 저장)
+    status: shipped
+    commands: commands/sections.yaml
+    service: service/notes.yaml#autosave
+    verify:
+      rust: src-tauri/src/repo/sections.rs
+    cases:
+      - id: create-defaults-to-text-kind
+        given:
+          kind: omitted
+        expect:
+          kind: "text"
+        covered_by: create_defaults_to_text_kind
+
+      - id: create-diagram-section-roundtrip
+        given:
+          kind: diagram
+          body: flowchart
+        expect:
+          kind: "diagram"
+          # 싱글쿼트: rust 소스의 `\n` 이스케이프와 바이트 단위로 같아야 한다.
+          body_md: 'flowchart TD\n  A --> B'
+        covered_by: create_with_body_and_kind_makes_a_diagram_section
+
+      - id: create-sheet-section-roundtrip
+        given:
+          kind: sheet
+          name: "가계부"
+        expect:
+          kind: "sheet"
+          name: "가계부"
+          body: '{"v":1,"rows":100,"cols":[],"cells":{}}'
+        covered_by: create_with_body_and_kind_makes_a_sheet_section
+
+      - id: create-rejects-unknown-kind
+        given:
+          kind: "bogus"
+        expect:
+          kind: "bogus"
+        covered_by: create_with_body_and_kind_rejects_unknown_kind
+
+  - id: F-N03
+    name: 원문 사료 패널 (read-only)
+    status: shipped
+    commands: commands/sources.yaml
+    verify:
+      vitest: src/components/SourcePanel.test.tsx
+    cases:
+      - id: presets-for-fresh-draft
+        given:
+          draft: true
+          body: empty
+          previewItem: null
+        expect:
+          presets: "preset-list-stub"
+          preview: "preview-attachment-stub"
+        covered_by: "shows presets for a fresh draft (baseline, unchanged)"
+
+      - id: presets-when-attachment-unselected
+        given:
+          attachments: ["a1"]
+          previewItem: null
+        expect:
+          presets: "preset-list-stub"
+        covered_by: "shows presets when an attachment exists but NOTHING is selected in the preview"
+
+      - id: hides-presets-when-attachment-selected
+        given:
+          previewItem: { kind: attachment, id: "a1" }
+        expect:
+          preview: "preview-attachment-stub"
+          presets: "preset-list-stub"
+        covered_by: "hides presets once that attachment is actually selected"
+
+      - id: stale-preview-shows-presets
+        given:
+          previewItem: { kind: attachment, id: "from-another-note" }
+        expect:
+          stale: "from-another-note"
+          presets: "preset-list-stub"
+        covered_by: "shows presets when a STALE previewItem from another note can't resolve here"
+
+      - id: related-preview-hides-presets
+        given:
+          previewItem: { kind: note, id: "related-1" }
+        expect:
+          related: "related-1"
+          preview: "preview-attachment-stub"
+        covered_by: "hides presets when a resolved preview item exists (e.g. previewing a related note), even with empty body and no attachments"
+
+      - id: body-content-keeps-presets
+        given:
+          body: "real content"
+          previewItem: null
+        expect:
+          body: "real content"
+          presets: "preset-list-stub"
+        covered_by: "keeps presets when the body has content but nothing is actually being previewed"
+
+      - id: collapsed-28px-rail
+        given:
+          previewCollapsed: true
+        expect:
+          rail: "source-panel-collapsed-rail"
+          width: "28px"
+        covered_by: "collapsed: renders the 28px rail, not PresetList/PreviewAttachment content"
+
+      - id: expanded-fills-column-width
+        given:
+          previewCollapsed: false
+        expect:
+          flex: "0 0 auto"
+          width: "100%"
+          drop: "source-panel-drop-target"
+        covered_by: "expanded (not collapsed): the card fills the column's width, not its content width"
+
+      - id: history-hidden-until-entries
+        given:
+          previewPast: []
+          previewFuture: []
+        expect:
+          back: "preview-history-back"
+          forward: "preview-history-forward"
+        covered_by: "hides back/forward until history has entries"
+
+      - id: back-steps-previous-preview
+        given:
+          past: ["a1"]
+          current: "a2"
+        expect:
+          back: "preview-history-back"
+        covered_by: "back steps to the previous preview selection"
+
+  - id: F-N04
+    name: 첨부파일 (복사 저장 + OS 열기 + 사진·음성 메타 자동 반영)
+    status: shipped
+    commands: commands/attachments.yaml
+    verify:
+      rust:
+        - src-tauri/src/repo/attachments/mod.rs
+        - src-tauri/src/repo/attachments/exif_region.rs
+        - src-tauri/src/repo/settings_schema.rs
+        - src-tauri/src/sync_server/handlers.rs
+      vitest:
+        - src/lib/fileKinds.test.ts
+    cases:
+      - id: normalize-stored-name
+        given:
+          names: ["사진.png", "my photo.png", "a(1)#b%c.png", "???.???"]
+        expect:
+          hangul: "사진.png"
+          spaces: "my-photo.png"
+          punct: "a-1-b-c.png"
+          fallback: "attachment"
+        covered_by: normalize_stored_name_rules
+
+      - id: add-file-keeps-display-name
+        given:
+          src: "my photo (final).png"
+        expect:
+          name: "my photo (final).png"
+          reason: "DB display name must stay original"
+        covered_by: add_file_normalizes_stored_name_but_keeps_display_name
+
+      - id: link-url-allowlist-rejects-nonhttp
+        given:
+          urls: ["http://example.com", "javascript:alert(1)", "file:///C:/Windows/System32/calc.exe"]
+        expect:
+          ok: "http://example.com"
+          javascript: "javascript:alert(1)"
+          file: "file:///C:/Windows/System32/calc.exe"
+        covered_by: link_url_allowlist_rejects_nonhttp_schemes
+
+      - id: footnote-read-text-roundtrip
+        given:
+          text: "각주 본문입니다"
+          anchor: "앵커"
+        expect:
+          text: "각주 본문입니다"
+        covered_by: read_text_roundtrips_footnote_and_gates_kind
+
+      - id: add-footnote-empty-rejected
+        given:
+          text: ["", "   ", "\\n\\t"]
+        expect:
+          reason: "should reject empty text"
+        covered_by: test_add_footnote_empty_text_rejected
+
+      - id: footnote-survives-export
+        given:
+          text: "export me"
+          anchor: "anchor"
+        expect:
+          body: "export me"
+          reason: "footnote .md body must be copied into export sidecar"
+        covered_by: test_footnote_survives_export_as_file_attachment
+
+      - id: add-file-stores-sha256
+        given:
+          bytes: "brise sync phase 0 content hash test"
+        expect:
+          bytes: "brise sync phase 0 content hash test"
+        covered_by: add_file_computes_and_stores_sha256_content_hash
+
+      - id: remove-deletes-original-and-thumb
+        given:
+          file: "shot.png"
+        expect:
+          original: "original must be removed"
+          thumb: "thumbnail must be removed with the attachment"
+        covered_by: remove_deletes_original_and_thumbnail
+
+      - id: gps-from-file-hemisphere
+        given:
+          refs: ["N/E", "S/W"]
+        expect:
+          present: "GPS present"
+        covered_by: meta_from_file_reads_hemisphere_refs
+
+      - id: dedupe-within-100m
+        given:
+          existing: { name: "서울시청", lat: 37.5665, lng: 126.9780 }
+          near: 50m
+          far: 500m
+        expect:
+          name: "서울시청"
+        covered_by: dedupe_within_100m_skips_but_farther_does_not
+
+      - id: auto-meta-exifless-noop
+        given:
+          file: "nogps.png"
+        expect:
+          file: "nogps.png"
+        covered_by: auto_meta_hook_adds_nothing_for_exifless_image
+
+      # S2-1 (PLAN-2026-10-06-s2-input.md §1·§3) — 사진 EXIF·음성 업로드 메타의 자동 반영.
+      # 결정: 정책은 photo_meta_mode(off|ask|auto, 기본 auto) 하나. off 면 EXIF·지오코딩(외부 요청) 생략,
+      # ask 면 attachment-meta-suggested 이벤트만, auto 면 반영 뒤 attachment-meta-applied(되돌리기 id).
+      # 대표 날짜는 연 정밀도뿐일 때만 채우고 아니면 관련 날짜(label "사진"/"음성")로 — 덮어쓰지 않는다.
+      - id: photo-meta-fixture-matrix
+        given:
+          fixtures: ["GPS+촬영시각", "촬영시각만", "GPS만", "둘 다 없음", "시계 미설정 쓰레기 값"]
+        expect:
+          taken: "2026:10:03 14:32:05"
+        covered_by: meta_from_file_fixture_matrix
+
+      - id: representative-date-never-overwritten
+        given:
+          primary: "2025-01-02 (일 정밀도)"
+          photo: "2026-10-03"
+        expect:
+          reason: "대표 보존"
+        covered_by: apply_never_overwrites_an_existing_representative_date
+
+      - id: burst-same-day-one-date-row
+        given:
+          photos: 5
+        expect:
+          dates: "연사 5장 → 관련 날짜 1행"
+          regions: "100m dedupe → 지역 1행"
+        covered_by: burst_of_five_same_day_makes_one_date_row
+
+      - id: photo-meta-off-skips-geocoding
+        given:
+          photo_meta_mode: off
+        expect:
+          reason: "off 에서는 지오코딩(외부 요청) 0"
+        covered_by: hook_off_skips_exif_and_geocoding_entirely
+
+      - id: photo-meta-mode-settings-round-trip
+        given:
+          keys: ["photo_meta_mode", "voice_transcribe_mode", "voice_cleanup_mode"]
+        expect:
+          scope: "PC 공유 전역 키"
+        covered_by: test_s2_input_modes_default_validate_and_round_trip
+
+      - id: media-kind-and-mime-in-sync
+        given:
+          exts: ["webm", "opus", "heic"]
+        expect:
+          webm: "audio/webm"
+        covered_by: kind_and_guess_mime_stay_in_sync_for_media
+
+      - id: image-exts-mirror-rust-kind
+        given:
+          ext: heic
+        expect:
+          ext: "heic"
+        covered_by: image 팔 = ATTACHMENT_IMAGE_EXTS (heic/heif 포함)
+
+  - id: F-N05
+    name: 노트 내보내기 / 전체 백업·복원 4모드
+    status: shipped
+    commands: commands/export.yaml
+    service: service/export.yaml
+    states: states/note-lifecycle.md
+    verify:
+      rust: src-tauri/tests/invariant_export_roundtrip.rs
+    cases:
+      - id: replace-roundtrip-preserves-notes
+        given:
+          mode: replace
+          seed: Sejong + Related Partner
+        expect:
+          title: "Sejong"
+          partner: "Related Partner"
+          bundle: "brise-bundle.json"
+        covered_by: full_roundtrip
+
+      - id: replace-preserves-fts-and-source
+        given:
+          mode: replace
+          search: "훈민정음"
+        expect:
+          query: "훈민정음"
+          source: "원문.txt"
+        covered_by: full_roundtrip
+
+      - id: replace-preserves-region-schedule-icon
+        given:
+          mode: replace
+        expect:
+          region: "Hanseong"
+          start_time: "09:30"
+          rrule: "FREQ=WEEKLY;BYDAY=MO,WE"
+          icon: "crown"
+          waypoint: "Gyeongbokgung"
+        covered_by: full_roundtrip
+
+      - id: replace-preserves-space-and-status
+        given:
+          mode: replace
+        expect:
+          space: "Main Canvas"
+          sticky: "Sticky Note Memo"
+          status: "Relecture"
+        covered_by: full_roundtrip
+
+      - id: merge-skips-conflicts
+        given:
+          mode: merge
+          extra: "Extra"
+        expect:
+          extra: "Extra"
+          mode: "merge"
+        covered_by: merge_skips_conflicts
+
+      - id: future-version-rejected
+        given:
+          version: i64::MAX
+          mode: replace
+        expect:
+          bundle: "brise-bundle.json"
+        covered_by: future_version_rejected
+
+      - id: traversal-rejected
+        given:
+          rel_path: "../../evil.exe"
+          mode: merge
+        expect:
+          rel_path: "../../evil.exe"
+          not_written: "evil.exe"
+        covered_by: traversal_rejected
+
+  - id: F-N06
+    name: 휴지통 / 아카이브
+    status: shipped
+    commands: commands/notes.yaml
+    states: states/note-lifecycle.md
+    verify:
+      rust: src-tauri/src/repo/notes/mod.rs
+    cases:
+      - id: trash-soft-delete-hides
+        given:
+          title: "Trash Test Note"
+          action: delete
+        expect:
+          title: "Trash Test Note"
+          no_cascade: "soft delete must not cascade children"
+        covered_by: test_trash_lifecycle_soft_delete_restore_purge
+
+      - id: trash-restore-returns-to-list
+        given:
+          after: restore
+        expect:
+          title: "Trash Test Note"
+        covered_by: test_trash_lifecycle_soft_delete_restore_purge
+
+      - id: purge-cascades-children
+        given:
+          after: purge
+        expect:
+          cascade: "purge must cascade-delete children"
+        covered_by: test_trash_lifecycle_soft_delete_restore_purge
+
+      - id: archive-hidden-but-fts-searchable
+        given:
+          title: "Archive Test Note"
+          action: archive
+        expect:
+          title: "Archive Test Note"
+          fts: "archived notes must stay in FTS — archive() must not call fts_delete"
+        covered_by: test_archive_lifecycle_hidden_but_fts_searchable_and_unarchive_restores
+
+      - id: unarchive-restores-to-tree
+        given:
+          after: unarchive
+        expect:
+          title: "Archive Test Note"
+        covered_by: test_archive_lifecycle_hidden_but_fts_searchable_and_unarchive_restores
+
+      - id: purge-tombstones-note-only
+        given:
+          title: "Tombstone Note"
+          action: purge
+        expect:
+          title: "Tombstone Note"
+          note: "purge must tombstone the note itself"
+          children: "cascaded children must not get their own tombstones"
+        covered_by: test_purge_tombstones_note_only_not_cascaded_children
+
+  - id: F-N07
+    name: 파일 ↔ 섹션 (가져오기/내보내기)
+    status: shipped
+    commands: [commands/sections.yaml, commands/export.yaml]
+    service: service/extraction.yaml
+    verify:
+      rust:
+        - src-tauri/src/commands/sections.rs
+        - src-tauri/src/repo/csv_import.rs
+        - src-tauri/src/repo/xlsx_import.rs
+        - src-tauri/src/repo/import_scan.rs
+        - src-tauri/src/repo/extraction.rs
+        - src-tauri/src/repo/transfer/export.rs
+      vitest:
+        - src/lib/fileKinds.test.ts
+        - src/lib/sheet/fromMatrix.test.ts
+        - src/components/AttachmentsBar.test.tsx
+        - src/components/Toast.test.tsx
+        - src/components/editor/useEditorFileDrop.handleDrop.test.ts
+        - src/components/editor/EditorPanel.dropZone.contract.test.ts
+        - src/lib/noteActions.test.ts
+        - src/components/editor/SectionTabBar.test.tsx
+    cases:
+      - id: csv-rfc4180-quotes
+        given:
+          file: "name,note / \"Kim, Bob\" ... (RFC 4180 따옴표·이스케이프·셀 안 개행)"
+        expect:
+          a2: "Kim, Bob"
+        covered_by: test_csv_import_rfc4180_quotes
+
+      - id: csv-cp949-fallback
+        given:
+          file: "CP949로 저장된 한글 CSV (엑셀 기본 저장본)"
+        expect:
+          decoded_as: "EUC_KR"
+        covered_by: test_csv_import_cp949_fallback
+
+      - id: csv-truncates-at-sheet-limits
+        given:
+          file: "1001행 × 53열 CSV"
+        expect:
+          rows: "1000"
+        covered_by: test_csv_import_truncates_beyond_limits
+
+      - id: hwpx-sections-concatenated-in-order
+        given:
+          file: "Contents/section1.xml 이 zip 안에서 section0.xml 보다 먼저 저장된 hwpx"
+        expect:
+          tail: "Second"
+        covered_by: test_hwpx_extracts_paragraph_text
+
+      - id: pptx-slides-concatenated-in-order
+        given:
+          file: "ppt/slides/slide2.xml 이 zip 안에서 slide1.xml 보다 먼저 저장된 pptx"
+        expect:
+          head: "## Slide 1"
+        covered_by: test_pptx_extracts_slides_in_order
+
+      - id: export-section-md-rejects-non-text
+        given:
+          section_kind: "sheet"
+        expect:
+          code: "VALIDATION"
+        covered_by: test_export_section_md_rejects_non_text_kind
+
+      - id: drop-routing-sets-are-exclusive
+        given:
+          sets: "ATTACHMENT_IMAGE_EXTS ∩ SECTION_IMPORT_EXTS"
+        expect:
+          section_import_has: "hwpx"
+        covered_by: image and section-import extension sets never overlap (drop routing must be exclusive)
+
+      - id: import-batch-continues-after-failure
+        given:
+          files: "3개 중 2번째가 실패"
+        expect:
+          command: "section_import_file"
+        covered_by: keeps going after one file fails, returns the sections that did succeed
+
+      - id: xlsx-one-section-per-worksheet
+        given:
+          file: "워크시트 2장짜리 xlsx"
+        expect:
+          second_section_name: "Costs"
+        covered_by: test_xlsx_two_worksheets_become_two_sections_named_by_sheet
+
+      - id: xlsx-date-cell-becomes-iso
+        given:
+          cell: "엑셀 날짜 셀"
+        expect:
+          raw: "2023-01-01"
+        covered_by: test_xlsx_date_cell_becomes_iso_string
+
+      - id: scan-expands-folder-and-counts-skips
+        given:
+          paths: "폴더 하나(지원 파일 + 미지원 파일 + 숨김 파일 혼재)"
+        expect:
+          unsupported_skipped: "ignore.exe"
+        covered_by: test_scan_expands_directory_and_counts_unsupported_as_skipped
+
+      - id: scan-unreadable-path-is-not-fatal
+        given:
+          paths: "사라진 경로 1개 + 읽을 수 있는 파일 1개"
+        expect:
+          still_imported: "a.md"
+        covered_by: test_scan_unreadable_path_is_skipped_not_fatal
+
+      - id: directory-import-is-rejected
+        given:
+          file_path: "디렉터리"
+        expect:
+          error: "AppError::Validation"
+        covered_by: directory_path_is_rejected_as_validation
+
+      - id: promote-source-tile-copies-body-in-place
+        given:
+          tile: "사료 타일 우클릭"
+        expect:
+          command: "section_create_with_body"
+        covered_by: "source tile: context menu row always appears; clicking it hits section_create_with_body, never section_import_file"
+
+      - id: promote-attachment-tile-resolves-path
+        given:
+          tile: "가져오기 가능한 첨부(.md) 우클릭"
+        expect:
+          command: "section_import_file"
+        covered_by: "promotable attachment (.md, desktop baseDir set): context menu row appears; clicking it resolves baseDir+rel_path and hits section_import_file, never section_create_with_body"
+
+      - id: promote-hidden-for-fileless-tile
+        given:
+          tile: "링크 첨부(디스크에 파일 없음)"
+        expect:
+          menu: "no promote row"
+        covered_by: "link attachment (no rel_path — nothing on disk) shows no promote row on right-click"
+
+      - id: clipboard-matrix-preserves-cell-content
+        given:
+          matrix: "셀 안에 탭/개행이 든 행렬"
+        expect:
+          b1_raw: "keeps a cell"
+        covered_by: "keeps a cell that itself contains a tab or newline in one cell"
+
+      - id: clipboard-matrix-caps-match-file-path
+        given:
+          matrix: "행 상한 초과"
+        expect:
+          flag: "truncated"
+        covered_by: "matrix beyond the hard cap (rows): capped at maxRows and flagged truncated"
+
+      - id: import-progress-only-for-batches
+        given:
+          files: "2개"
+        expect:
+          toast: "does not emit a progress toast"
+        covered_by: "does not emit a progress toast for fewer than 3 files"
+
+      - id: import-progress-always-cleared
+        given:
+          batch: "중간에 예외가 나는 배치"
+        expect:
+          toast: "clears the progress toast"
+        covered_by: "clears the progress toast even when a file throws mid-batch"
+
+      - id: import-progress-updates-in-place
+        given:
+          toast: "같은 key 로 반복 emit"
+        expect:
+          behavior: "updates a progress toast in place"
+        covered_by: "updates a progress toast in place for the same key instead of stacking, and clears it on null"
+
+      - id: import-undo-deletes-only-created
+        given:
+          undo: "가져오기 직후 되돌리기"
+        expect:
+          scope: "exactly the created ids"
+        covered_by: "wires the undo toast's onUndo to undoImportedSections with exactly the created ids"
+
+      - id: import-undo-flushes-before-delete
+        given:
+          state: "저장 대기 중인 편집"
+        expect:
+          order: "flushes pending saves before deleting"
+        covered_by: "flushes pending saves before deleting, and reloads the active note when it's the target note"
+
+      - id: drop-works-on-any-section-kind
+        given:
+          active_section: "시트 섹션에 md 드롭"
+        expect:
+          route: "section_import_file"
+        covered_by: "시트 섹션 + md 드롭: section_import_file 경로(importFilesAsSections)를 타고 새 섹션이 생긴다"
+
+      - id: drop-image-attaches-when-no-editor
+        given:
+          active_section: "시트 섹션에 png 드롭"
+        expect:
+          route: "attachment_add_file"
+        covered_by: "시트 섹션 + png 드롭: attachment_add_file만 부르고 노드 삽입은 시도하지 않는다"
+
+      - id: drop-zone-is-single
+        given:
+          render: "EditorPanel"
+        expect:
+          instances: "EditorDropOverlay"
+        covered_by: "<EditorDropOverlay 는 EditorPanel.tsx 안에서 정확히 한 번만 쓰인다"
+
+      - id: export-menu-branches-on-section-kind
+        given:
+          section_kind: "sheet"
+        expect:
+          command: "export_sheet_csv"
+        covered_by: "kind==='sheet' → parses body_md then save dialog (.csv) then export_sheet_csv"
+
+  - id: F-N08
+    name: 섹션 이동(드래그·우클릭)과 섹션 휴지통
+    status: shipped
+    commands: commands/sections.yaml
+    db: [db/schemas/content.sql]
+    verify:
+      rust: src-tauri/src/repo/sections.rs
+      vitest:
+        - src/components/editor/SectionTabBar.test.tsx
+        - src/components/TrashModal.test.tsx
+        - src/stores/trash.test.ts
+    cases:
+      - id: move-rejects-only-section
+        given:
+          note: "섹션 하나뿐인 노트"
+        expect:
+          error: "CONFLICT"
+        covered_by: move_rejects_the_only_section_like_delete_does
+
+      - id: move-to-trashed-note-is-not-found
+        given:
+          target_note: "휴지통에 있는 노트"
+        expect:
+          error: "NOT_FOUND"
+        covered_by: move_to_trashed_note_is_not_found
+
+      - id: move-lands-at-target-end
+        given:
+          target_note: "이미 섹션 둘"
+        expect:
+          position: "position 2)"
+        covered_by: move_lands_at_target_max_position_plus_one
+
+      - id: drag-tab-onto-tree-note-calls-section-move
+        given:
+          drag: "탭을 트리 노트 행 위에 놓음"
+        expect:
+          command: "section_move"
+        covered_by: 탭을 트리 노트 행 위에 놓으면 section_move 1회 + 원 노트 재로드
+
+      - id: context-menu-move-shares-same-command
+        given:
+          menu: "우클릭 → 다른 노트로 이동 → 선택기"
+        expect:
+          command: "section_move"
+        covered_by: 우클릭 → 다른 노트로 이동 → 선택기에서 고르면 같은 호출
+
+      - id: delete-goes-through-trash-not-hard-delete
+        given:
+          section: "가계부(sheet)"
+        expect:
+          kind: "sheet"
+        covered_by: delete_lists_in_trash_and_restore_puts_it_back_at_the_end
+
+      - id: restore-puts-it-back-at-the-end
+        given:
+          note: "복구 대상 섹션 + 그 뒤 섹션 하나"
+        expect:
+          position_rule: "맨 뒤(MAX+1)"
+        covered_by: delete_lists_in_trash_and_restore_puts_it_back_at_the_end
+
+      - id: restore-conflicts-while-note-trashed
+        given:
+          note: "휴지통에 있는 원 노트"
+        expect:
+          error: "CONFLICT"
+        covered_by: restore_conflicts_while_the_note_is_in_the_trash
+
+      - id: note-purge-cascades-into-section-trash
+        given:
+          action: "노트 완전 삭제"
+        expect:
+          rule: "CASCADE"
+        covered_by: note_purge_cascades_into_section_trash
+
+      - id: trash-modal-section-restore-button
+        given:
+          modal: "휴지통 섹션 구역"
+        expect:
+          command: "section_restore"
+        covered_by: 복구 버튼이 section_restore 를 부른다
+
+      - id: trash-modal-restore-blocked-when-note-trashed
+        given:
+          entry: "note_deleted true"
+        expect:
+          reason_key: "section_restore_blocked"
+        covered_by: 원 노트가 휴지통이면 복구가 비활성이고 이유가 보인다
+
+      - id: trash-store-section-roundtrip
+        given:
+          store: "loadSectionTrash → restoreSection → purgeSection"
+        expect:
+          command: "section_purge"
+        covered_by: 섹션 왕복 — 목록/복구/완전삭제가 각 커맨드를 부르고 목록을 다시 읽는다
+
+  - id: F-N09
+    name: 더보기 메뉴 개편 — 이름바꾸기 제거 + 내용잠금
+    status: shipped
+    commands: commands/notes.yaml
+    db: [db/schemas/notes.sql]
+    verify:
+      rust: src-tauri/src/repo/notes/mod.rs
+      vitest:
+        - src/components/TitleBar.meta.test.tsx
+        - src/components/editor/SectionTabBar.test.tsx
+        - src/stores/notes.test.ts
+        - src/lib/noteActions.test.ts
+        - src/components/sheet/useSheetState.test.ts
+        - src/components/attachments/useAttachmentActions.test.tsx
+        - src/lib/aiSectionBridge.test.ts
+        - src/components/diagram/DiagramSection.test.tsx
+        - src/components/AskAiModal.test.tsx
+        - src/stores/ai.test.ts
+        - src/components/titlebar/AiActionsMenu.test.tsx
+    cases:
+      - id: toggle-content-lock-flips-and-persists
+        given:
+          note: "잠기지 않은 새 노트"
+        expect:
+          rule: "첫 토글은 잠금을 켠다"
+        covered_by: test_toggle_content_lock_flips_and_persists
+
+      - id: more-menu-shows-unlock-and-disables-import-when-locked
+        given:
+          note: "content_locked: true"
+        expect:
+          label: "Unlock content"
+          tooltip: "Content is locked — editing disabled"
+        covered_by: content_locked=true면 내용잠금 항목이 '해제'로 바뀌고 가져오기는 비활성 + 이유 툴팁을 보여준다
+
+      - id: add-section-button-disabled-when-locked
+        given:
+          note: "content_locked: true"
+        expect:
+          tooltip: "Content is locked — editing disabled"
+        covered_by: 잠겨 있으면 '+' 버튼이 비활성 + 이유 툴팁을 보여주고 클릭해도 메뉴가 안 열린다
+
+      - id: delete-section-chokepoint-blocks-when-locked
+        given:
+          call: "handleDeleteSection (모든 삭제 호출자의 단일 chokepoint)"
+        expect:
+          notice: "Content is locked — editing disabled"
+        covered_by: useSectionActions::handleDeleteSection 자체가 잠금이면 알림만 띄우고 삭제하지 않는다 (chokepoint — UI disabled와 무관하게)
+
+      # 아래부터는 강제 범위 확장(PLAN 후속 웨이브) — 섹션 추가/삭제·본문 편집만 막던 것을
+      # 메타데이터·폴더 이동·시트·첨부·AI 삽입·다이어그램까지 넓혔다. 즐겨찾기는 예외로 남는다.
+      - id: metadata-setters-blocked-when-locked
+        given:
+          note: "content_locked: true"
+        expect:
+          title: "Old title"
+        covered_by: 잠긴 노트에서 setTitle은 제목을 바꾸지 않는다
+
+      - id: move-note-blocked-when-locked
+        given:
+          call: "moveNote(id, folderId) — 트리/모바일 다중선택 이동 포함 공통 지점"
+        expect:
+          tooltip: "Content is locked — editing disabled"
+        covered_by: 잠긴 노트는 옮기지 않고 잠금 안내를 띄운다
+
+      - id: sheet-ai-replace-blocked-when-locked
+        given:
+          call: "useSheetState의 registerSheetTarget().replaceSection — setCells를 거치지 않는 10번째 쓰기 경로"
+        expect:
+          notice: "Content is locked — editing disabled"
+        covered_by: 잠긴 노트에서는 AI 시트 수정하기(replaceSection)가 문서를 바꾸지 않고 잠금 안내를 띄운다
+
+      - id: attachment-add-blocked-when-locked
+        given:
+          call: "addOneFile — addFile(파일피커)과 useAttachmentsDragDrop(드래그&드롭)의 공통 chokepoint"
+        expect:
+          notice: "Content is locked — editing disabled"
+        covered_by: addOneFile(파일피커·드래그&드롭 공통 지점)은 아무 커맨드도 부르지 않고 잠금 안내를 띄운다
+
+      - id: ai-insert-blocked-when-locked
+        given:
+          call: "insertAiSection — docs/AI.md L1, AI가 노트에 쓰는 유일한 삽입 지점"
+        expect:
+          notice_key: "editor.content_locked_tooltip"
+        covered_by: 대상 노트가 잠겨 있으면 registered inserter를 부르지 않고 null을 돌려주며 안내한다
+
+      - id: diagram-ai-replace-blocked-when-locked
+        given:
+          call: "DiagramSection의 registerDiagramTarget().replaceSection — applyMutation과 같은 원칙"
+        expect:
+          notice: "Content is locked — editing disabled"
+        covered_by: 잠긴 노트에서는 AI 관계도 수정하기(replaceSection)가 문서를 바꾸지 않고 잠금 안내를 띄운다
+
+      - id: titlebar-lock-icon-unlocks-without-menu
+        given:
+          note: "content_locked: true"
+        expect:
+          testid: "titlebar-lock-icon"
+        covered_by: 잠금 아이콘 클릭은 더보기 메뉴를 거치지 않고 바로 toggleContentLock을 부른다
+
+      - id: ask-ai-modal-banner-and-disabled-send-when-locked
+        given:
+          note: "content_locked: true 인 노트를 대상으로 AskAiModal을 연다"
+        expect:
+          testid: "askai-locked-banner"
+        covered_by: 배너를 보여주고 전송 버튼을 비활성화한다
+
+      - id: ai-apply-proposal-blocked-when-locked
+        given:
+          call: "applyProposal — organizeCurrentNote(제안)는 막지 않되 실제 쓰기(ai_apply_organize)만 막는다"
+        expect:
+          notice_key: "editor.content_locked_tooltip"
+        covered_by: applyProposal은 잠긴 노트에는 ai_apply_organize를 부르지 않고 잠금 안내를 띄운다
+
+      - id: ai-actions-menu-disabled-when-locked
+        given:
+          note: "content_locked: true"
+        expect:
+          tooltip: "Content is locked — editing disabled"
+        covered_by: disables the button and shows the locked tooltip when the active note is content_locked
+
+  - id: F-AS01
+    name: 어시스트 두 모드 (시작/작업)
+    status: shipped
+    verify:
+      vitest: src/components/assist
+    cases:
+      - id: text-start
+        given:
+          kind: text
+          blank: true
+        expect:
+          visible: "assist-ai-prompt-start"
+        covered_by: "text × blank=true renders the right assist rows"
+
+      - id: text-work
+        given:
+          kind: text
+          blank: false
+        expect:
+          visible: "assist-ai-spellcheck"
+        covered_by: "text × blank=false renders the right assist rows"
+
+      - id: sheet-start
+        given:
+          kind: sheet
+          blank: true
+        expect:
+          visible: "assist-ai-sheet-start"
+        covered_by: "sheet × blank=true renders the right assist rows"
+
+      - id: sheet-work
+        given:
+          kind: sheet
+          blank: false
+        expect:
+          visible: "assist-ai-sheet-edit"
+        covered_by: "sheet × blank=false renders the right assist rows"
+
+      - id: diagram-start
+        given:
+          kind: diagram
+          blank: true
+        expect:
+          visible: "diagram-type-groups"
+        covered_by: "diagram × blank=true renders the right assist rows"
+
+      - id: diagram-work
+        given:
+          kind: diagram
+          blank: false
+        expect:
+          visible: "assist-ai-diagram-edit"
+        covered_by: "diagram × blank=false renders the right assist rows"
+
+  - id: F-AS02
+    name: 관계도 배치 바꾸기(베타, 작업 어시스트)
+    status: shipped
+    verify:
+      vitest: src/components/assist
+    cases:
+      - id: diagram-layout-hidden-without-focus
+        given:
+          kind: diagram
+          blank: false
+          diagramFocus: null
+        expect:
+          hidden: "diagram-layout-group"
+        covered_by: "diagram-layout-* 는 diagramFocus 가 있을 때만 존재한다"
+
+      - id: diagram-layout-visible-with-focus
+        given:
+          kind: diagram
+          blank: false
+          diagramFocus: "sec-d1"
+        expect:
+          visible: "diagram-layout-radial"
+        covered_by: "diagram-layout-* 는 diagramFocus 가 있을 때만 존재한다"
+
+      - id: diagram-layout-click-calls-setlayout
+        given:
+          row: "diagram-layout-radial"
+        expect:
+          setLayoutArg: "radial"
+        covered_by: "행 클릭 → diagramFocus.setLayout 한 번, 인자는 그 행의 배치명"
+
+  - id: F-AS03
+    name: 텍스트 작업 어시스트 · 파생 그룹 (오너 제안 #6)
+    status: shipped
+    verify:
+      vitest: src/components/assist
+    cases:
+      - id: table-to-sheet
+        given:
+          bodyMd: "GFM 표 포함"
+        expect:
+          visible: "assist-derive-sheet"
+        covered_by: "본문에 GFM 표가 있으면 assist-derive-sheet 행이 있고, 클릭하면 새 시트 섹션으로 적용한다"
+
+      - id: list-to-diagram
+        given:
+          bodyMd: "들여쓰기 목록 3항목 이상"
+        expect:
+          visible: "assist-derive-diagram"
+        covered_by: "들여쓰기 목록이 3항목 이상이면 assist-derive-diagram 행이 있고, 클릭하면 새 관계도 섹션으로 적용한다"
+
+      - id: selection-to-section
+        given:
+          selection: "비어 있지 않음"
+        expect:
+          visible: "assist-derive-selection"
+        covered_by: "에디터 선택이 있으면 assist-derive-selection 행이 있고, 클릭하면 원본을 두고 새 텍스트 섹션을 postProcess 없이 만든다"
+
+  - id: F-N10
+    name: 표 열 너비 드래그 조정 + body_md 왕복
+    status: shipped
+    verify:
+      vitest:
+        - src/lib/mdSerialize.test.ts
+        - src/components/editor/tableColwidth.test.ts
+    cases:
+      - id: colwidth-none-byte-identical
+        given:
+          table: "colwidth 없는 표"
+        expect:
+          marker_absent_literal: "{colwidth"
+        covered_by: colwidth 없는 표는 출력이 기존과 바이트 단위로 동일하다
+
+      - id: colwidth-serializes-as-trailer-line
+        given:
+          firstRowColwidth: [120, null, 200]
+        expect:
+          trailer: "{colwidth=120,,200}"
+        covered_by: "첫 행 셀 colwidth [120, null, 200] 은 표 뒤에 {colwidth=120,,200} 한 줄로 직렬화된다"
+
+      - id: colwidth-round-trips-on-reparse
+        given:
+          bodyMd: "표 + {colwidth=120,,200} 줄"
+        expect:
+          restored: "[[120], null, [200]]"
+        covered_by: "{colwidth=120,,200} 줄은 다시 파싱하면 첫 행 셀의 colwidth 로 복원된다"
+
+      - id: resizable-live-only
+        given:
+          schema: "mdSerialize.ts (headless) vs EditorPanel.tsx (live)"
+        expect:
+          desc: "라이브 에디터에서만 리사이즈 가능"
+        covered_by: 라이브 에디터(EditorPanel.tsx)는 Table 옵션만 resizable:true 로 오버라이드한다
+
+  - id: F-N11
+    name: 병합·셀 배경·여러 블록 셀 표의 HTML 조각 저장 (PLAN-2026-10-07 W0)
+    status: shipped
+    verify:
+      vitest:
+        - src/components/editor/tableHtmlFragment.test.ts
+        - src/lib/mdSerialize.test.ts
+        - src/mobile/mobileEditorSupport.test.ts
+    cases:
+      - id: merged-table-saved-as-fragment
+        given:
+          table: "colspan·rowspan 병합 표"
+        expect:
+          saved_as: "<table"
+        covered_by: 병합 표는 HTML 조각으로 저장되고 재로드해도 같은 칸에 있다
+
+      - id: multi-block-cell-not-flattened
+        given:
+          cell: "목록 + 문단 둘이 든 셀"
+        expect:
+          flattened_literal_absent: "- a- b"
+        covered_by: 셀 안 목록과 여러 문단이 글자로 뭉개지지 않는다
+
+      - id: cell-background-round-trips
+        given:
+          cell: "배경색이 있는 th·td"
+        expect:
+          style: "background-color: rgb(255, 255, 0)"
+        covered_by: 셀 배경이 style 로 저장되고 재로드해도 남는다 (th·td 모두)
+
+      - id: colwidth-in-fragment-has-no-marker
+        given:
+          table: "병합 + colwidth"
+        expect:
+          marker_absent_literal: "{colwidth"
+        covered_by: 조각 안에서도 colwidth 가 셀 속성으로 보존되고 {colwidth=…} 마커 줄은 쓰지 않는다
+
+      - id: fragment-double-round-trip-stable
+        given:
+          bodyMd: "표 조각 + 앞뒤 문단"
+        expect:
+          second_equals_first: "바이트가 같다"
+        covered_by: 직렬화 → 파싱 → 직렬화를 두 번 돌려도 바이트가 같다
+
+      - id: simple-table-stays-gfm
+        given:
+          table: "병합·배경·여러 블록이 없는 표"
+        expect:
+          header_row: "| A   | B   |"
+        covered_by: 병합·배경·여러 블록이 없는 표는 GFM 그대로다
+
+      - id: fragment-table-read-only-on-phone
+        given:
+          bodyMd: "<table> 조각이 든 본문"
+        expect:
+          editable_on_phone: "읽기 전용"
+        covered_by: flags the <table> HTML fragment saved for merged/multi-block/shaded cells (the phone schema has no Table — re-saving would cut it)
+
+  - id: F-N12
+    name: HWPX 서식형 가져오기 — doc_import_html → mdSerializeHtml → 섹션 (PLAN-2026-10-07 W1)
+    status: shipped
+    verify:
+      vitest:
+        - src/lib/noteActions.test.ts
+        - src/lib/docImportHtmlContract.test.ts
+      rust: src-tauri/src/repo/doc_import/
+    cases:
+      - id: hwpx-goes-through-rich-path
+        given:
+          file: "회의록.hwpx"
+        expect:
+          commands: "doc_import_html"
+        covered_by: "hwpx: scan → doc_import_html(callSilent) → section_create_with_body(name·body_md) 순서, section_import_file 은 안 부른다"
+
+      - id: merged-table-from-contract-html
+        given:
+          html: "병합·셀 배경·colwidth 표"
+        expect:
+          colwidth: 'colwidth="120,200"'
+        covered_by: 병합·셀 배경·colwidth 표는 한 줄 <table> 조각이고 병합·배경·열 너비가 재로드 뒤에도 남는다
+
+  - id: F-N13
+    name: AI로 표 편집 — 병합·양식 표 칸 채우기 + 근거 노트 (PLAN-2026-10-07 W2)
+    status: shipped
+    verify:
+      vitest:
+        - src/components/editor/TableAiModal.test.ts
+        - src/components/editor/tableHtmlFragment.test.ts
+    cases:
+      - id: form-table-no-fabrication-without-notes
+        given:
+          table: "병합된 양식 표, 근거 노트 없음"
+        expect:
+          prompt_rule: "근거 노트가 없습니다"
+        covered_by: forbids inventing personal facts on a form table even without grounding notes
+
+      - id: label-column-th-survives-save
+        given:
+          table: "첫 열이 라벨 th 인 양식"
+        expect:
+          saved_as: "<table"
+        covered_by: 첫 열이 라벨 th 인 양식은 조각으로 남아 재로드해도 라벨 칸이 th 다(GFM 이면 td 로 접혔다)
+
+  - id: F-N14
+    name: DOCX 가져오기·내보내기 — doc_import_html(docx) · export_docx · 모달 DOCX 형식 (PLAN-2026-10-07 W4)
+    status: shipped
+    verify:
+      vitest:
+        - src/lib/docImport.test.ts
+        - src/components/export/ExportModal.test.tsx
+      rust: src-tauri/src/repo/doc_export/
+    cases:
+      - id: docx-goes-through-rich-path
+        given:
+          file: "회의록.docx"
+        expect:
+          commands: "doc_import_html"
+        covered_by: "doc_import_html(callSilent) -> mdSerializeHtml -> section_create_with_body, 텍스트 추출은 부르지 않는다"
+
+      - id: modal-docx-save-calls-export-docx
+        given:
+          format: "DOCX, A4 가로"
+        expect:
+          command: "export_docx"
+          filter: 'extensions: ["docx"]'
+        covered_by: "DOCX save: the save dialog (.docx filter) then export_docx with the same arguments as HWPX, never export_hwpx"
+
+      - id: resume-form-table-round-trips
+        given:
+          table: "이력서 양식 표(병합·셀 배경·정렬·열 너비)"
+        expect:
+          merged_header: 'colspan="4" colwidth="90,140,90,140"'
+        covered_by: resume_style_table_round_trips_cell_by_cell
+
+  - id: F-N15
+    name: PDF·인쇄 — 내보내기 모달의 종이 미리보기를 그대로 WebView2 인쇄 창으로 (PLAN-2026-10-07 W5)
+    status: shipped
+    verify:
+      vitest:
+        - src/components/export/ExportModal.test.tsx
+        - src/components/export/exportDoc.test.ts
+    cases:
+      - id: print-only-after-current-paper-loaded
+        given:
+          action: "PDF·인쇄 → 용지 가로 → [인쇄…]"
+        expect:
+          disabled_until_load: "expect(button().disabled).toBe(true)"
+          printed: "expect(printSpy).toHaveBeenCalledTimes(1)"
+        covered_by: print waits for the preview to finish loading the current paper, then prints the iframe document without saving anything
+
+      - id: print-css-real-size-page-numbers
+        given:
+          paper: "a4-landscape"
+        expect:
+          page_size: "size: 297mm 210mm;"
+          zoom_reset: "zoom: 1 !important;"
+          page_number: 'content: counter(page) " / " counter(pages);'
+        covered_by: "prints the paper at real size: @page size and margins, screen zoom/width/padding undone, browser header off, page numbers on"
+
+  - id: F-N16
+    name: HTML·서식 복사·시트 값 표·각주 목록 — 내보내기 모달 W6 (PLAN-2026-10-07 §3.1)
+    status: shipped
+    verify:
+      vitest:
+        - src/components/export/ExportModal.test.tsx
+        - src/components/export/exportSheets.test.ts
+      rust: src-tauri/src/repo/doc_export/html.rs
+    cases:
+      - id: html-file-images-by-rel-path-links-kept
+        given:
+          format: "HTML, 노트 전체"
+        expect:
+          command: "export_html"
+          image_ref: 'data-rel-path="n1/photo.png"'
+          link: 'href="https://example.com/"'
+        covered_by: "HTML save: .html dialog, then export_html with a whole document whose images are data-rel-path (no asset URLs) and links kept"
+
+      - id: copy-to-clipboard-inline-styled
+        given:
+          format: "서식 복사"
+        expect:
+          task_glyph: "☐ 포트폴리오"
+        covered_by: "copy: export_html_inline fills the inline-styled fragment, then the clipboard gets text/html + text/plain and the modal closes"
+
+      - id: sheet-computed-values
+        given:
+          sheet: "=SUM 등 수식이 든 시트"
+        expect:
+          percent: "33%"
+        covered_by: "puts computed values (not formula text) in the table, formatted the way the grid shows them"

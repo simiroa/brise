@@ -1,0 +1,112 @@
+# 커맨드 계약: calendar_marks (규약·공용 타입: _conventions.yaml)
+#
+# 달력 표시일 — 공휴일·기념일 이름표(docs/PLAN-2026-09-19-calendar-schedule.md, DB: calendar_marks.sql).
+# 노트가 아니다: 빨간 날(dayTone)과 반복 일정 skip 이 읽는 공휴일 맵에 합쳐진다. 전부 노트북 소속.
+# 매년·음력 전개는 프런트(lib/holidays.ts, lib/lunar.ts)가 한다 — 서버는 (월, 일, 첫해?, 반복, 음력?)만 저장.
+# 쓰기마다 "calendar-marks-changed" 데스크톱 이벤트(다른 창의 스토어 재로드).
+commands:
+  calendar_marks_list:
+    http: true    # 읽기 전용 — 모바일 달력도 기념일·빨간 날을 그려야 한다
+    input:
+      workspace_id: "uuid|omit=active"
+    output:
+      sources: "CalendarSource[]"
+      marks: "CalendarMark[]"
+      hides: "CalendarMarkHide[]"
+    notes: repo::calendar_marks::list
+
+  calendar_mark_create:
+    http: false
+    input:
+      workspace_id: "uuid|omit=active"
+      title: string                     # 1..120자
+      year: "integer?"                  # once 면 필수(그해), yearly 면 처음 해(선택 — "N주년")
+      month: "integer(1..12)"
+      day: "integer(1..31)"             # 음력이면 1..30, 양력이면 그달 길이
+      repeat: string                    # 'once' | 'yearly'
+      lunar: "boolean|omit=false"       # yearly 만
+      day_off: "boolean|omit=false"     # 빨간 날
+      color_hue: "integer?"
+    output: CalendarMark
+    errors: [VALIDATION, NOT_FOUND]
+    notes: 내 기념일(source_id 없음)만 만든다.
+
+  calendar_mark_update:
+    http: false
+    input:
+      id: uuid
+      title: string
+      year: "integer?"
+      month: "integer(1..12)"
+      day: "integer(1..31)"
+      repeat: string
+      lunar: "boolean|omit=false"
+      day_off: "boolean|omit=false"
+      color_hue: "integer?"
+    output: CalendarMark
+    errors: [NOT_FOUND, VALIDATION]
+    notes: |
+      전부 보낸다(편집 폼 자세). 불러온 캘린더의 행은 VALIDATION(읽기 전용 — 다시 불러오면 덮인다;
+      숨기거나 내 목록으로 복사한다).
+
+  calendar_mark_delete:
+    http: false
+    input: { id: uuid }
+    output: { ok: boolean }
+    errors: [VALIDATION]
+    notes: 멱등(없어도 ok). 불러온 캘린더의 행은 VALIDATION.
+
+  calendar_mark_set_hidden:
+    http: false
+    input:
+      workspace_id: "uuid|omit=active"
+      source: string                    # 'builtin'(기본 공휴일 표) | calendar_sources.id
+      iso_day: string                   # 'YYYY-MM-DD'
+      hidden: boolean
+    output: { ok: boolean }
+    errors: [VALIDATION, NOT_FOUND]
+    notes: 하루 숨기기/되살리기 — 멱등. 다시 불러와도 숨김은 날짜로 매달려 남는다.
+
+  calendar_source_save:
+    http: false
+    input:
+      workspace_id: "uuid|omit=active"
+      source_id: "uuid|omit=none"       # 있으면 다시 불러오기(그 출처의 표시일 통째 교체)
+      name: string
+      url: "string|omit=none"           # 없으면 파일에서 불러옴
+      marks: "CalendarMarkImport[]"     # 상한 5000
+    output:
+      source: CalendarSource
+      skipped: integer                  # 검증을 못 넘어 건너뛴 줄 수
+    errors: [VALIDATION, NOT_FOUND]
+    notes: 한 트랜잭션. 파싱은 프런트 lib/ical.ts(파서 하나).
+
+  calendar_source_update:
+    http: false
+    input:
+      id: uuid
+      name: "string|omit=none"
+      enabled: "boolean|omit=none"
+    output: CalendarSource
+    errors: [NOT_FOUND, VALIDATION]
+
+  calendar_source_delete:
+    http: false
+    input: { id: uuid }
+    output: { ok: boolean }
+    notes: 그 출처의 표시일(CASCADE)과 숨김까지. 멱등.
+
+  calendar_fetch_ics:
+    http: false
+    input: { url: string }              # http(s) 또는 webcal://
+    output: { text: string }
+    errors: [VALIDATION, IO]
+    notes: |
+      공개 주소만(사설 주소·리디렉트 가드 = collect::rss::fetch_public_text), 2MB 상한, VCALENDAR 확인.
+      파싱하지 않는다. 자동 갱신 없음(오너 결정 D5) — 사용자가 누를 때만.
+
+shared_types:
+  CalendarMark: "{ id: uuid, workspace_id: uuid, source_id: uuid|null, uid: string|null, title: string, year: integer|null, month: integer, day: integer, repeat: string, lunar: boolean, day_off: boolean, color_hue: integer|null, created_at: timestamp, updated_at: timestamp }"
+  CalendarSource: "{ id: uuid, workspace_id: uuid, name: string, url: string|null, enabled: boolean, color_hue: integer|null, fetched_at: timestamp|null, position: integer, created_at: timestamp, updated_at: timestamp }"
+  CalendarMarkHide: "{ source: string, iso_day: string }"
+  CalendarMarkImport: "{ uid: string|null, title: string, year: integer|null, month: integer, day: integer, repeat: string, day_off: boolean }"

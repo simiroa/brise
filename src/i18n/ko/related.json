@@ -1,0 +1,12 @@
+{
+  "title": "연관 노트",
+  "empty_hint": "연관된 노트가 없습니다. 트리에서 노트를 끌어오거나 + 를 클릭해 기존 노트를 연결하세요.",
+  "add_hint": "기존 노트 연결",
+  "manual_label": "수동 링크",
+  "auto_label": "자동 제안",
+  "restore_hidden": "숨긴 연관 {{count}}개 복원",
+  "smart_link_suggest": "스마트 연결 제안",
+  "smart_link_tooltip": "AI 겹침 제안: 클릭하여 즉시 내부 링크로 연결합니다.",
+  "smart_link_badge": "AI 추천",
+  "connected_notice": "“{{name}}” 노트와 연결되었습니다."
+}

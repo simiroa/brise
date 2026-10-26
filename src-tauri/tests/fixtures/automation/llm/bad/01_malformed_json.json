@@ -1,0 +1,7 @@
+{
+  "_comment": "분류 응답이 잘린 JSON(닫는 괄호 없음). 파서가 malformed_json 으로 받고 스키마 채점기가 n14 를 실패로 잡아야 한다. 폴더 정확도도 깎인다.",
+  "expect": { "scorer": "schema", "ids": ["n14"] },
+  "split": "dev",
+  "target": { "prompt": "classify", "note_id": "n14" },
+  "response": "{\"folder\": \"insight\", \"tags\": [\"독서\"], \"date\": null, \"region\": nul"
+}

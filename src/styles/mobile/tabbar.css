@@ -1,0 +1,89 @@
+/* mobile/tabbar.css — bottom tab bar, keyboard-open chrome, record button */
+
+/* ── Bottom tab bar (노트 / 입력 / 설정) — floating role, always opaque (.overlay, tokens.css
+ * SURFACE PRESET CONTRACT). A flex sibling of .mobile-screen (not position:fixed) — .mobile-app is
+ * already display:flex/flex-direction:column, so this reserves its own row and nothing can ever
+ * render underneath it, no manual bottom-padding bookkeeping needed on the tab screens. ─────────── */
+
+.mobile-tabbar {
+  flex: none;
+  display: flex;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  border-radius: 0;
+  padding: var(--space-2) var(--m-gutter) calc(var(--space-2) + env(safe-area-inset-bottom));
+}
+
+/* V13: while the multi-select action bar (SelectionActionBar, position:fixed bottom-centre — a
+ * shared component) is up, drop the tab bar the same way the keyboard does (data-kbd rule below).
+ * Selection is a modal mode on the 노트 tab, tab switching is not a valid move mid-selection, and
+ * the bar then owns the bottom edge instead of covering the tab labels. The tree list gets bottom
+ * room so the last rows are not hidden under the floating bar. */
+.mobile-app:has([data-testid="selection-action-bar"]) .mobile-tabbar { display: none; }
+.mobile-list:has(~ [data-testid="selection-action-bar"]) {
+  padding-bottom: calc(var(--space-8) * 4 + env(safe-area-inset-bottom));
+}
+
+/* 키보드가 열려 있는 동안(`data-kbd="open"`, src/mobile/useKeyboardOpen.ts) 입력과 무관한 크롬을 걷는다 —
+ * 오너 "C 두 상태"(2026-10-07, docs/mockups/2026-10-07-mobile-capture): 키보드 닫힘 = 개요, 열림 = 본문 + 독.
+ * 2026-10-04 실기기: 안드로이드 WebView 는 키보드가 열리면 레이아웃 높이가 줄어 하단 탭이 키보드 바로 위에
+ * 남았고, 실제 입력 줄이 1줄만 보였다. 그 뒤 뱃지 줄·섹션 스트립·S2 제안 카드가 다시 그 공간을 먹었다.
+ * 걷는 것: 하단 탭 · 뱃지 줄 · 섹션 스트립 · S2 제안 카드(.mobile-input-chips). 헤더는 얇아진다(note-header.css).
+ * 키보드를 내리면 전부 돌아온다. 남기는 것: 독(.mobile-capture-bar — 도구 슬롯·AI·저장하기, 입력을 끝내는 동작이라
+ * 키보드 위에 있어야 한다)과 입력 감지 칩 줄(.mobile-nudge-row — 눌러도 포커스를 안 뺏는다).
+ * 프리셋 줄은 이제 독 슬롯 안이라 여기서 숨기지 않는다(키보드가 떠 있는 빈 입력이 프리셋의 주 무대다). 대신 CSS 가 아니라
+ * 슬롯이 지킨다: 줄은 **살아 있는 에디터 문서가 비었을 때만** 그려지고 첫 글자에서 서식 버튼으로 바뀐다(MobileDockSlot::dockSlotKind)
+ * — 키보드가 열린 채로 줄이 눌릴 수 있게 된 뒤로, 700ms 늦는 스토어 플래그(activeBodyEmpty)만 믿으면 친 글이 프리셋에 덮인다. */
+.mobile-app[data-kbd="open"] .mobile-tabbar,
+.mobile-app[data-kbd="open"] .mobile-note-badges,
+.mobile-app[data-kbd="open"] .mobile-section-strip,
+.mobile-app[data-kbd="open"] .mobile-input-chips {
+  display: none;
+}
+
+/* 아이콘 전용(2026-10-07 오너) — 라벨 줄이 빠져 탭 높이는 아이콘(40) + 위아래 여유로 48 터치 목표만 지킨다. */
+.mobile-tab {
+  flex: 1;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.mobile-tab-icon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  transition: background var(--dur-med), color var(--dur-med);
+}
+.mobile-tab[data-active="true"] { color: var(--text); }
+.mobile-tab[data-active="true"] .mobile-tab-icon {
+  background: var(--accent);
+  color: var(--btn-primary-fg);
+}
+
+.mobile-record-btn {
+  width: 100%;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  font: inherit;
+  font-weight: 600;
+  font-size: var(--text-lg);
+  cursor: pointer;
+}
+.mobile-record-btn:active { filter: brightness(0.95); }

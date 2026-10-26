@@ -1,0 +1,13 @@
+{
+  "ai_master_title": "AI features are on",
+  "ai_master_body": "This switch turns on every AI action — Refine, Organize, and Gather. By default your content goes to Google's Gemini API for processing; switch to a local Ollama instance in Settings and nothing leaves this PC.\n\nIf you're using the Google API, it's worth reading through their data handling policy once.",
+  "ai_master_learn_more": "AI helps in three ways — Refine (tidies up your writing; the result lands in a new section, your original is untouched), Organize (suggests titles and tags, saved only after you confirm), and Gather (brings in outside content, like a link summary, while keeping the original). Turning AI on doesn't turn every feature on — each one is switched separately under Settings > AI Features.",
+  "ai_master_privacy_link": "View Google's data handling policy",
+  "sync_server_title": "Sync server is on",
+  "sync_server_body": "Another device on the same network (your Tailscale tailnet, or this PC itself) reads and writes your notes using the issued token — including running AI actions. Reissue the token any time from this screen; the old one stops working immediately.",
+  "capture_channel_title": "A capture channel is on",
+  "capture_channel_body": "Clipping, visit history, and SMS parsing all share one token. Any automation app (Tasker, Shortcuts) or browser extension that knows this token writes notes into this PC, so treat it like a password. Copy it from Settings > Connect.",
+  "learn_more_button": "See how it works",
+  "ack_button": "Got it",
+  "caution_badge": "Worth knowing"
+}

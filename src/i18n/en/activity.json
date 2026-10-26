@@ -1,0 +1,18 @@
+{
+  "header_button": "Activity history",
+  "header_button_with_state": "{{button}} · {{state}}",
+  "modal_title": "Activity history",
+  "empty_state": "No activity yet — create, edit, or restore a note to see it here.",
+  "kind_create": "Created",
+  "kind_delete": "Deleted",
+  "kind_edit": "Edited",
+  "kind_restore": "Restored snapshot",
+  "kind_import": "Imported",
+  "kind_collect": "Collected",
+  "note_gone": "Note no longer available",
+  "gone_tag": "Deleted",
+  "view_snapshots": "Autosaves",
+  "view_snapshots_hint": "View autosaved versions - pick a saved point of this note to restore",
+  "back_to_activity": "Back to activity",
+  "restore_failed": "Snapshot restore failed: {{message}}"
+}

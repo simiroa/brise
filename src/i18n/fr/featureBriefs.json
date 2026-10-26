@@ -1,0 +1,13 @@
+{
+  "ai_master_title": "Les fonctions IA sont activées",
+  "ai_master_body": "Cet interrupteur active toutes les actions IA — Affiner, Organiser et Collecter. Par défaut, votre contenu est envoyé à l'API Gemini de Google pour traitement ; basculez vers une instance Ollama locale dans les paramètres et rien ne sort de ce PC.\n\nSi vous utilisez l'API Google, mieux vaut lire une fois sa politique de traitement des données.",
+  "ai_master_learn_more": "L'IA aide de trois façons — Affiner (améliore votre texte ; le résultat va dans une nouvelle section, l'original reste intact), Organiser (suggère titres et tags, enregistrés seulement après confirmation), et Collecter (importe du contenu externe, comme un résumé de lien, en conservant l'original). Activer l'IA n'active pas tout d'un coup — chaque fonction se règle séparément dans Paramètres > Fonctions IA.",
+  "ai_master_privacy_link": "Voir la politique de traitement des données de Google",
+  "sync_server_title": "Le serveur de synchronisation est activé",
+  "sync_server_body": "Un autre appareil sur le même réseau (votre tailnet Tailscale, ou ce PC lui-même) lit et écrit vos notes avec le jeton émis — y compris pour exécuter des actions IA. Régénérez ce jeton à tout moment depuis cet écran ; l'ancien cesse aussitôt de fonctionner.",
+  "capture_channel_title": "Un canal de capture est activé",
+  "capture_channel_body": "Le clip, l'historique de visites et l'analyse des SMS partagent le même jeton. Toute application d'automatisation (Tasker, Raccourcis) ou extension de navigateur qui connaît ce jeton écrit des notes sur ce PC — traitez-le comme un mot de passe. Copiez-le depuis Paramètres > Connexion.",
+  "learn_more_button": "Voir comment ça marche",
+  "ack_button": "Compris",
+  "caution_badge": "À savoir"
+}

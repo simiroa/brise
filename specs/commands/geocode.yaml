@@ -1,0 +1,32 @@
+# 커맨드 계약: geocode (규약·공용 타입: _conventions.yaml)
+commands:
+  geocode_search:
+    input:  { query: string, lang: "string|omit=ko" }
+    output: { results: "GeocodeResult[]" }
+    errors: [VALIDATION, IO]
+    notes: |
+      Nominatim openstreetmap API 를 통한 주소 검색.
+      Rust 백엔드에서 reqwest 호출.
+
+  geocode_reverse:
+    input:  { lat: "integer", lng: "integer", lang: "string|omit=ko" }
+    output: { label: "string|null" }
+    errors: [VALIDATION, IO]
+    notes: |
+      좌표 → 지명(짧은 이름). 지도에 핀을 꽂았을 때 region 라벨 자동 채움용.
+      lat/lng 는 REAL — 스펙 DSL 에 부동소수 타입이 없어 integer 로 적지만 생성 타입은 number.
+
+  geo_timezone:
+    input:  { lat: "integer", lng: "integer" }
+    output: { time_zone: "string|null" }
+    errors: [VALIDATION]
+    notes: |
+      좌표 → IANA 시간대 이름(예: "Asia/Seoul"). 온보딩 2/4 지역에서 선택 지역의 *현지 시각*을
+      보이기 위함 — 기기 시각을 지역 시각인 것처럼 보이면 안 되므로 필요. tzf-rs(오프라인, 내장
+      경계 데이터) 조회라 네트워크 호출이 없다 — 위치를 외부로 보내지 않는다는 프라이버시 방침과
+      geocode_search/geocode_reverse(원격 Nominatim)의 차이. 알 수 없는 지점(대양 중앙 등)은 null.
+      lat/lng 는 REAL — 스펙 DSL 에 부동소수 타입이 없어 integer 로 적지만 생성 타입은 number
+      (geocode_reverse 와 동일 관례).
+
+shared_types:
+  GeocodeResult: "{ label: string, lat: number, lng: number }"

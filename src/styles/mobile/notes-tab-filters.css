@@ -1,0 +1,98 @@
+/* mobile/notes-tab-filters.css — 노트 tab: view switcher, filter reset chip, folder-tree section rows */
+
+/* Δ3 회귀 수정 (e14908f7 이후 TreeRowBadges.tsx가 hover 의존이 됨) — 내보내기/즐겨찾기 배지가
+ * treeRow.css의 opacity:0 기본 은닉 뒤, tokens.css의 `.treerow:hover .treeact{opacity:1}`로만
+ * 되살아난다. 모바일엔 hover가 없어 그 두 배지가 영구히 안 보였다. 슬롯 폭(40px, TreeRowBadges.tsx)
+ * 은 고정이라 이 opacity 전환만으론 리플로우가 없다. 상태 점은 애초에 opacity 밖에 있어 그대로 보인다. */
+.mobile-app .treeact { opacity: 1; }
+
+/* 뷰 스위처 (leftpanel/YearFilter.tsx 모바일 미러) — 같은 세그먼트 모양이되 자리가 모자라면
+ * flex-shrink 대신 가로 스크롤한다(48px 미만으로 눌리는 대신). */
+.mobile-view-switcher {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0; /* six equal tabs must each stay ≥48px wide at 384px CSS (see .mobile-view-switcher-tab) */
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.mobile-view-switcher-tab {
+  /* Equal shares of the bar instead of fixed 48px: with all six views on (tree·지역·타임라인·챗·
+     갤러리·달력, 2026-10-06) 6×48 + gaps overflowed the ~295px bar into a horizontal scroll. Each
+     share stays ≥48 wide at 384px CSS width with the bar's gap removed below. */
+  flex: 1 1 0;
+  min-width: 44px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.mobile-view-switcher-tab[data-active='true'] { background: var(--accent); color: var(--on-accent); }
+
+/* 필터 리셋 배지 — 시각적으로는 작은 pill이지만 히트존은 다른 아이콘 버튼과 같은 48px
+ * (CLAUDE.md 모바일 관례: "배지는 12~16px 이라도 히트존은 48px"). */
+.mobile-filter-chip {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  /* No fill: without this the WebView's default button background painted a mid-grey block that
+     read as disabled (red-team V8, 2.66:1). Outlined like .mobile-view-switcher beside it. */
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--m-accent-text);
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+.mobile-filter-chip-dot {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.mobile-tree-hdr {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--m-gutter) var(--space-2);
+}
+/* T4: the "노트" header is a section title — it must outrank the 17px rows beneath it, not whisper
+ * above them (was faint 13px label-caps). (0,2,0) beats tokens.css `.label-caps`. */
+.mobile-tree-hdr .mobile-tree-hdr-title {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  font-size: var(--m-section);
+  font-weight: 600;
+}
+
+/* 섹션 행(즐겨찾기/미분류/폴더/휴지통/아카이브 헤더) — 기존 .mobile-tree-row(notes-tab.css) 위에 굵기만
+ * 얹는다. */
+.mobile-tree-row--section { font-weight: 600; }
+.mobile-tree-row--note { align-items: center; }
+.mobile-tree-row-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-label);
+  color: var(--faint);
+}
+.mobile-tree-row--skeleton { pointer-events: none; }
+.mobile-tree-divider {
+  height: 1px;
+  margin: var(--space-2) 0;
+  background: var(--divider);
+}

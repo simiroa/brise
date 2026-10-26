@@ -1,0 +1,29 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "본 창 + 설정 창 + 활동 이력 창 + AI 히스토리 창 + 브리핑 창 + 섹션 분리 창(section-<id>, 글롭).새 OS 창을 추가하면 반드시 이 windows 배열(또는 별도 capability)에 라벨을 넣어야 한다 — 빠뜨리면 core 커맨드가 조용히 거부돼 data-tauri-drag-region 드래그와 getCurrentWindow().close() 가 아무 반응 없이 죽는다(2026-08-14 설정 창에서 실제로 발생). 앱 커맨드는 lib.rs 의 별도 allowlist 가 관리한다.",
+  "windows": ["main", "settings", "activity", "ai-history", "briefing", "section-*"],
+  "permissions": [
+    "core:default",
+    "opener:default",
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [{ "path": "$RESOURCE/**" }]
+    },
+    "dialog:default",
+    "autostart:default",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-close",
+    "core:window:allow-start-dragging",
+    "core:window:allow-destroy",
+    "core:window:allow-set-size",
+    "core:window:allow-set-position",
+    "core:window:allow-maximize",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "updater:default",
+    "process:default"
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "current_location": "Current location",
+  "locating": "Locating…",
+  "err_no_permission": "Location permission is off. Please allow it in Settings.",
+  "err_no_provider": "This device can't provide a location.",
+  "err_timeout": "Couldn't get your location. Please try again shortly.",
+  "err_security": "Location access was blocked.",
+  "err_unavailable": "Couldn't get your location."
+}

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 런처 아이콘 바탕 — 원본 아트워크(세이지 #B4BFA8)가 투명 배경이라, 같은 색상(녹색 계열)의 짙은 톤으로 대비를 준다. -->
+    <color name="ic_launcher_background">#283024</color>
+</resources>

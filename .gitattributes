@@ -1,0 +1,3 @@
+# 프롬프트 SSOT — 모델에 바이트 그대로 나간다(TS ?raw · Rust include_str!). core.autocrlf=true 체크아웃에서도
+# CRLF 로 풀리지 않게 고정한다. 동일성 테스트: src/stores/aiPromptFiles.test.ts (PLAN-2026-10-08 §7 W0)
+specs/ai/prompts/** text eol=lf

@@ -1,0 +1,18 @@
+{
+  "header_button": "활동 기록",
+  "header_button_with_state": "{{button}} · {{state}}",
+  "modal_title": "활동 기록",
+  "empty_state": "아직 활동 기록이 없습니다 — 노트를 만들거나 편집·복원하면 여기에 나타납니다.",
+  "kind_create": "생성",
+  "kind_delete": "삭제",
+  "kind_edit": "편집",
+  "kind_restore": "스냅샷 복원",
+  "kind_import": "가져오기",
+  "kind_collect": "수집",
+  "note_gone": "노트를 더 이상 사용할 수 없음",
+  "gone_tag": "삭제됨",
+  "view_snapshots": "자동저장",
+  "view_snapshots_hint": "자동저장된 이전 버전 보기 — 이 노트의 저장 시점을 골라 복원할 수 있습니다",
+  "back_to_activity": "활동 기록으로",
+  "restore_failed": "스냅샷 복원에 실패했습니다: {{message}}"
+}

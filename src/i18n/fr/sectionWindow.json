@@ -1,0 +1,10 @@
+{
+  "open_in_window": "Ouvrir dans une nouvelle fenêtre",
+  "drop_to_open": "Relâchez pour ouvrir dans une nouvelle fenêtre",
+  "detached_badge": "Ouverte dans une fenêtre séparée",
+  "placeholder_title": "Cette section est ouverte dans une fenêtre séparée",
+  "placeholder_body": "Une section ne se modifie qu'à un seul endroit à la fois. Fermez cette fenêtre pour la ramener ici.",
+  "focus_window": "Aller à la fenêtre",
+  "return_here": "Ramener ici",
+  "missing": "Section introuvable. Elle a peut-être été supprimée ou déplacée vers une autre note."
+}

@@ -1,0 +1,7 @@
+{
+  "_comment": "날짜가 없는 러닝 기록(n19, gold.date=null)에 날짜·시각을 지어냄. 날짜 채점기의 '지어냄' 이 n19 를 잡아야 한다.",
+  "expect": { "scorer": "date", "ids": ["n19"] },
+  "split": "dev",
+  "target": { "prompt": "classify", "note_id": "n19" },
+  "response": { "folder": "health", "tags": ["러닝"], "date": { "year": 2026, "month": 10, "day": 2, "time": "07:00", "end": null }, "region": "서울", "todos": [], "topic_hint": "러닝 기록", "suspicious_instructions": false }
+}

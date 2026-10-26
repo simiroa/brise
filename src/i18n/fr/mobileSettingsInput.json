@@ -1,0 +1,23 @@
+{
+  "group": "Saisie",
+  "photo_label": "Appliquer les métadonnées des photos",
+  "voice_label": "Transcription vocale",
+  "cleanup_label": "Nettoyer le texte transcrit",
+  "loc_label": "Joindre la position actuelle",
+  "mode_auto": "Auto",
+  "mode_ask": "Demander",
+  "mode_off": "Désactivé",
+  "photo_auto": "Ajoute automatiquement l'heure et le lieu de prise de vue à la date et à la région de la note.",
+  "photo_ask": "Demande avant d'ajouter l'heure et le lieu de prise de vue.",
+  "photo_off": "Ne lit ni l'heure ni le lieu de prise de vue des photos.",
+  "voice_auto": "Transcrit automatiquement à la fin d'un enregistrement. L'audio est envoyé au service d'IA.",
+  "voice_ask": "Demande s'il faut transcrire à la fin d'un enregistrement. L'audio est envoyé au service d'IA.",
+  "voice_off": "Les enregistrements ne sont pas transcrits. L'audio est seulement conservé en pièce jointe.",
+  "voice_needs_ai": "Indisponible : la connexion IA est désactivée. Activez l'IA depuis le bureau.",
+  "cleanup_auto": "Nettoie automatiquement les hésitations du texte transcrit.",
+  "cleanup_ask": "Demande s'il faut nettoyer le texte transcrit.",
+  "cleanup_off": "Insère le texte transcrit tel quel.",
+  "loc_auto": "Renseigne votre position actuelle à l'enregistrement si la région est vide.",
+  "loc_ask": "Demande s'il faut ajouter votre position actuelle à l'enregistrement si la région est vide.",
+  "loc_off": "Ne récupère pas votre position actuelle."
+}

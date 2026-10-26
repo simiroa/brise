@@ -1,0 +1,123 @@
+-- Brise DDL: settings (KV, value는 JSON 텍스트) + 스키마 버전
+--
+-- ⚠️ 노트북별 키(V86, 2026-09-19): 아래 목록 중 `settings_schema.rs::NOTEBOOK_KEYS`(모양·언어·달력·
+-- 편집·AI 행동, 35개)는 **이 테이블에 살지 않는다** — `workspace_settings`(workspace_settings.sql)에
+-- 노트북마다 따로 산다. 이 테이블에 남은 그 키의 행은 죽은 행이다(get_all 이 무시). 키의 의미·범위
+-- 설명은 여전히 이 목록이 SSOT 미러다. 상세: docs/SETTINGS.md §2.4c.
+--
+-- 알려진 키 (SSOT = src-tauri/src/repo/settings_schema.rs::validate_setting 의 match 팔 — 이 주석은
+-- 그 목록을 사람이 읽기 좋게 미러링한 것이므로, validate_setting 을 고치면 여기도 고칠 것):
+--   theme('dark'|'light'|'system'), accent(hex), font_scale(number 0.85~1.35),
+--   bg_dim(int 0~40, 배경 어둡기 %, 다크 테마 전용),
+--   bg_tone(int -10~10, 배경 명도 미세조정 — 범위는 본문 4.5:1 대비 보장을 위해 좁게 고정),
+--   bg_sat(int 0~100, 기본 0 — 배경 **채도**. bg_tone/bg_dim 과 다른 축이다: 밝기는 그대로 두고
+--     캔버스를 테마색(tokens.css 의 --theme, 강조색이 아니다) 쪽으로 물들이는 세기. 값은
+--     퍼센트가 아니라 **상한의 몇 %**이고 상한은 lib/appearance.ts::BG_SAT_MAX_CHROMA
+--     (OKLCH 채도 0.0226 = 구분선 합성색의 채도, "배경은 머리카락 선보다 더 색을 띠지 않는다").
+--     0 = 기존 화면과 픽셀 동일. 확정 시점(손 뗌/테마 변경)에만 OS 아크릴 틴트에도 반영된다 —
+--     밝기는 여전히 안 보낸다(2026-07-24 flicker 사고). PLAN-2026-09-12 §3/E3·§4/E4),
+--   content_tint(int -30~40, 기본 0 — 본문 캔버스(.content-canvas) 틴트 **부호 있는 오프셋**.
+--     음수는 실효 틴트를 흰색으로 뒤집어 본문을 사이드바보다 **밝게** 만든다(2026-09-12 오너 QA:
+--     검정 한 색으로는 사이드바와 같아지는 것이 상한이었다).
+--     bg_dim 과 달리 절대값이 아니라 오프셋이다: 이 키는 테마별 기준 틴트
+--     (다크 16% / 라이트 7%, src/styles/tokens.css 의 --content-tint)에 더한다. 0 = 기존 화면과
+--     픽셀 동일. 사이드바는 이 슬라이더를 따라가지 않는다(bg_dim 담당) — 노트북 스위처 칩도
+--     --notebook-chip-tint 로 떨어져 나갔다. PLAN-2026-09-12 §5/D6),
+--   surface_style('flat'|'acrylic', 이전 이름 'mica'→'acrylic' 리네임 2026-07-24),
+--   sheet_alpha(number 0.0~1.0, 기본 0.85, 이전 이름 'mica_alpha'→'sheet_alpha' 리네임 2026-07-24,
+--     acrylic 표면 불투명도 — (1-alpha)만큼 뒤 OS 데스크톱이 비친다. acrylic 프리셋 전용. 하한은
+--     사용자 요청으로 제거(2026-07-23) — 과거엔 본문 4.5:1 대비 기준 0.72 하한이었다),
+--   ai_provider('ollama'|'openai'|'claude'|'gemini'|'minimax'|'openrouter'), ai_endpoint(string),
+--   ai_enabled(bool, 기본 false — AI 정리 게이트), ai_api_key(string),
+--   ai_provider_creds(object, 기본 {} — 비활성 프로바이더별 {api_key,endpoint} 보관함, ai_api_key 와 같은 비밀·앱 전역), ai_model(string),
+--   ai_confirm_before_apply(bool, 기본 true — 어시스트 결과를 노트에 넣기 전 AiResultModal 확인, PLAN-2026-09-05 §2),
+--   assist_preset_autorun(bool, 기본 false — 어시스트 패널에서 AI 프리셋 클릭 시 모달 오픈 후 자동 실행, PLAN-2026-09-27 §7-4),
+--   ai_debug_verbose(bool, 기본 false — ai-calls.jsonl 에 프롬프트/응답 앞 2000자 동봉, PLAN-2026-09-05 §3),
+--   ui_lock(bool), sidebar_collapsed(bool, 기본 false), favorites_open(bool, 기본 true),
+--   left_width(px int > 0, 기본 300), source_pct(int 24~74, 기본 50), active_workspace_id(string),
+--   active_tab_id(string|null), window_geometry(json string|null), open_tabs(string[]),
+--   source_original_policy('ask'|'keep'|'discard'), ui_lang('en'|'fr'|'ko', 기본 'ko' — 2026-07-29 릴리즈 결정),
+--   spellcheck_enabled(bool, 기본 false — 에디터 툴바 맞춤법 밑줄 토글),
+--   translate_enabled(bool, 기본 false — 에디터 툴바 번역 뷰(읽기전용) 토글),
+--   translate_target_lang('fr'|'en'|'ko', 기본 'en'),
+--   sync_enabled(bool, 기본 false — 동기화(beta) 임베디드 HTTP 서버 on/off),
+--   sync_port(int 1024~65535, 기본 7332), sync_token(string, 기본 "" — 첫 활성화 시 sync_set_enabled
+--     커맨드가 new_id()로 생성; 빈 문자열은 인증 실패로 취급된다, sync_server::handlers::authorized),
+--   holiday_region('none'|'kr', 기본 'none' — 대시보드 달력 공휴일 표시 지역. 날짜 표는 프런트
+--     src/lib/holidays.ts 정적 표(2024~2030), 백엔드는 값만 보관, 2026-09-08),
+--   close_to_tray(bool, 기본 true — 창을 닫아도 종료 대신 트레이로 숨김, lib.rs 의
+--     on_window_event(CloseRequested) 가 매번 이 키를 다시 읽는다),
+--   ai_action_presets(array, 기본 없음(프론트가 없을 때 components/ai/askAiPresets.ts 의 내장 타일로 폴백) — AI
+--     프리셋 단일 목록(PLAN-2026-09-27 §7, stores/aiPresets.ts SSOT): 요청 문장 타일 + 사용자 프리셋 + 타일 없는
+--     바로 실행 액션의 숨김 자리(prompt ""). 배열 순서가 모든 표면의 단일 순서다. 각 항목
+--     {id, name, prompt, kind:'text'|'metadata'|'diagram'|'template'|'sheet'|'tool', isBuiltin, hidden,
+--     label?, icon?, targets?, where?, proposal?, needs?, blank?, order?}. 값은 JS 객체 그대로 직렬화되므로
+--     필드명이 camelCase(isBuiltin)임에 주의 — 이 파일의 다른 키들과 다른 유일한 snake_case 예외),
+--   ai_internal_instructions(object, 기본 {} — 엔진 지침 재정의 {id: 문장}. 관계도·시트 JSON 규칙, 메타데이터 기준,
+--     에이전트 계획, 챗 지침의 코드 기본값(stores/aiPrompts.ts ENGINE_INSTRUCTION_DEFS)을 사용자가 고친 것만.
+--     전역(노트북별 아님 — ai_action_presets 와 같다). PLAN-2026-09-27 §7.1),
+--   search_recent(string[], 기본 [] — QA8 Wave 3A 검색 자동완성 기록, newest-first, 상한 20은
+--     프런트 stores/search.ts. 기기 로컬(export.rs::is_device_local_setting_key)이라 내보내기
+--     번들·백업에서 제외),
+--   user_name(string, 기본 "" — W10 사용자 이름(선택, 최대 64자)),
+--   font_family(string, 기본 'serif' — W11 글꼴 패밀리 ('serif'|'sans'|시스템 글꼴명)),
+--   pet_dblclick_action('chat'|'new_note'|'off', 기본 'new_note' — W18 펫 더블클릭 반응),
+--   chat_memory(array, 기본 [] — W13 챗봇 메모리 [{ id, text, created_at }], 최대 50개),
+--   chat_write_enabled(bool, 기본 true — 비서/펫 노트 쓰기 게이트),
+--   attachment_storage_mode('copy'|'reference'|'link', 기본 'copy' — 첨부 파일 저장 방식:
+--     복사/원본 경로 참조/하드링크, settings_schema.rs 기본값·검증 arm 참조),
+--   collect_paused_until(string, 기본 "2099-12-31T23:59:59+00:00" — 수집 자동 러너 일시중지 마스터 스위치),
+--   collect_chat_register(bool, 기본 false — 챗이 수집 소스를 등록하는 경로의 킬 스위치.
+--     lib/chatPipeline.ts 의 add_collect_source 분기가 이 값을 본다),
+--   status_add_locked(bool, 기본 false — 노트 진행 상태 "추가" 진입점 잠금. 내장 3종과 기존
+--     커스텀 상태의 개명·삭제는 영향 없음),
+--   update_check_auto(bool, 기본 true — 자동 업데이트 확인 킬스위치),
+--   date_nudge_auto(bool, 기본 false — PLAN-2026-09-18-nl-dates.md §W4. 에디터 타이핑 넛지
+--     (dateNudge.ts)의 완전자동 등록 옵트인. 기본은 칩 확인 후 1키 수락("넛지"), 켜면 캐럿이
+--     매치 범위를 벗어나는 즉시 칩 없이 등록된다(되돌리기 토스트는 유지). 프런트 전용 게이트 —
+--     이 값은 저장만 담당),
+--   region_nudge_strict(bool, 기본 true — PLAN-2026-09-19-date-region-ui.md §P3 D12. 지역 사전
+--     매칭 넛지(regionDetect.ts)의 매칭 강도. true(엄격) = 경계 검사(후보 지역명 앞뒤가 한글
+--     음절/영문자/숫자가 아니어야, 또는 문자열 시작/끝) — "경주"가 "경주마"에서 안 걸린다.
+--     false = 경계 검사 없는 순수 substring. date_nudge_auto 와 달리 "기본 꺼진 기능의 옵트인"이
+--     아니라 "항상 도는 기능의 강도"라 기본이 true. 프런트 전용 게이트 — 이 값은 저장만 담당),
+--   date_nudge_enabled(bool, 기본 true), region_nudge_enabled(bool, 기본 true) — 오너 결정
+--     (2026-09-20): 날짜/지역 제안을 설정 > 에디터에서 3단(off/suggest/auto, off/strict/loose)으로
+--     보여주되, 저장은 기존 date_nudge_auto/region_nudge_strict 를 그대로 두고 그 앞에 세우는
+--     "enabled" 불리언 한 쌍이다 — enum 으로 바꾸면 전역 settings·노트북별 workspace_settings(V86)
+--     양쪽에 마이그레이션이 필요하고 옛 내보내기 번들·노트북 복제와도 어긋난다. off = enabled
+--     false(이때 date_nudge_auto/region_nudge_strict 는 그대로 둔다 — 다시 켜면 이전 선택이
+--     돌아온다). 프런트 stores/settings.ts::setDateNudgeMode/setRegionNudgeMode,
+--   paste_link_nudge(bool, 기본 true), paste_path_inline_code(bool, 기본 true),
+--     paste_table_sheet_suggest(bool, 기본 true) — 오너 결정(2026-09-20): 붙여넣기 자동 동작
+--     3종(단독 URL 후행 제안 · 파일 경로 인라인 코드 서식 · 표 모양 텍스트 시트 변환 제안)을
+--     각각 토글 가능하게. 기본 true = 오늘까지의 동작 유지,
+--   editor_md_autoformat(bool, 기본 true — 오너 결정(2026-09-20): 타이핑 중 마크다운 자동 서식
+--     (`**bold**`/`# heading` 등을 즉시 리치 서식으로 바꾸는 에디터 동작)의 킬 스위치. 기본
+--     true = 오늘까지의 동작 유지),
+--   photo_meta_mode('off'|'ask'|'auto', 기본 'auto'), voice_transcribe_mode('off'|'ask'|'auto', 기본 'auto'),
+--     voice_cleanup_mode('off'|'ask'|'auto', 기본 'off') — S2 입력(PLAN-2026-10-06-s2-input.md §1):
+--     폰 사진/음성 입력의 자동 반영 정책. 서버 훅이 읽는 PC 공유 전역 키(노트북 키 아님, 폰 설정에서
+--     변경 가능). photo_meta_mode = 사진 EXIF(GPS·촬영시각)·음성 업로드 메타 → 노트 날짜/경유지
+--     (auto 반영+되돌리기 / ask 제안만 / off 면 EXIF 읽기·역지오코딩 자체를 생략), voice_transcribe_mode =
+--     녹음 전사 삽입(실효는 ai_enabled 일 때만), voice_cleanup_mode = 전사 블록 정리 프리셋,
+--   link_open_on_click(bool, 기본 false), editor_word_count(bool, 기본 true — 상태줄 글자 수는 원래 늘 보이던 것이라 '끌 수 있게' 하는 키),
+--     editor_width('narrow'|'normal'|'wide', 기본 'normal'),
+--     new_note_date_precision('day'|'month'|'year', 기본 'day'),
+--     new_note_section_name(string, trim 40자 이하·줄바꿈 금지, 기본 "" = 내장 기본 이름) —
+--     오너 결정(2026-09-20, "4~7번도 넣어봐, 보고 이상하면 지울게"): **실험적** 4종, 각각 키
+--     하나·스토어 필드 하나·설정 UI 행 하나로 자기완결(뺄 때 그 한 줄씩만 지우면 된다).
+--     docs/SETTINGS.md 2026-09-20 절 참고
+-- 위 11키는 전부 NOTEBOOK_KEYS(settings_schema.rs) — 노트북마다 완전 격리(오너 결정 2026-09-19).
+-- 드리프트 방지: scripts/check-settings-keys.mjs 가 프론트 settings_set 호출 키와 validate_setting
+-- 허용 목록을 대조 (CI 게이트, specs/tests/invariant-settings-keys.yaml 참고).
+
+CREATE TABLE settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL              -- JSON 인코딩 값
+);
+
+CREATE TABLE schema_migrations (
+  version    INTEGER PRIMARY KEY,
+  applied_at TEXT NOT NULL
+);

@@ -1,0 +1,20 @@
+{
+  "_comment": "지식 노트 links 에 입력 묶음 밖의 id 를 넣음 — 다른 묶음의 n09(동기화 노트, 동음이의 함정)와 존재하지 않는 n99. 링크 채점기의 '지어낸 id' 가 n99 를 잡아야 한다.",
+  "expect": { "scorer": "links", "ids": ["n99"] },
+  "split": "dev",
+  "target": { "prompt": "knowledge", "topic_label": "동기부여와 작은 습관" },
+  "response": {
+    "topic_notes": [{
+      "topic": "동기부여와 작은 습관",
+      "title": "동기부여와 작은 습관",
+      "summary": "작게 시작하면 의욕이 뒤따른다는 기록.\n열린 질문: 5분 규칙이 얼마나 오래 가나?",
+      "log_append": [
+        { "date": "09-28", "quote": "동기는 기다린다고 생기지 않는다.", "source_id": "n12" },
+        { "date": "10-03", "quote": "일어나자마자 침구 정리 → 작은 성공 하나로 하루 시작.", "source_id": "n13" }
+      ],
+      "related_topics": [],
+      "links": ["n12", "n13", "n09", "n99"]
+    }],
+    "duplicates": []
+  }
+}

@@ -1,0 +1,197 @@
+/* mobile/note-header.css — note screen header: title, badges, section strip, read-only banner */
+
+/* ── Note screen ─────────────────────────────────────────────────────────────────────────── */
+
+.mobile-note-header {
+  flex: none;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: calc(var(--space-3) + env(safe-area-inset-top)) var(--m-gutter) var(--space-4);
+  border-bottom: 1px solid var(--divider);
+}
+
+/* 슬림 헤더(오너 "C 두 상태", 2026-10-07): 키보드가 열려 있는 동안 위아래 여유를 걷어 뒤로 버튼 줄(48) + 밑줄만
+ * 남긴다(67 → 49). 상태 표시줄 안전영역은 지킨다. 뱃지 줄·섹션 스트립 숨김은 tabbar.css 의 같은 `data-kbd` 블록. */
+.mobile-app[data-kbd="open"] .mobile-note-header {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: 0;
+}
+
+.mobile-icon-btn {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--dur-med), color var(--dur-med);
+}
+.mobile-icon-btn:active { background: var(--hover); }
+.mobile-icon-btn[data-active='true'] { background: var(--sel); color: var(--m-accent-text); }
+.mobile-icon-btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+
+.mobile-note-header-meta {
+  flex: 1;
+  min-width: 0;
+  padding-top: var(--space-2);
+}
+
+/* 제목 + 오른쪽 끝의 저장 상태(MobileSaveStatus, 오너 2026-10-10 — 저장하기 버튼 대신). 밑줄은 입력이 아니라 이 줄이 가진다 —
+ * 상태 글자 밑까지 한 줄로 이어지게. */
+.mobile-note-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  border-bottom: 1px solid var(--divider);
+}
+.mobile-note-title-input {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-editor);
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  padding-bottom: var(--space-2);
+}
+.mobile-note-title-input::placeholder {
+  color: var(--muted);
+  font-weight: 400;
+}
+.mobile-note-title-input::placeholder { color: var(--faint); font-style: italic; }
+/* 옅은 한 단어(저장 중… / 저장됨 / 저장 안 됨). 실패만 위험 색 — 설명과 [다시 시도]는 V5 배너가 맡는다. */
+.mobile-save-status {
+  flex: none;
+  color: var(--faint);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  white-space: nowrap;
+}
+.mobile-save-status[data-state="failed"] { color: var(--danger); }
+
+/* Badge row (지역·날짜·상태) under the title — same pill language as desktop TitleBar's
+ * StatusControl/RegionEditor/YearBadge (outlined pill, dashed+muted until set). Wrapped (not
+ * horizontally scrolled like desktop's tag strip) — there's vertical room here for 3 badges, and
+ * wrapping sidesteps the overflow question at 390px entirely. */
+.mobile-note-badges {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  /* W3: left-aligned (was centred, which left the wrapped 4th badge as a centred orphan at 크게). */
+  justify-content: flex-start;
+  /* --space-1: the 16px gutter (W1) cost 4px of row width and pushed the 4th badge (알림) onto its
+     own line at 보통 — the tighter gap gives it back (S22, 2026-10-06). */
+  gap: var(--space-1);
+  padding: 0 var(--m-gutter) var(--space-3);
+}
+/* Owner feedback (2026-07-30, item 3): "뱃지가 너무 크다" — a 48px-tall --radius-sm box for each of
+ * three badges dominated the header. They are compact ROUND PILLS now; the 48px touch target moved
+ * off the pill's own box and onto a hit area that is invisible (see below), so the visual weight
+ * dropped without breaking the touch rule. */
+.mobile-badge {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 3px var(--space-3);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 400;
+  cursor: pointer;
+}
+.mobile-badge--unset {
+  border-style: dashed;
+  color: var(--muted);
+}
+/* The ≥48px target, kept off the pill. Scoped to `button.` ON PURPOSE: the date badge is a DIV with
+ * a transparent `<input type="date">` at inset:0 on its wrapper (MobileNoteBadges) — an overlay
+ * pseudo-element there would paint after the input and swallow the tap that opens the OS picker.
+ * The date pill gets its target from .mobile-badge-hit's min-height instead. */
+button.mobile-badge::after {
+  content: "";
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  top: 50%;
+  height: 48px;
+  transform: translateY(-50%);
+}
+/* Date-pill wrapper — owns the touch height so the invisible <input type="date"> stretched across
+ * it (inset:0) is the thing that is 48px tall, not the pill. No font-size here: the input inherits
+ * it, and anything under 16px re-introduces iOS's focus zoom. */
+.mobile-badge-hit {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+}
+
+/* Section strip (owner feedback 2026-07-30, item 2) — desktop's tab order, one scrollable row.
+ * Underline emphasis rather than a filled chip: the badges right above are already pills, and two
+ * pill rows stacked read as one undifferentiated blob. */
+.mobile-section-strip {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-1);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 var(--m-gutter);
+  border-bottom: 1px solid var(--divider);
+}
+.mobile-section-tab {
+  flex: none;
+  min-height: 48px;
+  max-width: 72vw; /* W3: was 44vw — names were cut at ~6 chars; the strip scrolls anyway */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  padding: 0 var(--space-3);
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--text-md);
+  cursor: pointer;
+}
+.mobile-section-tab[data-active="true"] {
+  color: var(--text);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
+.mobile-section-add {
+  flex: none;
+  min-width: 48px;
+  min-height: 48px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--text-xl);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.mobile-readonly-banner {
+  flex: none;
+  padding: var(--space-3) var(--m-gutter);
+  border-bottom: 1px solid var(--divider);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}

@@ -1,0 +1,21 @@
+{
+  "name": "Nom",
+  "color": "Couleur",
+  "color_reset": "Couleur par défaut",
+  "rules": "Règles du dossier",
+  "rules_hint": "Héritées quand l’IA organise les notes de ce dossier. Elles priment sur le guidage métadonnées du carnet.",
+  "rules_locked": "Verrouillé tant que la lecture par l’IA est interdite. Le texte est conservé tel quel.",
+  "search_excluded": "Exclure de la recherche",
+  "search_excluded_hint": "Masque les notes de ce dossier des résultats de recherche globale. Elles restent visibles dans l’arborescence, le graphe et la chronologie.",
+  "ai_excluded": "Interdire la lecture par l’IA",
+  "ai_excluded_hint": "L’IA ne lit jamais les notes de ce dossier — elles restent hors des analyses, de l’organisation et de l’organisation groupée.",
+  "ai_excluded_disabled_tooltip": "La lecture par l’IA est interdite pour ce dossier",
+  "notes": "Notes",
+  "select_all": "Tout sélectionner",
+  "select_none": "Effacer la sélection",
+  "batch_organize": "Organiser la sélection",
+  "batch_plan": "Organiser & fusionner",
+  "empty": "Aucune note dans ce dossier",
+  "load_failed": "Impossible de charger le dossier : {{msg}}",
+  "save_failed": "Enregistrement impossible : {{msg}}"
+}

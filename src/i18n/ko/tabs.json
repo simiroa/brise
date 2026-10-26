@@ -1,0 +1,7 @@
+{
+  "home": "대시보드",
+  "close_all": "모두 닫기",
+  "close_others": "다른 탭 닫기",
+  "reopen_closed": "방금 닫은 탭 열기",
+  "close_tab": "{{title}} 탭 닫기"
+}

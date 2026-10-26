@@ -1,0 +1,94 @@
+/* MobileAmbient — 폰 화면 배경 신호(AI 빛줄기 · 녹음 이퀄라이저 띠). MobileAmbient.tsx 가 직접 import 한다.
+ * 색·불투명도는 전부 tokens.css 토큰(AI-GLOW / REC-EQ) — 여기엔 색 리터럴이 없다.
+ *
+ * 레이어 계약: 모달 스크림(z-modal) 바로 위의 고정 면. 빛줄기는 가장자리에, 녹음 띠는 바닥 한 줄에만 그리고
+ * 가운데는 비어 있어 글자를 덮지 않는다. 손가락은 통과(pointer-events:none). 움직이는 것은 opacity/transform
+ * 뿐이다 — filter 는 쓰지 않는다(번짐은 방사형 그라디언트가 낸다). 왜 모달 위인지는 MobileAmbient.tsx 머리말. */
+
+.mobile-ambient {
+  position: fixed;
+  inset: 0;
+  /* --z-toast(9000) 아래, 모달 스크림(--z-modal) 바로 위. */
+  z-index: calc(var(--z-modal) + 1);
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* ── AI 빛줄기 호스트 ────────────────────────────────────────────────────────────────────────
+ * 계약은 tokens.css AI-GLOW › BEAM 그대로(링 1px + 안쪽 28px 번짐, 회전하는 호). 호스트는 이 전체 화면 div
+ * 하나다. 폰에서만 세기를 한 단 낮춘다 — 바닥 시트 푸터 버튼이 안쪽 번짐 띠(28px) 안에 들어오므로
+ * 데스크톱 에디터 값(0.6/0.45)보다 옅게. 변수는 호스트에서 덮어도 의사요소가 상속받는다.
+ * (BEAM 규칙이 호스트에 position:relative 를 (0,2,0) 으로 걸므로 크기는 width/height 로 준다.) */
+.mobile-ambient-beam {
+  width: 100%;
+  height: 100%;
+  --ai-beam-stroke-opacity: 0.5;
+  --ai-beam-inner-opacity: 0.3;
+}
+
+/* ── 녹음 이퀄라이저 띠 ────────────────────────────────────────────────────────────────────────
+ * 바닥에 붙은 얇은 띠(높이 --rec-eq-height ≤ 20%) 안에 세로 빛기둥 24개. 기둥은 막대가 아니라 "방사형 그라디언트를
+ * 세로로 늘인 것"이라 위·좌·우가 전부 투명으로 풀리고, 이웃과 반 칸씩 겹쳐 하나의 물결로 번진다. 높이는 JS 가 쓰는
+ * `--eq-h`(scaleY, RecEqualizer.tsx 가 ~18fps 로 기록) 하나로만 움직이고, 사이는 transform 전환이 메운다.
+ * 2026-10-07 S22 실기: 바닥 글로우가 두꺼우면 시트의 일시정지·완료·취소 버튼이 베이지로 바랬다 — 그래서 띠는 얇고
+ * 옅다(알파 상한은 mobileAmbient.contract.test.ts 가 버튼 글자 대비로 검증). */
+.mobile-rec {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  opacity: 1;
+  /* 시간은 --dur-slow 의 배수라 토큰을 거친다. MobileAmbient.tsx 의 REC_FADE_MS(700ms) ≈ 3 × 0.22s. */
+  transition: opacity calc(var(--dur-slow) * 3) ease;
+  animation: mobile-rec-in calc(var(--dur-slow) * 3) ease-out;
+}
+/* 일시정지 — JS 루프가 멈춰 기둥은 그 자리에 얼고, 여기서 한 단 옅어진다. */
+.mobile-rec[data-rec="paused"] { opacity: var(--rec-eq-paused-opacity); }
+.mobile-rec[data-rec="fading"] { opacity: 0; }
+/* AI 빛줄기가 같이 켜져 있으면(녹음 직후 받아쓰기 등) 띠를 줄여 둘이 겹쳐 시끄러워지지 않게. */
+.mobile-ambient[data-ai="on"] .mobile-rec[data-rec="on"] { opacity: var(--rec-eq-ai-dim); }
+.mobile-ambient[data-ai="on"] .mobile-rec[data-rec="paused"] {
+  opacity: calc(var(--rec-eq-paused-opacity) * var(--rec-eq-ai-dim));
+}
+
+.mobile-rec-eq {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--rec-eq-height);
+  /* 양 끝을 풀어 화면 모서리에서 띠가 잘린 것처럼 보이지 않게 한다(정지 마스크 — 알파만 쓴다). */
+  -webkit-mask-image: linear-gradient(to right, transparent, black 14%, black 86%, transparent);
+  mask-image: linear-gradient(to right, transparent, black 14%, black 86%, transparent);
+}
+/* 기둥 i 는 슬롯 i 의 중심에 앉고 폭은 두 칸이라 이웃과 반 칸씩 겹친다. --n(열 수)·--i·--g(열 이득)는 TSX 인라인. */
+.mobile-rec-bar {
+  position: absolute;
+  bottom: 0;
+  left: calc((var(--i) - 0.5) / var(--n) * 100%);
+  width: calc(2 / var(--n) * 100%);
+  height: 100%;
+  transform-origin: 50% 100%;
+  transform: scaleY(var(--eq-h, var(--rec-eq-rest)));
+  /* JS 는 ~18fps 로만 쓰므로 사이는 합성기가 보간한다. */
+  transition: transform var(--dur-fast) linear;
+  will-change: transform;
+  /* 중간 정지점이 번짐을 늦춘다 — 선형으로 0 까지 풀면 기둥 아래 1/3 만 보여서(S22) 띠가 한 줄 선으로 읽혔다. 정점 알파는 그대로라
+   * 대비 증명(contract test 의 peak)은 바뀌지 않는다. */
+  background:
+    radial-gradient(ellipse 34% 85% at 50% 100%, var(--rec-eq-core), color-mix(in srgb, var(--rec-eq-core) 60%, transparent) 45%, transparent),
+    radial-gradient(ellipse 55% 100% at 50% 100%, var(--rec-eq-halo), color-mix(in srgb, var(--rec-eq-halo) 50%, transparent) 50%, transparent);
+}
+
+@keyframes mobile-rec-in {
+  from { opacity: 0; }
+}
+
+/* 모션 줄이기 — 루프도 진입 애니메이션도 없이, 열마다 높이가 조금씩 다른 낮은 정지 띠. 켜짐/꺼짐 페이드(opacity
+ * 전환)는 신호라 남긴다. AI 빛줄기는 tokens.css 의 AI-GLOW reduced-motion 블록이 이미 호를 멈춘다. */
+@media (prefers-reduced-motion: reduce) {
+  .mobile-rec { animation: none; }
+  .mobile-rec-bar {
+    transition: none;
+    transform: scaleY(calc(var(--rec-eq-static) * var(--g)));
+  }
+}

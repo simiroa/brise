@@ -1,0 +1,132 @@
+/* mobile/editor-touch.css — desktop editor sections adapted for touch: diagram authoring + inline-image resize handle */
+
+/* ── 관계도 (diagram) authoring on a phone ────────────────────────────────────────────────────
+ * MobileNote renders the DESKTOP DiagramSection/DiagramControls verbatim — that component owns the
+ * mermaid render, the var(--dur-slow)/700ms debounces, SVG tap-to-select, the 되돌리기 snapshot stack and the
+ * note-link picker, and forking it just to restyle it would have forked that save/undo core too.
+ * So the mobile adaptation is purely presentational and lives here: touch-sized targets, 16px
+ * fields (iOS zooms any focused input below 16px), and the selection action rows promoted from an
+ * inline strip into a real bottom sheet.
+ *
+ * ponytail: `!important` is load-bearing — DiagramControls sets padding/font-size as INLINE styles
+ * (`style={{ padding: "4px 8px", fontSize: "var(--text-sm)" }}`), which no stylesheet rule can beat
+ * otherwise. Ceiling: if that component's inline sizing changes shape, re-check these three rules.
+ * The upgrade path is a `compact`/`touch` prop on DiagramControls (their file), not a mobile fork. */
+
+/* Owner feedback (2026-07-30, item 4): "세로는 맞는데 가로 가운데 정렬이 되어야 한다." It wasn't,
+ * and the cause was WIDTH, not alignment. The picture's column was padded twice —
+ * .mobile-note-body-wrap's --space-6 on each side plus .diagram-stage's own --space-6 — which on a
+ * 390px phone spends ~56px of it. A flowchart that would otherwise fit is then pushed into
+ * .diagram-svg-wrap's overflow-x, and a wrap that actually scrolls collapses the svg's
+ * `margin-inline:auto` to 0 by design (tokens.css) and left-aligns. So: cancel the body-wrap's
+ * inline padding here, and shrink the stage's own padding on this surface.
+ * The host also becomes a real flex column so DiagramSection's root `flex:1` (and through it
+ * .diagram-stage's `flex:1 + min-height:0`) resolves against a height instead of collapsing to
+ * content — that height is what .diagram-stage's `margin-block:auto` centres the picture inside. */
+.mobile-diagram-host {
+  display: flex;
+  flex-direction: column;
+  min-height: 55vh;
+  margin-inline: calc(-1 * var(--m-gutter));
+}
+.mobile-diagram-host [data-testid="diagram-stage"] {
+  padding: var(--space-2);
+}
+
+/* 범례 알약(상자·관계 · 대기·진행중·완료) — 데스크톱 규칙은 flex-wrap:wrap + 알약 반경이라, 폰 폭에서 세 줄로 접히면
+ * 알약이 타원이 됐다(2026-10-07 S22 디자인 리뷰). 폰에서는 한 줄 가로 스크롤로 알약 모양을 지킨다. */
+.mobile-diagram-host .diagram-flow-legend {
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.mobile-diagram-host .diagram-flow-legend::-webkit-scrollbar { display: none; }
+.mobile-diagram-host .diagram-legend-item { flex: none; }
+
+/* 섹션 툴바 — desktop keeps this row, a phone has no use for it (DiagramControls handles touch):
+ * `.mobile-diagram-host` hides the toolbar row.
+ * `display:none` rather than a prop: DiagramSection is src/components/** (not ours to edit), and it
+ * already takes the one prop that changes its shape for touch (`touch`). */
+.mobile-diagram-host [data-testid="diagram-view-tools"] {
+  display: none;
+}
+
+.mobile-diagram-host [data-testid="diagram-controls"] {
+  gap: var(--space-3);
+  padding: var(--space-3) 0 calc(var(--space-3) + env(safe-area-inset-bottom));
+}
+
+/* Every field and button in the strip: 48px tall, 16px text. */
+.mobile-diagram-host [data-testid="diagram-controls"] input,
+.mobile-diagram-host [data-testid="diagram-controls"] select {
+  min-height: 48px;
+  padding: 0 var(--space-3) !important;
+  font-size: var(--text-md) !important;
+}
+/* …except the toolbar's 도형/선 menus, which are `.field-select`: that class draws its own chevron
+ * in the right gutter and reserves --space-7 for it, and the flat `0 var(--space-3)` above would
+ * run the label straight under the arrow. Keep the gutter, keep the touch height. */
+.mobile-diagram-host [data-testid="diagram-controls"] select.field-select,
+/* …and the two node pickers, which are now `.field-select` BUTTONS (a native <select>'s option list
+ * is OS-drawn and rendered white on the dark app — see NodePicker in DiagramControls.tsx). Same
+ * chevron gutter, same reason. */
+.mobile-diagram-host [data-testid="diagram-controls"] button.field-select {
+  padding: 0 var(--space-7) 0 var(--space-3) !important;
+}
+.mobile-diagram-host [data-testid="diagram-controls"] button {
+  min-height: 48px;
+  min-width: 48px;
+  padding: 0 var(--space-3) !important;
+  font-size: var(--text-md) !important;
+}
+
+/* The node picker's open list is PORTALED to <body> (so no ancestor overflow can clip it), which
+ * also puts it outside .mobile-diagram-host — the rules above cannot reach it. Touch sizing keys
+ * off the same `hover: none` signal tokens.css uses to hide the canvas's hover handles. */
+/* Same for the 도형/색/선 종류 popups the selection sheet's verb buttons open (diagram/
+ * VerbButtons): portaled for the same anti-clipping reason, so out of the host's reach too. */
+@media (hover: none) {
+  .diagram-node-list .menu-row,
+  .diagram-bubble-menu .menu-row { min-height: 48px; font-size: var(--text-md); }
+}
+
+/* The action rows exist only while a node/edge is selected — exactly a bottom sheet's lifecycle, so
+ * they become one instead of a desktop-style inline row. Same vocabulary as .mobile-sheet (overlays.css)
+ * (opaque `.overlay` surface is inherited from the host screen; this adds only geometry). */
+.mobile-diagram-host [data-testid="diagram-node-actions"],
+.mobile-diagram-host [data-testid="diagram-edge-actions"] {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-modal);
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-4) calc(var(--space-4) + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--divider);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  /* Same fill `.overlay` paints (tokens.css) — the floating-surface preset. Set directly because
+   * the class lives on a component we don't own and can't add a className to. */
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  animation: mobile-sheet-up var(--dur-slow) ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mobile-diagram-host [data-testid="diagram-node-actions"],
+  .mobile-diagram-host [data-testid="diagram-edge-actions"] { animation: none; }
+}
+/* The rename/label field takes the row; the icon buttons sit beside it at full touch size. */
+.mobile-diagram-host [data-testid="diagram-node-actions"] input,
+.mobile-diagram-host [data-testid="diagram-edge-actions"] input {
+  flex: 1 1 100% !important;
+}
+
+/* Empty diagram section: the inline template gallery is a 2-up grid on desktop — one column and
+ * 48px rows on a phone, matching MobileDiagramSheet's list of the very same templates. */
+.mobile-diagram-host [data-testid="diagram-empty"] > div { grid-template-columns: 1fr; }
+.mobile-diagram-host [data-testid="diagram-empty"] button { min-height: 48px; }
+
+/* ── Inline image resize handle ───────────────────────────────────────────────────────────── */
+/* Free-drag handle is desktop-only — thumbs use the 3-step size buttons (image-size.css). */
+.mobile-app .brise-image-resize-handle { display: none !important; }

@@ -1,0 +1,12 @@
+{
+  "title": "Related notes",
+  "empty_hint": "No related notes yet. Drag a note from the tree or click + to link an existing note.",
+  "add_hint": "Link an existing note",
+  "manual_label": "Manual link",
+  "auto_label": "Automatic suggestion",
+  "restore_hidden": "Restore {{count}} hidden related",
+  "smart_link_suggest": "Smart Link Suggestion",
+  "smart_link_tooltip": "AI overlap suggestion: click to link immediately as an internal note.",
+  "smart_link_badge": "AI Suggested",
+  "connected_notice": "Connected to note “{{name}}”."
+}

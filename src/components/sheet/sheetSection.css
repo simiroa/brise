@@ -1,0 +1,477 @@
+/* Sheet Section Styles */
+
+/* W22 ④: 시트 틴트 중복 제거 — 워크스페이스(.content-canvas, W22 ⑪에서 note-workspace 에서 개명)가
+   이미 중립 틴트를 깔기 때문에
+   여기서 넓은 면을 다시 칠하면 이중 배경이 된다. sticky 헤더·수식 바처럼 스크롤 콘텐츠와
+   겹쳐 불투명이 필수인 곳만 --surface/--surface-sunken 을 유지(아래 주석 참고). */
+.sheet-section {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  color: var(--text);
+  overflow: hidden;
+  position: relative;
+}
+
+/* W22 ⑦: 높이·패딩·하단 경계선은 공용 .section-toolbar 소유(tokens.css) — 여기는 시트 고유
+   레이아웃만 남긴다. JSX는 className="scroll noscroll sheet-toolbar section-toolbar".
+   W26: flex-wrap:wrap 은 고정 행 높이와 충돌하므로 제거하고 가로 스크롤로 전환(행 높이 단일 소스 유지). */
+.sheet-toolbar {
+  gap: var(--space-2);
+  min-width: 0;
+  overflow-x: auto;
+  flex-wrap: nowrap;
+}
+
+
+.sheet-formula-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-5);
+  /* 배경 없음 — 흐름 안 크롬은 .app 시트가 그대로 비친다(DESIGN.md SINGLE-SHEET ACRYLIC CONTRACT).
+     2026-09-21 까지 92% 틴트 + blur 를 자기 몫으로 그려 acrylic 슬라이더를 무시했다. */
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+  flex-shrink: 0;
+}
+
+.sheet-formula-cell-ref {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* "A1:AZ100" 같은 범위 표기가 그대로 들어가는 고정폭 — 한 칸일 때 상자가 줄었다 늘었다
+     하지 않도록 min-width 로 잡는다. */
+  min-width: 96px;
+  padding: var(--space-1) var(--space-2);
+  background: transparent; /* = .field */
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+  color: var(--accent);
+}
+
+/* 빠른 수식 — 두 칸 이상 고른 동안에만 편집칸 오른쪽에 붙는다(SheetSection.tsx QUICK_FNS). */
+.sheet-formula-quick {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: none;
+}
+
+.sheet-formula-quick-btn {
+  padding: var(--space-1) var(--space-2);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--dur-fast), color var(--dur-fast), border-color var(--dur-fast);
+}
+
+.sheet-formula-quick-btn:hover {
+  background: var(--hover);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.sheet-formula-fx {
+  font-weight: 600;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.sheet-formula-input {
+  flex: 1;
+  padding: var(--space-1) var(--space-3);
+  background: transparent; /* = .field */
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: inherit;
+  font-size: inherit;
+  outline: none;
+}
+
+.sheet-formula-input:focus {
+  border-color: var(--accent);
+}
+
+.sheet-limit-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-5);
+  background: color-mix(in srgb, var(--warn) 15%, transparent);
+  border-bottom: 1px solid var(--warn);
+  color: var(--text);
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+}
+
+/* 그리드는 react-window 양축 가상화 위에 얹혀 있다. 컨테이너가 4칸(모서리·열 헤더·행 헤더·본문)
+   CSS grid 이고, 헤더 트랙은 본문 스크롤을 transform 으로 따라간다(SheetGrid.tsx handleScroll).
+   행/열 크기는 TS 상수라 grid-template 는 인라인으로 들어온다. */
+.sheet-grid-container {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  display: grid;
+  position: relative;
+  outline: none;
+  user-select: none;
+  font-size: var(--text-md);
+}
+
+.sheet-grid-colheader,
+.sheet-grid-rowheader {
+  position: relative;
+  overflow: hidden;
+  /* 머리글 띠는 별도 grid 칸이라 아래에 셀이 없다 — 가릴 것이 없으니 불투명일 이유가 없다. 시트 위에 얇은
+     같은-색 틴트 한 겹: flat 에선 바탕과 거의 같고, acrylic 에선 --sheet-alpha 를 따라가며 셀보다 살짝 짙다
+     (오너 2026-09-21: "항상 불투명이면 안 되고 투명도에 대응"). */
+  background: color-mix(in srgb, var(--surface-base) 22%, transparent);
+}
+
+.sheet-grid-headertrack {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+}
+
+.sheet-grid-rowheader .sheet-grid-headertrack {
+  width: 100%;
+  height: auto;
+}
+
+.sheet-grid-body {
+  min-width: 0;
+  min-height: 0;
+}
+
+/* 첫 행 고정 레이어(PLAN-2026-09-21 W2) — 본문과 같은 grid 칸에서 스크롤을 무시하고 맨 위에 얹힌다.
+   머리글처럼 "가릴 셀이 없는" 별도 층이 아니라 실제 데이터 행을 다시 그린 것이라 틴트가 아니라
+   테마 배경을 그대로 써서 뒤로 스크롤되는 본문을 완전히 가린다(안 가리면 두 행이 겹쳐 보인다). */
+.sheet-frozen-rows {
+  position: relative;
+  overflow: hidden;
+  z-index: var(--z-sheet-frozen);
+  /* 스크롤 콘텐츠와 겹쳐 불투명이 필수인 곳(파일 상단 주석의 sticky 헤더·수식 바와 같은 부류) —
+     틴트가 아니라 --surface 를 쓴다: 뒤로 스크롤되는 실제 데이터 행을 완전히 가려야 두 행이
+     겹쳐 보이지 않는다. */
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+/* acrylic 에서는 위 --surface(불투명)를 관계도 노드 선례(tokens.css:2390)와 같은 톤으로 바꾼다 —
+   --sheet-alpha 를 따라가되 뒤 행을 반드시 가려야 하므로 .92 를 바닥으로 둔다(오너 제안 #9). */
+:root[data-surface='acrylic'] .sheet-frozen-rows {
+  background: color-mix(in srgb, var(--surface-base) calc(max(var(--sheet-alpha), 0.92) * 100%), transparent);
+}
+
+.sheet-frozen-rows-track {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+}
+
+.sheet-header-cell {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  /* 머리글 띠는 별도 grid 칸이라 아래에 셀이 없다 — 가릴 것이 없으니 불투명일 이유가 없다. 시트 위에 얇은
+     같은-색 틴트 한 겹: flat 에선 바탕과 거의 같고, acrylic 에선 --sheet-alpha 를 따라가며 셀보다 살짝 짙다
+     (오너 2026-09-21: "항상 불투명이면 안 되고 투명도에 대응"). */
+  background: color-mix(in srgb, var(--surface-base) 22%, transparent);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  user-select: none;
+  cursor: pointer;
+}
+
+.sheet-row-header-cell {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  /* 머리글 띠는 별도 grid 칸이라 아래에 셀이 없다 — 가릴 것이 없으니 불투명일 이유가 없다. 시트 위에 얇은
+     같은-색 틴트 한 겹: flat 에선 바탕과 거의 같고, acrylic 에선 --sheet-alpha 를 따라가며 셀보다 살짝 짙다
+     (오너 2026-09-21: "항상 불투명이면 안 되고 투명도에 대응"). */
+  background: color-mix(in srgb, var(--surface-base) 22%, transparent);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  user-select: none;
+  cursor: pointer;
+}
+
+.sheet-corner-header {
+  /* 머리글 띠는 별도 grid 칸이라 아래에 셀이 없다 — 가릴 것이 없으니 불투명일 이유가 없다. 시트 위에 얇은
+     같은-색 틴트 한 겹: flat 에선 바탕과 거의 같고, acrylic 에선 --sheet-alpha 를 따라가며 셀보다 살짝 짙다
+     (오너 2026-09-21: "항상 불투명이면 안 되고 투명도에 대응"). */
+  background: color-mix(in srgb, var(--surface-base) 22%, transparent);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.sheet-cell {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 0 var(--space-2);
+  color: var(--text);  overflow: hidden;
+  /* lib/sheet/rowHeights.ts 의 LINE_STEP 이 이 line-height 값(13px * 1.45 ≈ 19px)에서 나온다 —
+     여기를 바꾸면 그 상수도 같이 맞춰야 한다. 다중 줄 셀은 아래 [data-multiline] 규칙이 pre-wrap 으로
+     풀고, 1줄 셀은 지금처럼 nowrap 로 잘린다. */
+  line-height: var(--lh-ui);
+  white-space: nowrap;
+  cursor: cell;
+}
+
+/* Alt+Enter 로 개행을 넣은 셀만 읽기 모드에서도 줄바꿈이 보인다(SheetGrid.tsx isMultiline).
+   행 높이 자체는 rowHeights.ts 가 MAX_LINES 로 상한을 두므로 넘치는 줄은 부모 overflow:hidden 이 자른다. */
+.sheet-cell[data-multiline] {
+  white-space: pre-wrap;
+}
+
+/* 우정렬 셀은 flex 축으로 밀어야 한다 — text-align 은 span 하나로는 안 먹는다. */
+.sheet-cell > span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sheet-cell.selected {
+  background: var(--sel);
+}
+
+.sheet-cell.active-cell {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+.sheet-cell.error-cell {
+  color: var(--danger);
+}
+
+/* hl_extremes 어시스트(PLAN-2026-09-21 §4 W3 2차) — 셀 강조. 색 리터럴 없이 상태 토큰만 옅게 튄트. */
+.sheet-cell[data-hl="ok"] {
+  background: color-mix(in srgb, var(--ok) 18%, transparent);
+}
+.sheet-cell[data-hl="warn"] {
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+}
+.sheet-cell[data-hl="info"] {
+  background: color-mix(in srgb, var(--info) 18%, transparent);
+}
+
+.sheet-cell-checkbox {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.sheet-cell-checkbox input {
+  cursor: pointer;
+}
+
+.sheet-cell-input-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  padding: var(--space-1) var(--space-2);
+  background: var(--surface);
+  border: 2px solid var(--accent);
+  color: var(--text);
+  font-family: inherit;
+  font-size: inherit;
+  line-height: normal;
+  outline: none;
+  z-index: 2;
+  box-sizing: border-box;
+  /* <textarea> 전환(Alt+Enter 셀 내 줄바꿈, PLAN-2026-09-21 W2) — 행 높이는 고정이라 자동 줄바꿈은
+     원치 않는다. 명시적 \n 만 줄을 만들고, 넘치는 줄은 스크롤로 남는다(잘리지 않고 최소 확인 가능). */
+  resize: none;
+  white-space: pre;
+  overflow: auto;
+}
+
+/* 같은 열 자동완성 고스트 — 타이핑한 부분은 투명, 꼬리만 회색으로 textarea 위에 겹친다.
+   패딩·폰트를 편집칸과 맞춰야 겹치는 글자 위치가 어긋나지 않는다. */
+.sheet-cell-suggest {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  padding: var(--space-1) var(--space-2);
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: normal;
+  white-space: pre;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.sheet-cell-suggest-typed {
+  color: transparent;
+}
+
+.sheet-cell-suggest-rest {
+  color: var(--muted);
+}
+
+.sheet-col-resize-handle {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  z-index: 1;
+}
+
+.sheet-col-resize-handle:hover {
+  background: var(--accent);
+}
+
+.sheet-fill-handle {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 7px;
+  height: 7px;
+  background: var(--accent);
+  border: 1px solid var(--surface);
+  cursor: crosshair;
+  z-index: 2;
+}
+
+
+/* W22 ⑦: 높이·패딩·상단 경계선·타이포는 공용 .section-statusbar 소유(tokens.css) — 시트 고유
+   시각 속성은 없다. JSX는 className="sheet-footer-info section-statusbar" (테스트/훅용으로
+   sheet-footer-info 셀렉터는 유지). */
+
+.sheet-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* 앱의 모달 베일과 같은 토큰을 쓴다 — 생값이던 동안 라이트 테마에서도 순흑 45% 라
+     한지 바탕 위에서 혼자 차가웠다(--overlay 라이트는 rgba(45,40,32,.45), 따뜻한 먹). */
+  background: var(--overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-modal);
+  backdrop-filter: blur(2px);
+}
+
+.sheet-modal-content {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-lg);
+}
+
+/* W22 ④: 프리뷰 미니 그리드는 sticky 헤더가 아니다(스크롤과 함께 흘러간다) — 워크스페이스
+   틴트와 중복되는 면 배경을 제거했다(테두리는 SheetPreview.tsx 인라인 style 소유). */
+
+/* 차트 카드는 흐름 안(어시스트 상단·프리뷰) — 배경 없음, 테두리만(.card 와 같은 역할).
+   2026-09-21 까지 var(--surface) 로 acrylic 에서 혼자 불투명한 상자였다. */
+.sheet-chart-card {
+  background: transparent;
+}
+/* Recharts 컨테이너 — 축/범례 텍스트는 SVG presentation attribute 대신 CSS 가 소유한다.
+   (var() 를 font-size 속성에 직접 얹으면 브라우저별로 무시될 수 있고, --fs 자동 대응도 잃는다.) */
+.sheet-chart {
+  position: relative;
+}
+
+.sheet-chart-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text);
+  padding: var(--space-1) var(--space-2);
+}
+
+.sheet-chart .recharts-cartesian-axis-tick-value,
+.sheet-chart .recharts-pie-label-text {
+  font-size: var(--text-xs);
+  fill: var(--muted);
+}
+
+.sheet-chart .recharts-legend-item-text {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.sheet-chart .recharts-cartesian-axis-tick-line,
+.sheet-chart .recharts-cartesian-axis-line {
+  stroke: var(--divider);
+}
+
+.sheet-chart-tooltip {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+}
+
+.sheet-chart-tooltip-label {
+  color: var(--muted);
+  margin-bottom: var(--space-1);
+}
+
+.sheet-chart-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+
+.sheet-chart-tooltip-dot {
+  line-height: 1;
+}
+
+
+/* 라인 글로우(PLAN-2026-09-30 §3) — recharts 는 className 을 <g.recharts-line> 에 준다. accent 한 색 위의 은은한 번짐. */
+.sheet-chart-glow .recharts-line-curve {
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 55%, transparent));
+}
+.sheet-chart-glow-dot {
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 60%, transparent));
+}

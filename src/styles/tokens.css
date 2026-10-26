@@ -1,0 +1,3907 @@
+/* Subset files only. The unsplit 400.css for Noto * KR is ~90KB of unicode-range
+   slices (hundreds of woff2 URLs). Vite wraps that into the tokens.css JS module
+   which App.tsx imports statically — so the transparent Tauri window (visible:false
+   until show()) sits as an empty frame until the module evaluates. Two KR families
+   × 3 weights made that hang long enough to look like "테두리만 보임". */
+@import '@fontsource/source-serif-4/400.css';
+@import '@fontsource/source-serif-4/500.css';
+@import '@fontsource/source-serif-4/600.css';
+@import '@fontsource/noto-serif-kr/korean-400.css';
+@import '@fontsource/noto-serif-kr/korean-500.css';
+@import '@fontsource/noto-serif-kr/korean-600.css';
+@import '@fontsource/noto-serif-kr/latin-400.css';
+@import '@fontsource/noto-serif-kr/latin-500.css';
+@import '@fontsource/noto-serif-kr/latin-600.css';
+@import '@fontsource/source-sans-3/latin-400.css';
+@import '@fontsource/source-sans-3/latin-600.css';
+@import '@fontsource/source-sans-3/latin-700.css';
+@import '@fontsource/source-sans-3/latin-ext-400.css';
+@import '@fontsource/source-sans-3/latin-ext-600.css';
+@import '@fontsource/source-sans-3/latin-ext-700.css';
+@import '@fontsource/noto-sans-kr/korean-400.css';
+@import '@fontsource/noto-sans-kr/korean-600.css';
+@import '@fontsource/noto-sans-kr/korean-700.css';
+@import '@fontsource/noto-sans-kr/latin-400.css';
+@import '@fontsource/noto-sans-kr/latin-600.css';
+@import '@fontsource/noto-sans-kr/latin-700.css';
+/* Pretendard(2026-09-09, 오너 결정) — 본문·UI 기본 글꼴. @fontsource 의 subset 이름은
+   'latin' 하나뿐이지만 그 파일이 실제로 **한글 11,172 음절 전부**를 담고 있다(woff 의 cmap 을
+   직접 풀어 확인: 매핑 글리프 14,333 · AC00~D7A3 완전 커버). 그래서 라틴/한글이 두 패밀리로
+   갈리는 Source Serif 4 + Noto Serif KR 조합과 달리 한 벌로 끝나고, 굵기 사다리 400/600 도
+   양쪽 다 진짜 페이스라 CLAUDE.md 함정 10 의 "대체돼 같은 픽셀이 되는" 문제가 없다.
+   무게: 400 = 766KB, 600 = 786KB (woff2). 500/700 등 나머지 7단은 게이트가 막는 굵기라
+   임포트하지 않는다. */
+@import '@fontsource/pretendard/latin-400.css';
+@import '@fontsource/pretendard/latin-600.css';
+@import '@fontsource/source-code-pro/latin-400.css';
+@import '@fontsource/source-code-pro/latin-600.css';
+
+/* 글자색도 글꼴과 같은 이유로 html·body 에 둔다(GRILL-2026-10-19 R1-A): `.app` 밖 body 로 포털되는 모달·토스트·
+   메뉴는 `.app` 의 글자색을 못 물려받아 브라우저 기본값(다크 #fff · 라이트 #000)으로 그려졌다. */
+html,body{margin:0;height:100%;overflow:hidden;font-family:var(--font-body);color:var(--text)}
+/* Bug fix: the UI font used to live only as an inline style on `.app` (App.tsx) — anything
+   portaled straight to document.body (ModalShell/PromptDialog/IconPicker, the slash-"/" and
+   "[[" wikilink popups, NoteIconControl's long-press picker, <Toast/>, <OnboardingWizard/>)
+   fell outside that subtree and rendered in the browser/OS default font (measured: "Noto Sans
+   KR" 16px) instead of Source Sans 3 + Noto Sans KR 15px — the "some menus look oversized/different" bug. Setting
+   font-family on html/body (inherited by everything, portaled or not) fixes every surface in
+   one place instead of patching each portal. font-size stays on body only (not html) so any
+   future `rem` usage keeps resolving against the root's UA default, unaffected by this. */
+body{font-size:var(--text-lg)}
+:root{
+  /* Wave 6: Hanji, Celadon, Ink (Dark) */
+  /* NOTE: 토큰은 반드시 :root 에 둔다 — ModalShell 이 document.body 로 portal 되므로
+     .app 에 두면 모달이 CSS 변수를 상속받지 못해 배경/테두리/딤이 전부 무효가 된다. */
+  /* 단일 표면 원칙: 캔버스·패널·카드·모달이 모두 같은 한 톤이다. 구조는 배경 톤 차이가 아니라
+     보이는 헤어라인(--divider/--line)이 만들고, 강조는 선택 상태(accent)만 담당한다.
+     (예전에는 surface/surface2/panel 이 서로 다른 반투명 값이라 톤이 3~4개로 갈려 산만했다.) */
+  --app-canvas:#171b1a;
+  --bg-dim:0%;
+  --surface-base:color-mix(in srgb,var(--app-canvas) calc(100% - var(--bg-dim)),black);
+  /* `.app` 시트의 기준면을 **한 번 더 이름 붙인 것**. 값은 --surface-base 와 같다.
+     존재 이유는 순환 참조 회피 하나다: .content-canvas 가 자기 기준면을
+     "시트 위에 본문 틴트를 합성한 색"으로 재정의하는데(파일 하단 .content-canvas 블록),
+     그 식이 var(--surface-base) 를 읽으면 같은 요소에서 자기 자신을 참조하는 사이클이 되어
+     CSS 가 **두 선언을 통째로 무효**로 만든다. --app-sheet-base 는 :root 에서 이미 값으로
+     굳어(커스텀 프로퍼티는 선언 지점에서 var() 가 치환된다) 본문으로 **상속**되므로,
+     본문 블록이 안전하게 읽을 수 있는 "틴트 이전의 바탕"이 된다.
+     ⚠️ .content-canvas 에서 이 토큰을 재정의하지 마라 — 그 순간 사이클이 되살아난다. */
+  --app-sheet-base:var(--surface-base);
+
+  --paper-texture: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAACXBIWXMAAAsTAAALEwEAmpwYAAACq0lEQVR4nO1bQW7bMBA8R0lq55J//eU9q9y4B/oAe81Fw6UvUAK03rT2iRkEAkU2d9xISi8F+HjVvB1uWq+bNm3y27dvr2L/Ymxs7OPbt28zV1dX06qqZs+fP7/K88OHDx9ms5n348ePJ+/fv39fUVV/BgwY8OP6+to9ODiw7969a92+fdsWkS967ty5Z5FnjI2NHV1eXtrv379f0fGzW7dufcnjH9PT04O8f3Bw8PvkyZM7eA0c0NXV1Z8xMTGx7du3b13g/fv3v/Lyw4cPf+7evfvXbdu27Vw+vB/oH4aGhh6i8qXw/Pnz540bN+5D3p/w0759+/7D45eIffXKlSvP7969+4t9+/Ztvnjx4o+3b9/mXb58+fT4+PhJ5Av/T4x6e2BgYOH+/fvfEflk6NChw8y5c+e+Q45z586dR7z14sWL/4yPj//Yvn37kYSEhBvwt5gZ0tLSSi8vLy/G4vT09B9nz54t5+fnn61fv/4i5P7R3t7+x2HDhn0FvD67dOnSL5BqBw8eLMDvO1ZVVc18f/fu3Tf5+fnL/N9b0P3V8vLyIqD77s2bN8v3799/mZCQkAD97585c+Y+pAfnz58vv3Xr1r+Ivwb0y3t7e48nJCQk7ty58xOq5/XRo0dLREREzHj//v3j6upq87Zt2377/Pnzj5EjRw4zMzN/b9u27V/07x4/fnw9ZMiQEiAeHR0d3X/y5Mnf0dHRo7Zs2XI0MjJyz44dO5rLy8utr6+vD6H6E1Q1D70YwD4oPjw8fAc5u7u7/7x9+/Z79PT0eNPT04fHxsZ+4X9qauqX9vb2o7m5ucfHxsZ+oUf1s2fP/uFz06dPX7h+/fofkH8bcmxsbfX19eXw68+cOXM+c+bM7U+fPv1k48aNP0Bf/wH6L1VWVj5+/fr1n8bGxp03btz4DX1N5cOHD7/5L0NwcPD77du3f/z+/ftdY2Nj886dO99Dfx163i8uLv7x48ePvyAP4z/k46Kjo9+g/47/9evX5yA/9wfy/iFk59+8eXP85s2bC+j939ixY/9AX36g57e0f/369f/5+fm/Hz58+I163oF8Fz5+/PgAcnN5eXkLsD+B/R+0/4P2f9D+D9r/Qfs/aP8H7f+g/R+0/4P2f9D+D9r/Qfs/aP8f7f8X/gEAAAD//8U51/0AAAAASUVORK5CYII=");
+
+  /* Wave (window transparency): 이전 판(반투명 수정)은 유리/마이카 뒤에 비칠 게 있어야 한다는
+     이유로 사용자의 워크스페이스 배경 사진을 앱 전체 "벽지"(--workspace-bg-image, `.app`의
+     --bg 에 합성)로 만들었다 — 이건 요청을 잘못 읽은 것이었다: 사용자가 원한 건 CSS 이미지가
+     아니라 **창 자체의 실제 OS 투명도**(Mica/Acrylic)로 진짜 데스크톱이 비치는 것이다. 그 벽지
+     플러밍은 전부 걷어냈다(App.tsx 도 더 이상 --workspace-bg-image 를 설정하지 않는다) —
+     워크스페이스 배경 이미지 "기능" 자체는 그대로 있다(WorkspaceSwitcher.tsx 자신의 미리보기
+     칩 전용, 앱 캔버스와 무관).
+     남은 두 accent 라디얼 글로우는 flat 프리셋의 "깊이감" 장식으로 유지 — 평범한
+     background-image 라 합성 비용은 0 이다. acrylic 에서는 아래 :root[data-surface='acrylic'] 블록이
+     --bg 자체를 단일 틴트로 덮어써 이 글로우도 함께 빠진다(SINGLE-SHEET ACRYLIC CONTRACT 참고,
+     이 파일 하단). */
+  --bg-canvas-glow-1: radial-gradient(140% 120% at 8% -15%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 55%);
+  --bg-canvas-glow-2: radial-gradient(150% 130% at 105% 118%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 60%);
+
+  /* flat: `.app` 캔버스는 항상 완전 불투명(페이퍼 텍스처 + accent 글로우 2 + surface-base 단색) —
+     오늘까지의 정확히 같은 모습. acrylic 은 아래 :root[data-surface='acrylic'] 블록이 이 토큰
+     자체를 단일 반투명 틴트로 덮어써 `.app` 한 장이 곧 창의 유일한 반투명 시트가 된다 — 그 안의
+     모든 것(카드/크롬/콘텐츠)은 배경 없이 이 시트를 그대로 통과시킨다(SINGLE-SHEET ACRYLIC
+     CONTRACT, 이 파일 하단 참고). */
+  --bg: var(--paper-texture), var(--bg-canvas-glow-1), var(--bg-canvas-glow-2), linear-gradient(var(--surface-base), var(--surface-base));
+  --bg-repeat: repeat, no-repeat, no-repeat, no-repeat;
+  --bg-size: 64px 64px, auto, auto, auto;
+  --bg-position: 0 0, 0 0, 0 0, 0 0;
+  --surface:var(--surface-base);
+  /* 선택/호버가 유일하게 배경으로 드러나는 곳 — 개선 D(2026-07-21): 선택 상태가 accent 를 조금 더
+     또렷이 물어 "영역별 핵심 하나"에 시선이 가도록 16%→20%. */
+  --sel:color-mix(in srgb,var(--accent) 20%,transparent);
+  --hover:color-mix(in srgb,var(--accent) 8%,transparent);
+
+  /* 개선 D(2026-07-21): 라벨/보조 텍스트가 흐리멍덩해 구조가 안 읽히던 걸 완화 — 3단 위계
+     (text/muted/faint) 유지하되 muted .60→.68, faint .40→.46 로 또렷하게. text 는 그대로. */
+  --text:#e0deda;--ink:#e0deda;--muted:rgba(224,222,218,.80);--faint:rgba(224,222,218,.46);
+  /* ── 색 세 층 중 ① 테마색 (PLAN-2026-09-12 §2/E1) ───────────────────────────────
+     --theme 은 **앱의 정체성 색**이다. 테마별 고정값이고 사용자는 못 바꾼다. 칠하는 것은
+     **구조**다 — 구분선(아래) · 배경 채도(E3) · OS 아크릴 틴트(E4).
+     ② --accent 는 사용자가 고르고(hue + 채도 5단) **상태**를 칠한다 — 선택/호버/포커스/활성,
+     주요 버튼, 링크. ③ 중성(--surface-* / --text)은 배경 합성에서 도출된다.
+
+     왜 갈랐나: 예전에는 --accent 하나가 "앱의 정체성"과 "사용자의 선택" 두 일을 겸했다.
+     강조색이 청자색 원툴이던 동안은 충돌이 안 보였지만 hue 를 연 순간 갈라졌다 — 레드를
+     고르면 화면의 **모든 선**이 분홍이 되고, 채도 0단을 고르면 전부 회색이 된다. 오늘 오전
+     b668b6ea 가 선을 중성(#e0deda 계열)으로 돌린 것은 그 충돌을 피한 것이지 푼 것이 아니어서
+     "라인 전부가 무채색으로 들어가 탁하다"(오너 QA)로 되돌아왔다. --theme 은 선을 다시
+     물들이면서도 사용자의 hue 선택과 **무관**하게 만든다.
+
+     값의 근거: 다크는 역사적 청자 #9cc5a4 **그대로**다 — 옛 다크 구분선
+     rgba(156,197,164,.26) 의 RGB 가 정확히 이 색이었다. 라이트는 같은 hue·채도
+     (HSL 131.7° / 26.1%)에서 **밝기만 뒤집은** L 27% = #33573a (아래 라이트 블록).
+     옛 라이트 구분선 #5d7a68 은 당시 라이트 accent(#7da98c)와도, 다크의 "accent 그대로"
+     규칙과도 어긋난 제3의 값이었다 — 두 테마가 서로 다른 규칙이었던 것이고, --theme 은 그
+     둘을 **하나의 규칙**으로 되돌린다: 같은 hue 의 테마색 + **양 테마 공통** 알파 두 단. */
+  --theme:#9cc5a4;
+  /* 구분선 = 테마색 + 알파 두 단(26% / 13%). 알파는 두 테마가 **같은 숫자**를 쓴다 — 달라지는
+     것은 --theme 의 밝기뿐이고, 그 밝기를 알파가 아니라 색 쪽에서 흡수하게 만든 것이 위
+     "하나의 규칙"의 실체다(옛날엔 다크 .26/.13, 라이트 .34/.16 로 알파까지 갈려 있었다).
+     알파를 그대로 옮기지 않고 캔버스 위 합성색의 WCAG 대비비 / ΔL* 로 다시 골랐다
+     (오늘 오전 중성화 때와 같은 방법·같은 형식):
+       다크 #171b1a 위 — divider 26% → rgb(58,71,62)  CR 1.782 / ΔL* +19.49
+                                         (오늘 중성 .21: CR 1.764 / +19.20)
+                          line   13% → rgb(40,49,44)  CR 1.298 / ΔL* +10.08
+                                         (오늘 중성 .11: CR 1.311 / +10.39)
+       라이트 #f4efe3 위 — divider 26% → rgb(194,199,183) CR 1.502 / ΔL* −14.95
+                                         (오늘 중성 .23: CR 1.502 / −14.95 — 동일)
+                          line   13% → rgb(219,219,205) CR 1.216 / ΔL* −7.41
+                                         (오늘 중성 .11: CR 1.205 / −7.08)
+     즉 **선의 무게는 오늘과 같고 색만 청자로 돌아온다.** 라이트 --theme 의 L 27% 는 이 26%
+     한 단이 라이트에서 오늘과 같은 무게를 내도록 이분탐색으로 고른 값이다.
+     --sel/--hover/--search-hit 는 그대로 accent 파생 — 그건 구조가 아니라 강조가 맞다. */
+  --divider:color-mix(in srgb,var(--theme) 26%,transparent);
+  --line:color-mix(in srgb,var(--theme) 13%,transparent);
+
+  --accent:#9cc5a4;--fs:1;
+  /* QA8 2C: dashboard brush + sidebar timeline search-hit ticks share one accent-family mark.
+     Resolves through --accent so light/dark theme re-tints stay in sync without a second hex. */
+  --search-hit:var(--accent);
+
+  /* 기본값은 Pretendard 한 벌 — 두 변수 모두 설정(모양 > 글꼴)이 런타임에 덮어쓴다
+     (lib/appearance.ts::applyAppearance). 여기 값은 설정이 오기 전 첫 페인트용이므로
+     appearance.ts 의 "pretendard" 스택과 **글자 그대로 같아야** 한다. */
+  --font-editor:"Pretendard", "Source Sans 3", system-ui, sans-serif;
+  --font-body:"Pretendard", "Source Sans 3", system-ui, sans-serif;
+  --font-heading:var(--font-body);
+  --font-mono:"Source Code Pro", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-ui:var(--font-body);
+  
+  /* W7-a: 접촉(contact) + 앰비언트(ambient) 2겹 스택 — 예전엔 44px 블러 단일 레이어(55%)뿐이라
+     떠 있는 느낌이 아니라 고정 거리의 링처럼 보였다("AI로 시작하기" 모달에서 owner가 지적, 실제로는
+     ModalShell 공통 --shadow-lg 라 모든 모달에 적용). 접촉 레이어(짧은 오프셋·좁은 블러·상대적으로
+     진한 알파)가 바닥에 붙은 느낌을 만들고, 앰비언트 레이어(넓은 블러·옅은 알파)가 은은한 낙하 음영을
+     맡는다. 다크 앰비언트는 55%→26%로 낮춰 라이트(아래, 14%)에 훨씬 가깝게 — 다크에서만 유독
+     무겁던 그림자를 완화한다. */
+  --shadow-sm: 0 1px 2px color-mix(in srgb, #000 20%, transparent);
+  --shadow-md: 0 2px 8px color-mix(in srgb, #000 24%, transparent);
+  --shadow-lg: 0 2px 6px color-mix(in srgb,#000 40%,transparent),0 20px 48px color-mix(in srgb,#000 26%,transparent);
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  /* 알약 — 높이의 절반 이상이면 무엇이든 같게 그려지므로 스케일의 일부가 아니라 "완전 둥근" 이라는
+     별개 개념이다. 999/9999px 로 갈리던 생값을 여기로 모은다. */
+  --radius-pill: 999px;
+
+  /* Semantic aliases */
+  --accent-text: var(--accent);
+  /* --surface-soft(= --surface-base 별칭)는 마지막 사용처(브리핑 칩)가 PLAN-2026-10-19 재작성으로 --surface-raised 로
+     옮기며 지웠다 — 본문 안에서는 바탕과 같은 값이라 면을 만들지 못했다(아래 .content-canvas 블록 주석). */
+  /* 파묻힌 면(프리뷰 타일 등) — 표면보다 한 단계 어둡다. 두 테마 모두에서 같은 방향으로 눌린다. */
+  --surface-sunken: color-mix(in srgb, var(--surface-base) 92%, black);
+  /* 살짝 떠 있는 면(위젯 내부의 칩·행·카드). --surface 계열과 달리 **불투명이 아니다** — 이 면들은
+     테마 표면 위에도, 사용자가 지정한 노드 fill 위에도, 양피지 스킨 위에도 얹히므로 바탕을 가리면
+     안 된다. 중성 회색이라 다크에서는 밝히고 라이트에서는 눌러 테마별 재정의 없이 양쪽에서 같은
+     방향으로 "한 단계 위"가 된다(그래서 여기엔 테마 블록의 오버라이드가 없다).
+     ponytail: 알파가 .05/.06/.08 세 단계로 표류하던 것을 기본/강조 두 단계로 합쳤다. 더 얕은
+     단계가 실제로 필요해지면 그때 --surface-raised-subtle 을 추가해라. */
+  /* ⚠️ 이 중성 회색은 **다크 전용 값**이다. 라이트 블록이 부호를 뒤집어 재정의한다 —
+     밝은 바탕 위에 밝은 회색을 얹으면 "한 단 위"가 아니라 "한 단 사라짐"이 된다.
+     2026-09-12 실측: 라이트 설정 본문에서 이 값이 ΔL* 2.09 밖에 안 나고(옛 --surface-sunken 은
+     6.36), 그래서 ⓘ 뱃지가 오히려 **덜** 보이게 됐다. 다크는 반대로 0.82 → 3.08 로 좋아진다. */
+  --surface-raised: rgba(125, 125, 125, 0.06);
+  --surface-raised-strong: rgba(125, 125, 125, 0.08);
+  --text-muted: var(--muted);
+  --text-tertiary: var(--faint);
+  --dim-disabled: .45;
+  --dim-ghost: 0.6;
+  --dim-faint: 0.35;
+
+  /* z-index 계층 스택 토큰 */
+  --z-overlay: 10;
+  /* 캔버스 내 패널/드로어 → 요소 옆 팝오버 순서.
+     ⚠️ --z-dropdown · --z-modal · --z-toast 는 **여기서 선언하지 않는다.** 같은 :root(40행) 안
+     아래쪽(254행 근처)에서 다시 선언되어 그쪽이 무조건 이기기 때문이다 — 여기에 값을 적으면
+     읽는 사람만 속는 죽은 값이 된다(2026-08-30 감사에서 --z-modal 50 / --z-toast 100 이 그렇게
+     죽어 있었다. 실제 유효값은 80 / 9000). 세 토큰의 SSOT 는 아래 한 줄이다. */
+  --z-sidebar: 25;
+  --z-popover: 40;
+
+  /* 관계도 캔버스 **안**의 지역 스택 — 앱 전역 레이어(--z-overlay 등)와 다른 축이다.
+     `.diagram-canvas` 가 자기 스태킹 컨텍스트를 만들고 React Flow 도 그 안에서 자기 관례대로
+     쌓으므로, 여기 값은 그 컨테이너 안에서만 의미가 있다(그래서 한 자리 수). <body> 로 포털되는
+     것(.diagram-bubble-menu 등)만 전역 토큰을 쓴다.
+     값은 이름을 붙이기 전과 **같다** — 생값이 열두 군데 흩어져 있던 것을 사다리 하나로 모은 것뿐. */
+  --z-canvas-input: 1;   /* 노드 안 제자리 입력칸 */
+  --z-canvas-badge: 2;   /* 노드 헤더·배지·그룹 칩·드래그 레이어 */
+  --z-canvas-float: 3;   /* 캔버스 위에 뜬 줄 — legend, Reach 배너, 인라인 생성칸 */
+  --z-canvas-chrome: 5;  /* React Flow 자체 크롬 — 줌 컨트롤·미니맵 */
+  --z-canvas-top: 10;    /* 최상단 — 선택 버블, Finder, 드래그 중인 핸들 */
+
+  /* 값은 이름을 붙이기 전과 같다 — 래칫(check:type-scale ⓔ)이 생값 4·20 을 막아 이름만 붙였다. */
+  --z-sheet-frozen: 4;   /* 시트 그리드 **안** 지역 스택 — 첫 행 고정 레이어. 머리글·sticky(1~3) 위 */
+  --z-table-handle: 20;  /* 본문 표 열 리사이즈 핸들 — 셀 안 absolute, 이웃 셀·선택 오버레이 위 */
+
+  /* W22 ⑧: 본문(실작업 영역) 틴트 — 명도 방향은 양 테마 모두 "짙게"(오너: 다크에서 밝히면
+     대비가 약해진다). 기준값 다크 16% / 라이트 7%.
+
+     PLAN-2026-09-12 §5/D6 에서 **하나였던 토큰이 둘로 갈라졌다.** 예전엔 `--workspace-tint`
+     하나가 .content-canvas(본문)와 노트북 스위처 칩 두 곳을 함께 칠했는데, 본문 밝기를
+     사용자 슬라이더(`content_tint`)에 물리면 사이드바에 있는 칩까지 따라 움직인다 — 칩은
+     사이드바 소속이고 사이드바의 밝기는 전역 슬라이더(`bg_dim`)가 담당한다.
+       --content-tint       : 본문 캔버스 전용. 슬라이더가 움직인다.
+       --notebook-chip-tint : 노트북(= 기존 workspace) 스위처 칩 전용. 고정.
+     둘의 **기준값은 같다**(다크 16% / 라이트 7%) — 슬라이더 0 에서 예전 한 토큰 시절과 1px 도
+     달라지지 않는다.
+
+     **틴트는 부호를 갖는다**(2026-09-12 오너 QA). 검정 한 색으로는 본문이 사이드바보다
+     *밝아질* 수 없다 — 검정을 0% 까지 줄여야 겨우 사이드바와 같아진다. 라이트 테마에서
+     "본문이 사이드바보다 밝았으면 좋겠다"는 요구가 나왔고, 그러려면 틴트가 흰색으로 뒤집혀야
+     한다. 그래서 색과 세기를 두 변수로 갈랐다:
+       --content-tint-color  : #000(어둡게) 또는 #fff(밝게)
+       --content-tint-amount : 세기(퍼센트). 항상 양수 — 부호는 위 색이 표현한다.
+     둘 다 lib/appearance.ts::applyCssVars 가 setProperty 한다. 설정 키 `content_tint` 는
+     **오프셋**(-30~40, 기본 0 = 지금 그대로)이고, 실효값 = 테마 기준값(다크 16 / 라이트 7) +
+     오프셋이다 — 실효값이 음수로 내려가면 색이 #fff 로 뒤집힌다(settings_schema.rs).
+     아래 CSS 값은 **JS 가 아직 안 돈 첫 페인트용 기본값**이라 오프셋 0 일 때와 같아야 한다. */
+  --content-tint-color: #000;
+  --content-tint-amount: 16%;
+  --content-tint: color-mix(in srgb, var(--content-tint-color) var(--content-tint-amount), transparent);
+  --notebook-chip-tint: color-mix(in srgb, #000 16%, transparent);
+
+  /* 간격 스케일 — 이전에는 padding 문자열이 44종으로 표류했다. 새 UI 는 이 값만 쓴다.
+     --space-2xs(2px)는 사다리의 "0 다음 한 칸" — 아이콘+라벨 붙은 쌍, 칩 클러스터, 툴바
+     아이콘 행처럼 4px 면 벌어져 보이는 밀착 간격 전용이다. 사다리 밖 생값으로 114곳에
+     흩어져 있던 것을 이름 붙여 들인 것이지 새 값을 만든 게 아니다(계산값 동일). 이보다
+     더 좁혀야 하면 그건 간격이 아니라 정렬 문제다 — 토큰을 더 만들지 말고 정렬을 고쳐라. */
+  --space-2xs:2px;
+  --space-1:4px;--space-2:6px;--space-3:8px;--space-4:10px;
+  --space-5:12px;--space-6:14px;--space-7:18px;--space-8:22px;
+  /* 사이드바 좌/우 인셋 — 워크스페이스 스위처/검색창/연대 필터가 각자 다른 padding(12/16/14px)을
+     써서 좌우 테두리가 어긋났다. 이 토큰 하나로 사이드바 컬럼의 모든 "가로 전폭" 블록
+     (스위처, 검색/필터, 트리 헤더·리스트, 새 노트 푸터)을 정렬한다. */
+  --sidebar-pad:var(--space-6);
+  /* 콘텐츠 좌/우 인셋 — 타이틀바 헤더 메타 행과 메인 영역(SourcePanel/EditorPanel 카드) 좌우 인셋 정렬 */
+  --content-inset:var(--space-6);
+  /* Editor image absolute size cap — owner: images must not balloon in full-width mode ("fixed
+     feel"). Applies via min(100%, this) on top of the stored %-of-column width (ImageNodeView.tsx
+     / imageExtension.ts renderHTML), in both comfortable and full-width layouts. */
+  --editor-img-max:680px;
+  /* 타이포 스케일 — 이전에는 fontSize 가 14종(10.5/11/11.5 공존 등)으로 표류했다.
+     --fs("Taille police" 슬라이더)는 UI 전체에 적용된다. 따라서 밀집 레이아웃은
+     확대된 글자를 견디도록 만들어야 한다(줄바꿈 허용/축소 허용/눈금 수 감소). */
+  --text-xs:calc(11px*var(--fs));--text-sm:calc(12px*var(--fs));--text-md:calc(13px*var(--fs));
+  --text-lg:calc(15px*var(--fs));--text-xl:calc(19px*var(--fs));--text-2xl:calc(22px*var(--fs));
+  /* 그룹/섹션 제목 — 행 라벨(13px)보다 위 */
+  --text-section:calc(15px*var(--fs));
+  /* 라벨/캡션용 — 대문자 트래킹 소형 텍스트 */
+  --text-label:calc(10.5px*var(--fs));
+  /* 조밀한 눈금/축 라벨용 최소 단계 (연대축 눈금, 타일 확장자 배지). */
+  --text-2xs:calc(9px*var(--fs));
+  /* 노트 제목 입력 전용(TitleBar) — W24 위생: 마지막 하드코딩 27px 를 토큰으로. --text-clock
+     과 같은 "용도 명명" 단계다(사다리 밖의 히어로 크기). */
+  --text-title:calc(24px*var(--fs)); /* 27→24: 제목 축소(2026-09-30, 22 는 과했음) */
+
+  /* 행간 스케일 (W6)
+     2026-09-09(오너: "에디터 기본 줄간격을 최소 10% 줄여라"): --lh-read 1.7 → 1.5 (-11.8%).
+     행간은 세 값 모두 **무단위**라 이미 글자 크기에 비례한다(--fs 슬라이더·에디터 15px·목록
+     13px 어디서든 같은 비율) — 줄여야 할 것은 배율 자체였다.
+     사다리를 이 방향으로 배열하는 원칙: **글자가 커질수록 행간 배율은 작아진다.** 큰 글자는
+     같은 배율에서도 절대 간격이 함께 커져 줄끼리 흩어져 보이기 때문이다. 그래서 본문·UI 1.45 >
+     제목·뱃지 1.2 이고(2026-09-10 에 본문이 UI 와 같은 단으로 내려왔다, 아래), 에디터 제목
+     (h1/h2, 1.65em/1.32em)도 본문 배율을 물려받지
+     않고 --lh-tight 를 직접 쓴다(아래 .ProseMirror h1~h3).
+
+     2026-09-10(오너: "다른 노트앱보다 넓은 느낌" — 줄간격을 더 줄여라): --lh-read 1.5 → 1.45,
+     동시에 .ProseMirror p/.mdbody p 의 margin 을 .5em → .7em. 단독으로 행간만 줄이면 안 됐던
+     이유: 15px 본문에서 행간 1.5 는 줄 사이 여백이 약 7.5px 인데 단락 margin 도 .5em(=7.5px)로
+     **정확히 같아서**, 단락이 한 덩어리로 안 뭉치고 본문 전체가 균일하게 성겨 보였다 — 이게
+     "넓다"는 인상의 실제 원인 중 하나. 원칙: **단락 사이 간격은 줄 사이 간격보다 커야 한다.**
+     그래서 행간을 줄이는 동시에 단락 margin 을 키워, 본문은 조밀해지되 단락 구분은 오히려
+     뚜렷해지도록 맞바꿨다(밀도와 가독성을 함께 얻는 방향).
+     또 하나의 원칙: **행간 배율은 글자 크기와는 반대로, 행 길이(measure)와는 같은 방향으로
+     움직인다.** 에디터 컬럼은 max-width 800px(15px 기준 한글 약 50자/라틴 약 100자)로 넓은
+     편이고, 넓은 measure 는 눈이 다음 줄 머리를 찾아 돌아올 때 길을 잃지 않도록 더 많은 행간을
+     요구한다 — 1.45 가 이 measure 에서의 하한선이다. 더 줄이려면 행간이 아니라 max-width 를
+     먼저 좁혀야 하는데, 800px 은 오너가 의도적으로 넓힌 값이라 이번엔 건드리지 않는다.
+     이 변경으로 --lh-read(1.45)와 --lh-ui(1.45)가 같은 값이 됐다 — 우연이 아니라 위 "글자가
+     커질수록 배율은 작아진다" 원칙을 본문 15px/UI 13px 에 그대로 적용한 결과다. 그래서 위
+     "본문 1.5 > UI 1.45" 서술은 낡았고, 지금은 **본문 1.45 = UI 1.45 > 제목·뱃지 1.2** 다. */
+  --lh-tight: 1.2;
+  --lh-ui: 1.45;
+  --lh-read: 1.45;
+
+  /* 컨트롤 높이 토큰 3단 (W3 — 박스를 --fs 에 연결) */
+  --ctrl-h-sm: calc(10px + 16px*var(--fs));   /* fs1 = 26 */
+  --ctrl-h:    calc(12px + 18px*var(--fs));   /* fs1 = 30 */
+  --ctrl-h-lg: calc(14px + 21px*var(--fs));   /* fs1 = 35 */
+  --settings-ctrl-w: 220px;                   /* 설정 패널 우측 파라미터 컨트롤 공통 너비 */
+
+  /* 전환 시간 사다리(W24, docs/DESIGN.md) — 마이크로 인터랙션은 이 3단만 쓴다:
+     fast = 색/투명도 호버(대다수), med = 그립·토글·팝오버 등장, slow = 확대되며 나타나는
+     오버레이(호버 프리뷰, 고스트+ 메뉴). 더 긴 값은 장식 애니메이션(shimmer 등) 전용. */
+  --dur-fast:.12s;
+  --dur-med:.16s;
+  --dur-slow:.22s;
+
+  /* 포커스 모드 본문 센터링(W24 위생) — 900px 측정폭, 좌우 최소 24px. App.tsx(본문 split)와
+     TitleBar.tsx(제목 행)가 같은 매직 식을 복제하던 것을 한 곳으로. %는 사용처 요소 폭 기준
+     (커스텀 프로퍼티는 사용 시점에 평가된다). */
+  --editor-measure:900px;
+  --focus-inset:max(24px, calc((100% - var(--editor-measure)) / 2));
+  /* 대시보드 헤더 시계 전용 단계 (W6-c — 시계가 헤더 위계 1순위). --text-2xl 위로 한 칸
+     더 필요한 곳은 여기 하나뿐이라 스케일을 통째로 늘리지 않고 이 토큰만 둔다.
+     2026-08-15(오너 피드백 — 헤더 높이를 타이틀바 수준으로): 38px→30px. 인사말 줄 제거로
+     생긴 여유를 헤더 높이 축소로 돌리기로 하면서 함께 줄였다 — 노트 제목(TitleBar.tsx 입력의
+     fontSize:27) 바로 위 단계라 "1순위" 위계는 유지하면서도 더는 헤더 전체 높이를 지배하지
+     않는다(HomeHeader.tsx 상단 주석 참고 — 2026-10-19 R14 로 문구가 빠진 뒤엔 날씨 박스가 그 역할). */
+  --text-clock:calc(30px*var(--fs));
+
+  --danger:#ef5350;--danger-soft:#e0a83c;--ok:#3ecf8e;--info:#4fa3e0;
+  --on-accent:#06211f;--on-solid:#ffffff;
+  --overlay:rgba(0,0,0,.62);
+  /* Wave 2 aliases — same values, new names. --danger-soft stays (it is amber). */
+  --warn:var(--danger-soft);
+
+  /* Home calendar day-cell forecast icon colors (lib/weather.ts::weatherCodeToVisual) — one calm,
+     desaturated hue per condition family, glass-appropriate (not candy). --weather-partly is a
+     mix rather than its own hex (amber-gray = warm ⨯ muted, no new literal needed). Extreme-weather
+     emphasis (heatwave/cold-wave, heavy rain/snow) reuses these plus the existing --danger/
+     --danger-soft/--info status tokens rather than adding more — see weatherCodeToVisual /
+     weatherTempColorVar in lib/weather.ts. */
+  --weather-warm:#d3a153;
+  --weather-partly:color-mix(in srgb, var(--weather-warm) 55%, var(--muted));
+  --weather-rain:#6f9bc9;
+  --weather-rain-strong:#4d78ab;
+  --weather-snow:#a7c8dd;
+  --weather-snow-strong:#d3ecf7;
+  --weather-thunder:#9483c7;
+
+  /* Wave (theme customisation): 1차 CTA(.addnote="새 노트") 전용 톤 — 다크에서 옅은 세이지 배경 +
+     거의 검정 글자가 "대비는 맞지만 톤이 붕 뜬다"는 지적(owner)에 대한 수정. --accent/--on-accent
+     자체는 선택/호버/포커스링 등에 광범위하게 쓰이므로 그대로 두고, 이 두 토큰만 버튼 전용으로
+     분리한다. 다크: accent를 검정 쪽으로 35%만 남기고 65% 섞어 어둡게, 글자는 --text(밝은 톤).
+     라이트는 :root[data-theme='light']에서 오늘과 동일하게(=accent 원색 + on-accent) 되돌린다.
+     대비 실측(5개 accent 스와치 전부, 텍스트 --text #e0deda 기준): 최저 6.40:1(#c7e0cd 스와치) ~
+     최고 10.31:1(#5d8a6e 스와치) — 전부 4.5:1 이상. */
+  --btn-primary-bg:color-mix(in srgb,var(--accent) 35%,black);
+  --btn-primary-fg:var(--text);
+
+  /* acrylic 시트 불투명도 기본값(0~1.0, settings.ts 가 인라인 override) — `.app` 위 단일 틴트 레이어의
+     알파. acrylic 프리셋에서만 쓰인다. */
+  --sheet-alpha:0.85;
+  --z-dropdown:20;--z-sticky:30;--z-backdrop:70;--z-modal:80;--z-toast:9000;--z-tooltip:9500;--z-drag:9600;
+  --img-ph-a:#5c5754;--img-ph-b:#2f2b29;
+  /* 네이티브 스크롤바/폼 컨트롤이 OS 테마가 아니라 앱 테마를 따르도록 — 라이트 블록에서 override. */
+  color-scheme:dark;
+
+  /* 빈 상태 ↔ 채워진 상태 사이 레이아웃 점프 방지용 "예약 높이" 토큰.
+     --row-tabs: 섹션 탭 행(EditorPanel) — 탭이 0/1/여러 개여도 행 높이가 같아야 한다.
+     --row-strip: 타일 스트립형 바(Pièces jointes 등) — 빈 힌트 상태도 타일 1행분 높이를 확보.
+       타일이 64px → 48px 로 줄어든 데 맞춰 갱신(Agent A, Attachments 타일 축소). */
+  --row-tabs:calc(22px + 12px*var(--fs));
+  /* W22 ⑩: 근본 원인 규명 — 타일(48px)+상하 패딩(--space-6*2)=76px는 padding 누락이 아니라
+     정확한 값이다(실측 확인). 문제는 그 "정확히 맞아떨어짐" 자체 — 여유가 0이면 고DPI/OS
+     배율에서 레이아웃이 분수 physical px로 스냅될 때 scrollHeight 가 clientHeight 를 1px
+     넘어가 스크롤바가 남는다. +4px 슬랙으로 흡수한다. (--row-strip-2 는 W24에서 삭제 —
+     2줄 확장 자체가 폐기됐다: 스트립은 항상 1줄 + 가로 패닝.) */
+  --row-strip:calc(48px + var(--space-2) + var(--space-5) + 2px);
+  /* 행 높이 사다리 상위 2단(W24, docs/DESIGN.md) — 창 크롬 / 문서 탭. 세 번째 단(구역 헤더)은
+     아래 --row-tabs. 리터럴(48/40)로 흩어져 있던 것을 토큰으로. */
+  --row-chrome:48px;
+  --row-doctabs:40px;
+  /* --row-toolbar: 섹션 툴바 행(리치텍스트/시트/관계도)의 단일 높이 소스.
+     40px 는 새 값이 아니다 — DESIGN.md 가 `.toolbar-btn`(30×28) 을 "40px 툴바 행 전용" 예외로
+     이미 명시했는데 정작 컨테이너에 그 높이가 없어 행 높이가 자식 최대값으로 결정되고 있었다.
+     버튼(26/28/30px)은 --fs 로 스케일되지 않으므로 이 값도 리터럴이다(--row-chrome/--row-doctabs 동일). */
+  --row-toolbar:calc(18px + 14px*var(--fs));
+  /* --row-header(W24): 노트 타이틀바와 대시보드 헤더가 공유하는 높이의 단일 소스 — 하단
+     구분선이 홈↔노트 전환에서 픽셀 단위로 같은 y에 있어야 한다(오너, 실측 0.6px 어긋남 수정).
+     유도: 고정부 38px(타이틀바 padding 12+8 + 제목 marginTop 6 + --row-title-3 고정부 12)
+         + 스케일부 49px*fs(제목 줄높이 35 + --row-title-3 스케일부 14).
+     TitleBar 는 내용이 정확히 이 값이 되도록 제목 line-height 를 35px*fs 로 고정하고,
+     HomeHeader 는 border-box 로 이 값 + border 1px 를 강제한다 — 내용이 아니라 토큰이 높이를
+     결정한다. */
+  /* 2026-09-30: 제목 27→22px(줄높이 35→30) + 하단 padding 8→4 → 고정부 34px, 스케일부 44px*fs. */
+  /* 2026-10-19(GRILL-2026-10-19 R14 "비우고 낮춘다"): 대시보드 헤더는 이 토큰을 **일부러** 떠났다 — 문구가
+     빠져 자기 내용(날씨 박스·날짜+시계) 높이로 낮아졌다(HomeHeader.tsx 상단 주석). 이제 노트 타이틀바
+     (App.tsx 래퍼) 전용이고, 홈↔노트 전환 때 밑선 y 가 같다는 위 W24 보장은 더는 없다. */
+  --row-header:calc(34px + 44px*var(--fs));
+  /* --row-search: 사이드바 검색 입력 상자와 필터 토글 버튼이 공유하는 높이 소스.
+     --fs(글자 크기 배율)에 비례해 확장되어 큰 배율에서도 텍스트와 버튼이 정렬되고 잘리지 않는다. */
+  --row-search:calc(30px*var(--fs));
+  /* --row-attach-header 는 W24에서 삭제 — 첨부 헤더가 어시스트 헤더·섹션 탭바와 같은
+     --row-tabs(아래) 리듬으로 통일됐다(오너). 행 최소 요소였던 icon-btn--sm(26px 셰브런)은
+     --row-tabs 최소값(fs 0.85에서 33.6px) 안에 여전히 들어간다. */
+  /* TitleBar 는 지금 2행이다(잠금/확대는 App.tsx 의 창 스트립으로 이동). 토큰 이름의 1/3 은
+     3행이던 시절의 잔재이고, row1 은 icon-btn--sm(26px, 고정
+     크기, --fs 로 스케일되지 않음)만 담으므로 그 자체로 고정 26px. row3(연도/지역/태그, 가로
+     스크롤 한 줄)은 실제 텍스트(var(--text-xs))를 담으므로 --row-yearfilter 와 동일한 원칙으로
+     --fs 만큼만 완만히 늘어난다 — 태그/지역 칩이 있든 없든, 몇 개든 이 행의 "높이"는 항상
+     같다(내용은 넘치면 가로 스크롤로 흡수, 절대 세로로 늘어나 헤더 전체 높이를 밀지 않는다). */
+  --row-title-3:calc(12px + 14px*var(--fs));
+  /* 제목 아래 메타 칩 높이 = --row-title-3 - 위아래 2px(칩 + 스트립 패딩이 행에 딱 맞는다). --tb-chip-pt: 한글이 위로 떠 보이는 것을 상쇄하는 위쪽 패딩(글자를 아래로 ~1px). */
+  --tb-chip-h:calc(8px + 14px*var(--fs));--tb-chip-pt:0px;--tb-chip-icon-dy:-1px;--tb-chip-dot-dy:-1.5px;
+}
+
+:root[data-theme='light']{
+  --paper-texture: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAACXBIWXMAAAsTAAALEwEAmpwYAAACq0lEQVR4nO1bQW7bMBA8R0lq55J//eU9q9y4B/oAe81Fw6UvUAK03rT2iRkEAkU2d9xISi8F+HjVvB1uWq+bNm3y27dvr2L/Ymxs7OPbt28zV1dX06qqZs+fP7/K88OHDx9ms5n348ePJ+/fv39fUVV/BgwY8OP6+to9ODiw7969a92+fdsWkS967ty5Z5FnjI2NHV1eXtrv379f0fGzW7dufcnjH9PT04O8f3Bw8PvkyZM7eA0c0NXV1Z8xMTGx7du3b13g/fv3v/Lyw4cPf+7evfvXbdu27Vw+vB/oH4aGhh6i8qXw/Pnz540bN+5D3p/w0759+/7D45eIffXKlSvP7969+4t9+/Ztvnjx4o+3b9/mXb58+fT4+PhJ5Av/T4x6e2BgYOH+/fvfEflk6NChw8y5c+e+Q45z586dR7z14sWL/4yPj//Yvn37kYSEhBvwt5gZ0tLSSi8vLy/G4vT09B9nz54t5+fnn61fv/4i5P7R3t7+x2HDhn0FvD67dOnSL5BqBw8eLMDvO1ZVVc18f/fu3Tf5+fnL/N9b0P3V8vLyIqD77s2bN8v3799/mZCQkAD97585c+Y+pAfnz58vv3Xr1r+Ivwb0y3t7e48nJCQk7ty58xOq5/XRo0dLREREzHj//v3j6upq87Zt2377/Pnzj5EjRw4zMzN/b9u27V/07x4/fnw9ZMiQEiAeHR0d3X/y5Mnf0dHRo7Zs2XI0MjJyz44dO5rLy8utr6+vD6H6E1Q1D70YwD4oPjw8fAc5u7u7/7x9+/Z79PT0eNPT04fHxsZ+4X9qauqX9vb2o7m5ucfHxsZ+oUf1s2fP/uFz06dPX7h+/fofkH8bcmxsbfX19eXw68+cOXM+c+bM7U+fPv1k48aNP0Bf/wH6L1VWVj5+/fr1n8bGxp03btz4DX1N5cOHD7/5L0NwcPD77du3f/z+/ftdY2Nj886dO99Dfx163i8uLv7x48ePvyAP4z/k46Kjo9+g/47/9evX5yA/9wfy/iFk59+8eXP85s2bC+j939ixY/9AX36g57e0f/369f/5+fm/Hz58+I163oF8Fz5+/PgAcnN5eXkLsD+B/R+0/4P2f9D+D9r/Qfs/aP8H7f+g/R+0/4P2f9D+D9r/Qfs/aP8f7f8X/gEAAAD//8U51/0AAAAASUVORK5CYII=");
+  
+  --app-canvas:#f4efe3;
+  /* 떠 있는 작은 면(배지·ⓘ 뱃지·칩)은 라이트에서 **어두워져야** 한 단 위로 읽힌다.
+     알파는 다크(.06/.08)와 대칭인 ΔL* 가 나오도록 골랐다 — 검정은 흰색보다 지각 효과가 커서
+     같은 알파를 쓰면 라이트만 과하게 진해진다(2026-09-12 실측). */
+  --surface-raised: rgba(0, 0, 0, 0.05);
+  --surface-raised-strong: rgba(0, 0, 0, 0.07);
+  /* bg-dim(배경 어둡게 슬라이더)은 이제 라이트에서도 동작한다(owner 결정, 2026-07-24 — 예전엔
+     "검정 섞으면 한지가 진흙색" 이유로 라이트를 제외했으나, 이제 양쪽 테마가 같은 공식을 쓴다).
+     --surface-base 를 여기서 따로 재정의하지 않으면 :root 의 기본 공식
+     (color-mix(in srgb,var(--app-canvas) calc(100% - var(--bg-dim)),black))이 그대로
+     상속되고, 그 공식이 참조하는 --app-canvas 는 이미 위에서 라이트 값(#f4efe3)으로 재정의돼
+     있으므로 결과적으로 라이트 전용 어둡게 효과가 정확히 적용된다 — 다크와 동일 코드 경로.
+     슬라이더는 AppearanceSection 에서 0~40 으로 캡되어 있고, 그 상한 안에서 대비가 낮아지는 것은
+     사용자의 명시적 선택이다. */
+
+  --text:#3b3833;--ink:#3b3833;--muted:rgba(59,56,51,.78);--faint:rgba(59,56,51,.45);
+  /* 테마색 라이트판(§2/E1 — 근거는 :root 의 --theme 주석). 다크 #9cc5a4 와 **같은 hue·채도**
+     (HSL 131.7° / 26.1%)에서 밝기만 69.2% → 27.0% 로 뒤집은 값이다. 27% 라는 숫자 자체는
+     디자인 취향이 아니라 계산 결과다 — 양 테마 공통 알파 26% 가 한지 캔버스(#f4efe3) 위에서
+     오늘의 라이트 구분선과 같은 무게(CR 1.502 / ΔL* −14.95)를 내는 밝기를 이분탐색으로 찾았다.
+     라이트 구분선이 옛날에 쓰던 #5d7a68 은 accent 도 --theme 도 아닌 제3의 값이었다.
+     --divider/--line 공식 자체는 :root 와 **글자 그대로 같다** — 여기서 재정의하지 않는다.
+     (배경 채도·아크릴 틴트도 이 색을 향한다. 라이트에서 어두운 색을 향해 섞으므로 상한을
+     낮게 — E3 는 C1 소관.) */
+  --theme:#33573a;
+  /* 라이트 기준값 7% — :root 의 다크 16% 짝(위 --content-tint 주석 참고). 두 토큰 모두
+     여기서 같이 내려야 한다. --content-tint-color/-amount 는 JS 가 덮어쓰므로 여기서는 첫
+     페인트용 세기만 라이트 값으로 내린다(색은 :root 의 #000 을 그대로 상속). */
+  --content-tint-amount: 7%;
+  --notebook-chip-tint: color-mix(in srgb, #000 7%, transparent);
+
+  --accent:#7da98c;
+
+  /* W7-a: 다크와 같은 2겹(접촉+앰비언트) 스택 — 라이트는 원래도 20% 로 다크(55%)보다 옅었으니
+     그 톤은 유지하고 접촉 레이어만 추가해 바닥에 붙은 느낌을 준다. */
+  --shadow-lg:0 1px 3px color-mix(in srgb,#000 12%,transparent),0 18px 44px color-mix(in srgb,#000 14%,transparent);
+  --on-accent:#06211f;
+  --overlay:rgba(45,40,32,.45);
+  /* 상태색은 다크 기준으로 골라져 있어 라이트 한지 표면(#f4efe3)에서는 거의 안 읽힌다
+     (실측 대비: ok 1.74 / danger-soft 1.86 / info 2.39 / danger 3.04 — 본문 기준 4.5:1 미달).
+     라이트 전용으로 어둡게 재지정해 본문 대비를 확보한다. 다크는 이미 6~10:1 이라 그대로 둔다. */
+  --danger:#b32020;--danger-soft:#7a5200;--ok:#116b41;--info:#12559f;
+  color-scheme:light;
+
+  /* Weather condition colors, darkened/saturated to read on the light hanji surface — same
+     direction as the --danger/--info re-tint above (dark-theme hexes measured too pale on
+     #f4efe3). --weather-partly stays a formula, no override needed (re-derives from the light
+     --weather-warm + light --muted set here/above). */
+  --weather-warm:#a97a2e;
+  --weather-rain:#3f6f9e;
+  --weather-rain-strong:#2c5480;
+  --weather-snow:#5f8aa3;
+  --weather-snow-strong:#2f7796;
+  --weather-thunder:#6f5aa0;
+
+  /* Bug fix: these had no light override, so NoteTree's image-placeholder gradient
+     (linear-gradient(135deg,var(--img-ph-a),var(--img-ph-b))) fell back to the dark values
+     (#5c5754/#2f2b29) and rendered near-black on the light hanji surface. Warm tan tones that
+     read as "placeholder" against --app-canvas (#f4efe3) without vanishing into it, plus a
+     dark-ink icon (matches --muted's rgb) for contrast instead of the dark theme's white. */
+  --img-ph-a:#d9cdb3;--img-ph-b:#b3a184;
+
+  /* 라이트에서는 accent 자체가 이미 진하고(#7da98c) on-accent 가 그 위에서 대비를 확보하므로
+     오늘 그대로 유지 — 버튼 전용 토큰도 accent/on-accent 를 그대로 가리키게 되돌린다. */
+  --btn-primary-bg:var(--accent);
+  --btn-primary-fg:var(--on-accent);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SINGLE-SHEET ACRYLIC CONTRACT — Settings > Appearance > "Surface style"
+   (flat | acrylic, 사용자 라벨 "Acrylique"; 이전 이름 mica → acrylic 리네임 2026-07-24). 새
+   패널/카드/모달을 추가하기 전에 읽을 것.
+
+   1. 반투명은 오직 `.app` 한 장에서만 일어난다. acrylic 프리셋은 아래
+      `:root[data-surface='acrylic']` 블록에서 `--bg`(=`.app` 의 배경)를 --sheet-alpha 로 조절되는
+      단일 색-혼합 틴트로 덮어쓴다. 그게 전부다 — CSS 블러는 없다(창이 transparent 라 WebView2 가
+      backdrop blur 를 반영하지 않는다, 3항 참고). 실제 흐림은 네이티브 창 재질(DWM Acrylic,
+      `window-vibrancy`, src-tauri/src/commands/window.rs)이 소유한다.
+      예전엔 카드·크롬·모달이 각자 다른 반투명값을 그려 화면 영역마다 톤이 6갈래로 갈렸다
+      (2026-07-24 이전, 이 계약으로 대체됨).
+   2. in-flow 표면 — 문서 흐름 안에 있는 모든 것(`.card`/`.field`/`.ws-trigger` 포함: 에디터 본문/
+      미리보기/첨부/사이드바/탭바/윈도우 스트립/타이틀/폼 컨트롤)은 배경을 칠하지 않는다(폼 컨트롤은
+      헤어라인 테두리로 경계만 표시). `.app` 의 시트(불투명 flat 이든 반투명 acrylic 이든)가 그대로
+      비쳐 보인다.
+   3. floating 표면 — 콘텐츠 위에 떠서 뒤와 구분돼야 하는 것(모달/컨텍스트 메뉴/드롭다운/토스트/
+      팝오버)은 `.overlay` 를 쓴다. **프리셋과 무관하게 항상 불투명** `var(--surface)` 다
+      (2026-08-14 오너 잠정 결정 — 이유는 아래 acrylic 블록 자리의 주석). 이 앱에서 CSS 유리는
+      불가능하다: 창이 `transparent: true` 인 동안 WebView2 가 backdrop blur 를 화면에 반영하지
+      않고, 그 투명 창은 네이티브 Acrylic(데스크톱 비침)의 전제다. 모달 유리는 별도 OS 창 +
+      네이티브 재질로 다시 시도한다.
+      2026-08-14 이전에는 body 에 카드와 같은 사각형을 JS 로 복제한 쌍둥이 레이어가 오버레이의
+      틴트/블러를 대신 그렸다 — `<dialog>.showModal()` 의 top layer 안에서 backdrop-filter 가
+      페이지를 샘플링하지 못하는 한계를 우회한 것인데, 쌍둥이가 한 번 안 그려지면 카드가 배경
+      없이 남는 구조(폴백 없음)라 실제로 그렇게 났다. ModalShell 이 top layer 를 포기하고 일반
+      레이어 스크림+카드로 내려오면서(포커스 격리는 `inert`) 우회 자체가 필요 없어졌다. 그
+      쌍둥이의 식별자 3종은 scripts/check-surface-contract.mjs 가 재등장을 막는다.
+   4. *.tsx 인라인 `style={{background: "var(--surface)"}}` (또는 --overlay / --bg) 는 금지 —
+      배경은 반드시 클래스(`.card`/`.overlay`/`.modal-scrim`/`.field`)가
+      소유한다. 인라인이 클래스 규칙을 가려(shadow) 그 요소만 어느 프리셋에서도 프리셋을 못 받는
+      "불투명한 상자"로 굳어버리는 게 이 계약이 막는 정확한 버그다. scripts/check-surface-
+      contract.mjs 가 베이스라인 대비 새로 추가된 인라인 표면 배경을 잡는다. 폼 컨트롤(input/
+      select/textarea)은 배경 없이 헤어라인만 — 남은 그랜드파더링된 인라인 --surface 는
+      2026-07-24 정리로 대부분 제거됐고(내용이 안 읽힐 위험이 있는 소수만 예외로 존치, 각 파일에
+      코멘트로 이유를 남김), 새로 추가하지 않는다.
+   ══════════════════════════════════════════════════════════════════════════ */
+:root[data-surface='acrylic']{
+  --bg: linear-gradient(
+    color-mix(in srgb, var(--surface-base) calc(var(--sheet-alpha)*100%), transparent),
+    color-mix(in srgb, var(--surface-base) calc(var(--sheet-alpha)*100%), transparent));
+  /* px math is safe to store. Do NOT stash the 0.92 alpha floor in a custom
+     property and color-mix it — unregistered custom props are substituted as
+     token sequences, and WebView2 drops the whole background, leaving
+     .overlay as a hairline frame. */
+}
+/* `.app` 시트 자체의 실제 페인트. 예전엔 App.tsx 인라인 style 이 이 4줄을 직접 그렸는데, 설정/활동
+   이력/AI 히스토리 창이 각자 자기 `.app` 루트 div 를 새로 만들면서(2026-08-14 창 분리) 그 인라인을
+   못 물려받아 --bg/--sheet-alpha 는 정확히 동기화되면서도 정작 시트가 안 그려지는 채로 남았다
+   (2026-08-15 실측: CDP 로 두 창의 --sheet-alpha/data-surface/--accent 는 동일한데 .app 의
+   backgroundImage 만 설정 창에서 "none"). 클래스로 옮기면 `.app` 를 쓰는 모든 창이 자동으로 같은
+   시트를 그린다 — mobile.css 의 `.mobile-app` 이 이미 같은 패턴(자기 클래스에 이 4줄)이다.
+   글자색도 같은 이유로 여기 산다(GRILL-2026-10-19 R1-A): App.tsx 인라인에만 있던 동안 보조 창
+   `.app` 루트는 글자색이 없어 브라우저 기본값(다크에서 흰색 rgb(255,255,255))으로 떨어졌다.
+   자동 대비 보정은 `--text` 자체를 :root 에 덮어쓰므로(lib/appearance.ts applyCssVars → 보조 창도
+   applySavedAppearanceSeed·load 로 같은 함수를 탄다) 여기서 읽기만 하면 모든 창이 보정을 받는다. */
+.app{
+  color: var(--text);
+  background-image: var(--bg);
+  background-repeat: var(--bg-repeat);
+  background-size: var(--bg-size);
+  background-position: var(--bg-position);
+}
+/* 떠 있는 표면은 프리셋과 무관하게 **항상 불투명**하다(2026-08-14 오너 잠정 결정).
+   그 전까지는 acrylic 에서 CSS 유리(틴트+블러+채도+그레인+림)를 시도했는데, 이 앱의 창이
+   `transparent: true` 라 WebView2 가 `backdrop-filter: blur()` 를 화면에 아예 반영하지 않는다 —
+   계산된 스타일에는 blur 가 정상적으로 들어 있지만 픽셀은 그대로다(실측: transparent 를 false 로
+   바꾸면 같은 CSS 로 즉시 블러가 걸린다). 창 뒤 데스크톱 비침(네이티브 Acrylic)이 그 투명 창을
+   전제로 하므로 둘은 상호 배타고, 오너는 **데스크톱 비침을 지키고 떠 있는 표면은 불투명**으로
+   가는 쪽을 택했다. 모달의 유리감은 CSS 가 아니라 **별도 OS 창 + 네이티브 Acrylic** 으로 다시
+   시도한다(조사 중).
+   따라서 여기에 프리셋별 .overlay 규칙은 없다 — 아래 컴포넌트 레이어의 `.overlay`
+   (background:var(--surface)) 한 줄이 두 프리셋 모두를 담당한다. .app 의 CSS backdrop-filter 도
+   같이 지웠다: 투명 창에서 동작하지 않을뿐더러 데스크톱 블러는 DWM 이 소유한다(끄고 실측 확인). */
+@media (prefers-reduced-motion: reduce){
+  /* 프리셋 전환 자체를 애니메이션하지 않는다(요구사항) — .card/.overlay 에 transition 을 추가하지
+     않는 것으로 이미 충족되지만, 혹시 모를 회귀를 막기 위해 명시적으로 무효화해둔다. */
+  .card,.overlay{transition:none}
+}
+@media (prefers-reduced-transparency: reduce){
+  /* OS-level "reduce transparency" 는 acrylic 을 flat 으로 되돌려야 한다 — 같은 특이도([data-surface=
+     '...'] vs [data-surface], 속성 셀렉터 하나씩)라 소스 순서(이 블록이 파일 뒤쪽)로 우선순위가
+     정해진다, 커스텀 프로퍼티 자체엔 !important 불필요. --bg 는 실제 flat 구성으로 되돌려야
+     한다(acrylic 이 남겨둔 값 그대로 두면 안 됨) — 안 그러면 `.app` 이 여전히 acrylic 의 틴트를 깔고
+     있고, 이 미디어쿼리가 관여할 수 없는 OS 윈도우 이펙트만 계속 뒤에서 비치게 된다. */
+  :root[data-surface]{
+    --bg: var(--paper-texture), var(--bg-canvas-glow-1), var(--bg-canvas-glow-2), linear-gradient(var(--surface-base), var(--surface-base));
+  }
+  /* .overlay 는 프리셋과 무관하게 이미 불투명이라 여기서 되돌릴 것이 없다 — .app 의 시트 톤만
+     flat 구성으로 돌린다(위 --bg 재정의). */
+}
+
+*,*::before,*::after{box-sizing:border-box}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--divider) 45%,transparent);border-radius:4px;border:none;transition:background var(--dur-fast) ease}
+*:hover::-webkit-scrollbar-thumb,
+::-webkit-scrollbar-thumb:hover{background:var(--divider)}
+::-webkit-scrollbar-thumb:active{background:var(--accent)}
+::-webkit-scrollbar-track{background:transparent}
+.noscroll::-webkit-scrollbar{display:none}
+.noscroll{scrollbar-width:none}
+
+/* Shimmer utility */
+.btn-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.btn-shimmer::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%; width: 50%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
+  transform: skewX(-20deg);
+  pointer-events: none;
+}
+.btn-shimmer:hover::after {
+  animation: shimmer-sweep 400ms ease-out forwards;
+}
+@keyframes shimmer-sweep {
+  100% { left: 200%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn-shimmer:hover::after { animation: none; }
+  .btn-shimmer { transition: filter var(--dur-slow); }
+  .btn-shimmer:hover { filter: brightness(1.1); }
+}
+
+@keyframes pop{from{opacity:0;transform:scale(.96) translateY(4px)}to{opacity:1;transform:none}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.ai-toast{animation:pop var(--dur-slow) ease-out forwards}
+@media (prefers-reduced-motion: reduce){.ai-toast{animation:none}}
+/* W24: var(--dur-slow)로 감속(오너 — 확대 오버레이는 좀 더 천천히), .attach-add-menu 등장과 같은 리듬.
+   .overlay 의 overlayIn 등장 애니메이션은 반드시 꺼야 한다 — hovprev 는 마운트 시 숨김
+   상태(opacity:0)인데, 키프레임 opacity 가 인라인/클래스보다 우선이라 타일이 마운트될 때마다
+   (펼침·탭 전환) 숨은 프리뷰 전부가 140ms 번쩍이던 원인이었다. */
+.hovprev{display:none !important}
+.overlay.hovprev{display:none !important}
+/* 기본 은닉을 클래스가 소유해야 한다 — 인라인 opacity:0 을 남기면 이 파일의 hover/focus 규칙이
+   (특이도와 무관하게) 인라인 스타일을 절대 이길 수 없어 X 버튼이 영원히 안 보인다. 타일/칩의
+   border-color 를 클래스가 소유하는 것과 같은 이유(이 파일 상단 "타일/칩" 주석 참고). */
+.attach-x{opacity:0;transition:opacity var(--dur-fast)}
+.attach:hover .attach-x{opacity:1}
+/* 키보드로 탭해 들어온 경우에도 삭제(×) 버튼이 보여야 한다 — .tb-tag-x 와 같은 기법.
+   마크업은 Agent A 커밋에서 들어오지만 규칙은 여기(tokens.css, 이번 판 소유자)에 둔다. */
+.attach:focus-within .attach-x{opacity:1}
+.attach-x:focus-visible{opacity:1}
+/* 태그 칩의 삭제(×) — 오버레이로 배치해 여백을 점유하지 않고, hover/focus 시에만 우상단 코너에 노출 */
+.tb-tag{position:relative;line-height:1}
+/* 위쪽 패딩은 flex 중앙정렬 때문에 글자·아이콘을 같이 밀어 상대 위치가 안 바뀐다 — 아이콘만 transform 으로 올려 글자 기준선에 맞춘다(--tb-chip-icon-dy). */
+.tb-quiet-chip svg,.tb-tag>svg{transform:translateY(var(--tb-chip-icon-dy))}
+/* 상태 점은 svg 가 아니라 span 이라 따로 — 점은 아이콘보다 더 내려앉아 보여 --tb-chip-dot-dy 로 별도 보정. */
+.tb-quiet-chip>span[aria-hidden]:first-child{transform:translateY(var(--tb-chip-dot-dy))}
+/* -2px: 스트립(TagPanStrip)이 overflow 클립이라 2px 패딩 안에 들어와야 안 잘린다(메타 행 26px = 칩 22 + 위아래 2). */
+.tb-tag-x{position:absolute;top:-2px;right:-2px;opacity:0;pointer-events:none;transition:opacity var(--dur-fast);z-index:1}
+.tb-tag:hover .tb-tag-x,.tb-tag:focus-within .tb-tag-x,.tb-tag-x:focus-visible{opacity:1;pointer-events:auto}
+/* NoteDatesList 행 액션(알림 토글·삭제) — 2026-09-07 오너 피드백("행이 두 줄"): 한 줄로 되돌리고
+   버튼은 hover·키보드 포커스에서만 보이게 한다. 위 .attach/.attach-x 와 같은 관용구
+   (.wsitem/.wsact 처럼 그룹 전체를 focus-within 하나로 묶음 — 버튼이 실제 <button>이라 opacity
+   와 무관하게 Tab 으로는 항상 도달 가능하다). */
+.ndrow-actions{opacity:0;transition:opacity var(--dur-fast)}
+.ndrow:hover .ndrow-actions,.ndrow:focus-within .ndrow-actions{opacity:1}
+.tag-strip-pan::-webkit-scrollbar{display:none}
+.tag-strip-pan{scrollbar-width:none;-ms-overflow-style:none}
+.treerow:hover .treeact{opacity:1}
+.wsitem .wsact{opacity:0;transition:opacity var(--dur-fast)}
+/* 워크스페이스 이름변경/삭제 버튼 — 실제 <button>이라 포커스는 되지만 hover 전용 규칙만
+   있어서 키보드 사용자에게는 안 보였다. :focus-within 을 더해 Tab 으로도 드러나게 한다. */
+.wsitem:hover .wsact,.wsitem:focus-within .wsact{opacity:1}
+/* 모달 스크림 — 배경을 클래스가 소유한다(SINGLE-SHEET ACRYLIC CONTRACT).
+   2026-08-14: ModalShell 이 <dialog>.showModal() 을 버리면서 스크림은 ::backdrop 의사요소가 아니라
+   다시 진짜 div 다(body 로 포털되는 자식). top layer 를 떠난 이유는 파일 상단 계약 3항.
+   헤더/푸터 전용 배경(.modal-header)은 사라졌다 — 스크롤을 카드가 아니라 안쪽 본문이 소유하게
+   바꿔서 헤더 아래로 본문이 지나가지 않고, 따라서 가릴 판이 필요 없다(유리 한 장이 이음매 없이
+   카드 전체에 깔린다). */
+.modal-scrim{
+  position:fixed;inset:0;z-index:var(--z-modal);
+  display:flex;align-items:center;justify-content:center;
+  padding:var(--space-8);overflow:auto;
+  background:var(--overlay);animation:fade var(--dur-med);
+}
+.modal-scrim.closing{
+  opacity:0;
+  pointer-events:none;
+  transition:opacity var(--dur-fast) ease-out;
+}
+.modal-scrim.closing .overlay{
+  opacity:0;
+  transform:scale(.96) translateY(4px) !important;
+  transition:opacity var(--dur-fast) ease-out, transform var(--dur-fast) ease-out !important;
+}
+/* acrylic 스크림: 프로스트는 패널(.overlay) 자신의 몫이지 스크림의 몫이 아니다(owner 정정,
+   2026-07-24) — 사용자가 외관 설정을 바꾸며 모달 뒤로 앱이 실시간으로 바뀌는 걸 지켜보므로,
+   스크림에 블러를 걸면 정작 봐야 할 배경이 흐려져 방해된다. 그래서 여기엔 blur 가 없다 — 시트
+   톤(--surface-base 색-혼합) 베일만 얹어 모달에 시선이 쏠리게 하는 정도로만 존재하고, 뒤 앱은
+   선명하게 그대로 보인다. W7-a: 20%는 "뒤가 비활성 상태"라고 읽기엔 너무 옅다는 지적(QA) —
+   40%로 올려 딤은 뚜렷이 하되(패널의 불투명 바닥 0.92보다는 한참 낮게 유지), 블러가 없으니
+   외관 미리보기 색조 변화는 여전히 그대로 비쳐 보인다. */
+:root[data-surface='acrylic'] .modal-scrim{
+  background: color-mix(in srgb, var(--surface-base) 40%, transparent);
+}
+/* 모달 카드 내부 3분할 — ModalShell 이 인라인으로 들고 있던 레이아웃을 여기로 옮겼다(2026-09-15).
+   헤더는 --surface-raised-strong 으로 한 단 올려 제목 띠와 본문이 색으로 갈린다. 위 주석의
+   "헤더 배경 없음" 은 CSS 유리 시절의 제약이었고, .overlay 가 항상 불투명이 된 뒤론 의미가 없다.
+   중성 회색 알파라 다크는 밝히고 라이트는 눌러 테마별 재정의가 없다(--surface-raised 주석 참고). */
+.modal-head{display:flex;align-items:center;padding:var(--space-7) var(--space-8);flex:none;
+  border-bottom:1px solid var(--divider)}
+/* 본문은 메인 창 본문(.content-canvas)과 같은 틴트를 시트 위에 얹는다(오너, 2026-09-15) — 헤더·
+   푸터는 시트 톤 그대로라 사이드바:본문 관계가 모달 안에서 그대로 반복된다. 표면 토큰 재정의는
+   아래 `.modal-body, .content-canvas` 공유 블록이 맡는다(본문 안 카드가 밝은 패치로 뜨는 것 방지). */
+.modal-body{padding:var(--space-6) var(--space-8) var(--space-8);overflow:auto;flex:1 1 auto;
+  background:var(--content-tint)}
+.modal-foot{padding:var(--space-6) var(--space-8);border-top:1px solid var(--line);flex:none}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   컴포넌트 레이어 — 반복 패턴의 단일 정의처.
+   호버/포커스는 여기(CSS)에서만 표현한다. 인라인 onMouseEnter 로 e.currentTarget.style
+   을 직접 만지면 React 와 싸우고, :focus-visible / prefers-reduced-motion 을
+   일관되게 표현할 수 없다.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* 카드/패널 표면: in-flow — 배경을 칠하지 않는다(SINGLE-SHEET ACRYLIC CONTRACT 2항). `.app` 의
+   시트가 그대로 비치고, 경계는 헤어라인(--divider)만 만든다. */
+.card{
+  border:1px solid var(--divider);
+  border-radius:var(--radius-md);
+  min-width:0;
+}
+/* 콘텐츠 위에 뜨는 표면(모달/메뉴/드롭다운/토스트/팝오버) — 프리셋과 무관하게 **항상 불투명**하다.
+   acrylic 전용 .overlay 규칙·CSS 블러는 없다(2026-08-14 제거 — 위 SINGLE-SHEET 계약 3항과 `.app`
+   규칙 아래 주석). 예전 body 쌍둥이도 삭제됐다(계약 3항). */
+/* ⚠️ --surface 가 아니라 --app-sheet-base 다. 떠 있는 표면은 "어디에 떠 있든 같은 한 톤"이어야
+   하는데(아래 SINGLE-SHEET 계약 3항), --surface 는 PLAN-2026-09-12 §3 이후 `.content-canvas`
+   안에서 본문 바탕과 같아진다. 그러면 body 로 포털되는 팝오버(:root 값)와 인-트리로 뜨는
+   팝오버(CreatePopover 등, portal 없이 position:fixed)가 **같은 화면에서 서로 다른 색**이 되고,
+   인-트리 쪽은 바탕 대비 CR 1.000 이라 아예 안 보인다(라이트 ΔL* 5.89). --app-sheet-base 는
+   본문이 재정의하지 않는 시트 기준면이라 어디서 읽어도 같은 값이다. */
+.overlay{background:var(--app-sheet-base);border:1px solid var(--divider);border-radius:var(--radius-md);overflow:hidden}
+/* 떠 있는 툴 버블(텍스트·표·이미지 버블, 관계도 노드 버블·드롭다운, 컨텍스트 메뉴, 캔버스 선택 툴바,
+   관계도 범례·Finder)은 **전부 위 .overlay 레시피 하나**다 — 불투명 --app-sheet-base · 1px --divider ·
+   --shadow-lg. 가로 툴바형만 모서리 pill, 메뉴형은 md. 2026-09-21 까지 여기 88%+blur16(!important) 한 벌,
+   .diagram-canvas-float 90%+blur10 한 벌, 에디터 버블 인라인 2px 한 벌이 따로 있었다(오너 전수조사 요청).
+   블러는 투명 창에서 그려지지 않는다(이 파일 SINGLE-SHEET 주석). */
+/* 읽기 콘텐츠 카드(에디터/미리보기/첨부)의 2px 외곽선 — .card 또는 .overlay 와 함께 사용(예: 확장
+   미리보기는 스크림 위 floating 이라 .overlay 가 배경을 맡고, 이 규칙이 그 위에 2px 외곽선을 얹는다). */
+:is(.card,.overlay).card-reading{border:2px solid var(--divider)}
+
+/* W5(WORKORDER-2026-09-02 §4): 태블릿 세로 안내 — 가로만 지원한다(오너 확정 2026-09-02, D3).
+   차단하지 않고 안내만 한다 — 회전하면 스스로 사라진다. JS 0줄, 상태 0개, 닫기 버튼 없음.
+   Tauri 창은 portrait+coarse 조합이 될 수 없어(마우스=fine pointer) 이 media query 자체가
+   성립하지 않고, 자연히 데스크톱에서는 항상 숨어 있다. App.tsx 는 이 요소를 무조건 렌더하고
+   (browser 가드조차 없다) 표시 여부는 전적으로 이 파일이 결정한다. */
+.tablet-portrait-banner{display:none}
+@media (orientation: portrait) and (min-width: 768px) and (pointer: coarse){
+  .tablet-portrait-banner{
+    display:flex;align-items:center;justify-content:center;
+    position:fixed;top:var(--space-4);left:50%;transform:translateX(-50%);
+    z-index:var(--z-sticky);
+    padding:var(--space-3) var(--space-6);
+    font-size:var(--text-sm);color:var(--text);text-align:center;
+  }
+}
+
+/* 앱 캔버스(W22 ⑪, 결정 번복 — 구 .note-workspace): TabBar부터 showHome 분기 전체(HomeTab, 또는
+   TitleBar+본문 split+첨부)를 하나의 라운드 외곽선으로 묶는다 — "창 안의 또 하나의 창" 인상.
+   좌우·상하 인셋은 이 래퍼가 소유(margin) — bodyRef 의 좌우 padding 은 제거됨. 이름을
+   note-workspace 에서 content-canvas 로 바꾼 이유: 홈까지 담으므로 노트 전용 이름이 부적절하고,
+   이 코드베이스에서 workspace 는 이미 노트북(Notebook)을 뜻하는 내부 식별자라 개념 충돌이
+   있었다(GLOSSARY).
+   W22 ④: 중립 틴트 추가 — SINGLE-SHEET ACRYLIC CONTRACT 와의 관계: 이건 불투명 표면이 아니라
+   반투명 틴트다. `.app` 의 시트(paper-texture·glow·surface-base)가 이 틴트를 통해 그대로
+   비친다 — 계약이 금지하는 건 opaque 배경이지, 명암 방향 틴트가 아니다.
+   W22 ⑧: 명도 반전(오너) — ink 3%(다크=밝게)는 대비가 약했다. 양 테마 모두 짙게 가라앉히는
+   --content-tint(당시 이름 --workspace-tint, 다크 10%/라이트 4%, :root 정의)로 교체.
+   2026-09-09(오너: "사이드바와 구분이 더 명확해야 한다") — 다크 10%→16%, 라이트 4%→7%.
+   사이드바는 틴트가 없는 맨 시트라, 이 값이 곧 두 영역 사이 대비의 유일한 손잡이다.
+   PLAN-2026-09-12 §5: 그 손잡이를 설정(`content_tint` 슬라이더)에 내준다 — 토큰 이름도
+   --content-tint 로 갈라졌다(:root 주석 참고). 노트북 스위처 칩은 --notebook-chip-tint 로
+   떨어져 나가 이 슬라이더를 따라가지 않는다.
+   W22 ⑪: W22 후속의 "하단 플러시(margin-bottom 0, 상단만 라운드)" 결정은 철회 — 컨테이너가
+   TabBar~홈까지 감싸므로 4면 인셋 + 전체 라운드로 되돌린다. 상/하 margin 은 창 스트립·창
+   하단과의 간격이 시각적으로 균형 있는 --space-3(8px)로 좌우 --content-inset 과 나란히 둔다.
+   W23 B: 위 결정을 다시 축소 — 박스 밖 중복 크롬 라인을 걷어낸 만큼(A) 여백도 줄여 본문을
+   넓힌다(오너 확정). --content-inset 토큰 자체는 TitleBar 내부 패딩(TitleBar.tsx)이 공유해서
+   그대로 둔다.
+   W23 B 개정(실기 리뷰): 균일 축소(6px/8px)로는 우측·하단이 너무 얇은 띠로 남았다(오너) —
+   ⑪의 "4면 인셋 + 전체 라운드"를 부분 번복하고 W22 후속의 "하단 플러시" 선례로 부분 회귀.
+   인셋·라운드·외곽선은 상단·좌측만, 우측·하단은 창 프레임에 플러시(선도 창 테두리와 겹쳐
+   보여 지운다). */
+/* ── 본문 안 표면 재정의 (PLAN-2026-09-12 §3/E5) — 틴트를 칠하는 두 곳(.content-canvas 와
+   .modal-body)이 공유한다. 셀렉터 순서는 tokensColorContract.test.ts 가 `.content-canvas{` 로
+   이 블록을 찍기 때문에 `.content-canvas` 가 뒤에 와야 한다. ─────────────────────────────
+     문제: --content-tint 는 이 요소 **한 장**만 어둡게 하는데, 그 안의 모든 표면 토큰은
+     :root 의 --surface-base(틴트를 모르는 색)에서 파생된다. 그래서 본문 안의 카드·칩·시트
+     헤더가 전부 "밝은 패치"로 떴다. 실측(CDP): 본문 안 --surface-sunken 이 바탕보다 **밝았다**
+     (rgb(21,25,24) vs 바탕 rgb(19,23,22), CR 1.020) — 이름과 반대 방향이다.
+     (정정: "--surface-soft 배지가 CR 1.000" 은 **사이드바**의 이야기다. 사이드바는 틴트가 없어
+     --surface-soft 가 바탕과 글자 그대로 같다. 본문 안에서는 반대로 CR 1.042 로 **밝은 패치**
+     였다. 그리고 이 재정의 **이후** 본문 안 --surface-soft 가 바탕과 같아지므로(CR 1.000),
+     "떠 있는 작은 면"인 배지·ⓘ 뱃지는 --surface-raised 로 옮겨야 한다 — 계획 E8.)
+     해결: 기준면을 갈아끼운다. 여기서 --surface-base 를 "시트 + 본문 틴트" 합성색으로
+     재정의하면 아래 파생 6종이 전부 그 위에서 다시 계산된다.
+     ⚠️ 파생을 **함께** 재정의해야 한다. "--surface-base 하나만 덮으면 따라온다"는 처음 계획은
+     실측으로 틀렸다: 커스텀 프로퍼티는 **선언된 지점**에서 var() 가 치환되므로 :root 의
+     `--surface: var(--surface-base)` 는 그 자리에서 이미 문자열로 굳어 상속된다. 하위에서
+     base 만 덮으면 --surface 는 옛 색 그대로 남는다(실측: 파생 3종 모두 변화 0).
+     소비처 222곳은 **한 줄도 고치지 않는다** — 이름은 그대로고 바탕만 바뀐다.
+
+     안전선: 틴트 0% 에서 이 블록은 **완전한 무연산**이다. color-mix(in srgb, X 0%, Y) = Y 라
+     --surface-base 가 --app-sheet-base 와 같아지고, 파생 6종의 식은 :root 의 것과 글자 그대로
+     같으므로 결과도 같다. 즉 이 재정의는 새 색을 만들지 않고 **이미 화면에 칠해져 있던 틴트를
+     토큰에 알려줄 뿐**이다.
+     --app-canvas 가 여기서 --surface-base 를 가리키는 이유: 본문에서 "캔버스"는 곧 눈에 보이는
+     그 바탕이다(bg_dim 과 틴트가 이미 반영된). :root 의 --app-canvas 는 dim 이전의 생캔버스라
+     본문 안에서 그걸 쓰면 §0 의 펫 액자처럼 "틴트도 bg_dim 도 둘 다 건너뛴" 색이 된다.
+     ⚠️ 파생 공식이 이제 **두 벌**이다. 한쪽만 고치면 본문만 조용히 어긋나므로
+     src/styles/tokensColorContract.test.ts 가 두 블록을 구조적으로 대조한다 —
+     :root 에 --surface-base/--app-canvas 파생 토큰을 새로 추가하면 그 테스트가 여기에도
+     추가하라고 빨개진다. */
+.modal-body,
+.content-canvas{
+  --surface-base:color-mix(in srgb, var(--content-tint-color) var(--content-tint-amount), var(--app-sheet-base));
+  --app-canvas:var(--surface-base);
+  --surface:var(--surface-base);
+  --surface-sunken: color-mix(in srgb, var(--surface-base) 92%, black);
+}
+.content-canvas{
+  border:1px solid var(--divider);
+  border-right:0;
+  border-bottom:0;
+  border-radius:var(--radius-md) 0 0 0;
+  overflow:hidden;
+  /* W24: 상단 6px→8px — 남아 있는 두 여백(상·좌)은 같은 값을 유지한다(오너: 좌우·상하 여백
+     균형). 우/하 프레임 플러시는 그대로. */
+  margin:var(--space-3) 0 0 var(--space-3);
+  background:var(--content-tint);
+}
+/* 포커스 모드: 레이아웃(1px border) 은 유지하고 색만 지운다 — border 자체를 없애면 폭이 1px
+   튀어 텍스트가 미세하게 흔들린다. 배경 틴트도 제거(포커스 모드는 기존 레이아웃 그대로). */
+.content-canvas--focus{
+  border-color:transparent;
+  border-radius:0;
+  margin:0;
+  background:none;
+  /* 틴트를 안 칠하므로 기준면도 틴트 이전으로 되돌린다 — 안 되돌리면 토큰만 어두워져 본문이
+     실제보다 어두운 바탕을 가정한다(위 블록이 고치려는 것과 정확히 반대 방향의 거짓말).
+     되돌릴 것은 **기준면 하나뿐**이다: 위 블록의 파생 6종은 전부 --surface-base(또는 그것을
+     가리키는 --app-canvas)를 읽으므로 함께 따라온다. 두 클래스는 같은 요소에 붙고
+     (App.tsx: `content-canvas content-canvas--focus`) 특이도가 같아 **소스 순서**로 이 블록이
+     이긴다 — 위 border-color/margin 재정의가 이미 같은 규칙에 기대고 있다.
+     --app-canvas 는 여기서도 --surface-base(= dim 이 반영된 시트)를 가리킨 채로 둔다. 포커스
+     모드에서 눈에 보이는 바탕이 정확히 그것이기 때문이고, bg_dim 기본값 0% 에서는 :root 의
+     생캔버스와 같은 색이다. */
+  --surface-base:var(--app-sheet-base);
+}
+
+/* W22 ⑦: 섹션 툴바·하단 상태줄 공용 크롬 — 리치텍스트(FixedToolbar)/시트(SheetToolbar)/
+   다이어그램(diagram-view-tools, diagram-hint-bar)이 각자 다른 패딩·경계선 색을 썼다(감사 결과는
+   이 문서 하단 "⑦ 감사 결과 및 통일 규칙" 참고). 정렬·크기·경계선만 공용 클래스로 수렴하고,
+   각 섹션 고유 클래스(.sheet-toolbar 등)와 함께 쓴다 — 버튼 구성·핸들러는 그대로. */
+.section-toolbar{
+  display:flex;align-items:center;
+  height:var(--row-toolbar);
+  padding:0 var(--space-3);
+  border-bottom:1px solid var(--line);
+  flex:none;
+}
+.section-statusbar{
+  display:flex;align-items:center;justify-content:space-between;
+  /* W24: 좌우 18px(space-7) → --content-inset(14px) — 에디터 컬럼 좌측 시작점 통일(위 원칙). */
+  padding:var(--space-2xs) var(--content-inset);
+  border-top:1px solid var(--line);
+  font-size:var(--text-2xs);
+  color:var(--muted);
+  line-height:1;
+  flex:none;
+}
+.section-statusbar .icon-btn{
+  width:18px;height:18px;min-height:18px;padding:0;
+}
+
+/* W22 ⑥: 고스트 + — 타일 스트립 끝(첨부/연관 공통) 또는 빈 상태 가운데의 점선 48x48 트리거.
+   W3의 hover 확장 2×2 그리드(레이아웃 흔들림)는 폐기 — 크기 고정, hover/focus 시 border 색만
+   accent 로. 첨부 탭은 클릭 시 포털 오버레이(.attach-add-menu, 아래)로 파일/노트/링크 선택지를
+   띄우고, 연관 탭·빈 상태 아이콘은 단일 액션이라 오버레이 없이 클릭이 바로 동작을 실행한다.
+   ponytail: W3 의 "4번째 형식 예약 빈칸" 조항은 그리드 자체가 사라져 함께 소멸 — 새 첨부 형식이
+   생기면 GhostAddButton 의 items 배열에 항목을 추가한다. */
+.ghost-add{
+  width:48px;height:48px;flex:none;
+  display:flex;align-items:center;justify-content:center;
+  border:1px dashed var(--divider);border-radius:var(--radius-sm);color:var(--faint);
+  background:none;padding:0;cursor:pointer;
+  transition:border-color var(--dur-med) ease,color var(--dur-med) ease;
+}
+.ghost-add:hover,.ghost-add:focus-visible{border-color:var(--accent);color:var(--accent)}
+.ghost-add:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* 포털 오버레이 등장 애니메이션(W22-⑫②) — 상태 기반 마운트라 등장만 있으면 충분(퇴장 애니메이션을
+   위한 지연 언마운트는 만들지 않는다). 원래 첨부 고스트+ 메뉴(.attach-add-menu) 전용이었던 걸 모든
+   `.overlay` 포털로 넓힌다 — Select/FormatMenus/SheetToolbar/ContextMenu/titlebar/* 등 createPortal
+   + .overlay 패턴 전반. 큰 시트(ModalShell)는 자체 inline `animation:"pop .16s"` 를 이미 갖고 있어
+   인라인이 클래스 규칙을 항상 이기므로 자동으로 제외된다 — 별도 예외 클래스 불필요. .attach-add-menu
+   자체의 animation 선언은 중복이라 제거(레이아웃/aria 는 그대로, className 은 AttachmentsBar.tsx에
+   그대로 남아 있다).
+   W22-⑫①의 tb-quiet-chip 처럼 여기서도 값은 그대로 최초 요구(attach-add-menu) 시절과 같다.
+   W23 F: transform → 독립 속성 scale 로 교체 — CSS 애니메이션은 실행 중 인라인 스타일을
+   덮어쓰므로, transform 키프레임은 인라인 transform 으로 위치를 잡는 오버레이(titlebar 팝오버
+   translateY, SelectionActionBar 등의 translateX(-50%), DiagramCanvasBubble 의 translateY(-100%))
+   를 등장 140ms 동안 어긋나게 했다가 끝나는 순간 튀게 만들었다. scale 은 transform 과 별개
+   속성이라 충돌하지 않는다. 이름도 범용화(attachAddMenuIn → overlayIn). */
+@keyframes overlayIn{from{opacity:0;scale:.96}to{opacity:1;scale:1}}
+.overlay{animation:overlayIn var(--dur-med) ease}
+/* W24: 고스트+ 2×2 메뉴는 "확대되며 나타나는" 오버레이 계열 — hovprev 와 같은 var(--dur-slow) 리듬으로
+   감속(오너: 전부 같은 형식). 일반 팝오버/메뉴의 var(--dur-med) 는 그대로. */
+.attach-add-menu{animation-duration:var(--dur-slow)}
+@media (prefers-reduced-motion: reduce){.ghost-add{transition:none}.overlay{animation:none}.modal-scrim.closing,.modal-scrim.closing .overlay{transition:none !important}.view-tab-indicator{transition:none !important}.sidebar-view-pane{animation:none !important}}
+
+/* 데이터 관리 타일 대시보드(통계 3칸 + 백업/이동 기능 타일) 공용 테두리 — 배경 없음(SINGLE-SHEET
+   계약, .card 와 동일 원칙), .card 보다 한 단계 옅은 --line 헤어라인만 소유한다. flex-basis/padding/
+   정렬은 두 용도(통계 타일은 중앙정렬 숫자, 기능 타일은 세로 스택 폼)가 서로 달라 인라인으로 둔다. */
+.stat-tile{border:1px solid var(--line);border-radius:var(--radius-sm)}
+
+/* 아이콘 버튼 (툴바/헤더의 정사각 액션 — 아이콘 전용, 텍스트 라벨 포함 금지) */
+.icon-btn{
+  width:var(--ctrl-h);min-height:var(--ctrl-h);flex:none;
+  display:grid;place-items:center;
+  border:0;background:transparent;color:var(--muted);
+  border-radius:var(--radius-sm);
+  box-sizing:border-box;
+  cursor:pointer;
+  transition:background var(--dur-fast),color var(--dur-fast),transform var(--dur-fast) cubic-bezier(0.2, 0, 0, 1);
+}
+.icon-btn:hover{background:var(--hover);color:var(--text)}
+.icon-btn:active:not(.icon-btn--static){transform:scale(0.94)}
+.icon-btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.icon-btn[data-active='true']{background:var(--sel);color:var(--accent)}
+.icon-btn--sm{width:var(--ctrl-h-sm);min-height:var(--ctrl-h-sm)}
+/* .field / .field-select 옆에 나란히 서는 아이콘 버튼 — 기본 --ctrl-h(30) 은 그 둘의
+   --ctrl-h-lg(35) 보다 작아서 한 줄에 두면 눈에 띄게 어긋난다(오너 지적 2026-09-09). */
+.icon-btn--lg{width:var(--ctrl-h-lg);min-height:var(--ctrl-h-lg)}
+.icon-btn--danger:hover{background:color-mix(in srgb, var(--danger) 78%, transparent);color:var(--on-solid)}
+/* 상태 표시처럼 누를 수 없는 아이콘 슬롯 */
+.icon-btn--static{cursor:default}
+.icon-btn--static:hover{background:transparent;color:inherit}
+
+/* 아이콘 hover 반응 — 눌리는 것(버튼·링크·메뉴 행·탭·트리 행) 위에 마우스를 올리면 그 안의 lucide
+   아이콘이 살짝 반응한다. 같은 줄에서 어떤 아이콘은 움직이고 어떤 건 안 움직이면 거슬려서(오너
+   2026-10-12) 컨테이너 클래스를 하나씩 나열하지 않고 "눌리는 요소 안의 svg.lucide:not([data-anim])" 전체로 건다.
+   CSS 전용 — 마운트 비용 0, hover 순간 컴포지터 속성(scale/rotate/translate)만 바뀐다. 개별 속성을 써서
+   호출부 인라인 transform(IconCaret 등)·:active 의 scale 과 겹치지 않는다. 아이콘 개별 반응은 lucide 가
+   svg 에 붙이는 `lucide-<이름>` 클래스로 잡으므로 icons.tsx·호출부는 손대지 않는다(별칭 파일은 클래스가
+   정식 이름이다 — 새 아이콘을 넣을 땐 실제 렌더된 클래스를 확인). 터치 기기(hover:none)와
+   prefers-reduced-motion 은 제외. 끄고 싶은 자리는 .no-icon-hover 를 조상에 붙인다.
+   lucide-animated 로 바꾼 아이콘(svg[data-anim], components/animatedIcons)은 JS(motion)가 움직이므로
+   여기서 제외한다 — 효과가 겹치면 안 된다. */
+@media (hover:hover) and (prefers-reduced-motion:no-preference){
+  :is(button,a[href],[role="button"],[role="menuitem"],[role="tab"],summary,.menu-row,.treerow) svg.lucide:not([data-anim]){
+    transition:rotate var(--dur-fast) ease-out,translate var(--dur-fast) ease-out;
+  }
+  :is(button:not(:disabled),a[href],[role="button"]:not([aria-disabled="true"]),[role="menuitem"],[role="tab"],summary,.menu-row,.treerow):not(.icon-btn--static):hover{
+    & svg.lucide-refresh-cw:not([data-anim]){rotate:180deg}
+    & svg.lucide-star:not([data-anim]){rotate:12deg}
+    & svg.lucide-copy:not([data-anim]){translate:-1px -1px}
+    & svg.lucide-arrow-right:not([data-anim]){translate:2px 0}
+    & svg.lucide-arrow-left:not([data-anim]){translate:-2px 0}
+    & svg.lucide-arrow-up:not([data-anim]){translate:0 -2px}
+    & svg.lucide-arrow-down:not([data-anim]){translate:0 2px}
+    & svg.lucide-external-link:not([data-anim]){translate:1px -1px}
+    & svg.lucide-link:not([data-anim]){rotate:-15deg}
+    & svg.lucide-search:not([data-anim]){rotate:-10deg}
+    & svg.lucide-archive:not([data-anim]){translate:0 1px}
+    & svg.lucide-download:not([data-anim]){translate:0 2px}
+    & svg.lucide-upload:not([data-anim]){translate:0 -2px}
+    & svg.lucide-send:not([data-anim]){translate:1px -1px}
+    & svg.lucide-undo-2:not([data-anim]){rotate:-20deg}
+    & svg.lucide-redo-2:not([data-anim]){rotate:20deg}
+    & svg.lucide-bell:not([data-anim]){transform-origin:50% 10%;animation:icon-wiggle .5s ease-in-out}
+    & svg.lucide-lock:not([data-anim]){transform-origin:50% 90%;animation:icon-wiggle .4s ease-in-out}
+  }
+  .no-icon-hover svg.lucide:not([data-anim]){transition:none;scale:none !important;rotate:none !important;translate:none !important;animation:none !important}
+}
+@keyframes icon-wiggle{0%,100%{rotate:0deg}25%{rotate:14deg}50%{rotate:-11deg}75%{rotate:6deg}}
+/* .icon-btn(border:0;background:transparent) 과 .overlay(border:1px solid var(--divider);
+   background:var(--surface))는 둘 다 단일 클래스라 특이도가 같다 — 소스 순서상 .icon-btn 이
+   나중에 선언돼 항상 이겨, className="icon-btn overlay"(WorldMap 지도 위 잠금/홈 버튼)의
+   배경·테두리가 flat 프리셋에서도 죽은 코드였다. 결합 선택자로 특이도를 올려 의도한 오버레이
+   배경이 실제로 그려지게 한다(acrylic 톤은 위 :root[data-surface='acrylic'] .icon-btn.overlay
+   가 더 높은 특이도로 재정의). */
+.icon-btn.overlay{
+  background:var(--surface);
+  border:1px solid var(--divider);
+}
+
+/* Icon Line Glow styling: 배경/테두리 박스 없이 선 자체에 네온/글로우 효과
+   - 적용 범위 [Design Rule 2026-09-11]: 편집 아이콘, 기능 아이콘 같은 조작 레벨(도구·토글·기능)에 적용.
+     뷰 모드 전환 등 '화면 전환' 수준의 큰 네비게이션 컨트롤에는 이 효과를 적용하지 않는다.
+   - Background & border: background: transparent; border: none; box-shadow: none;
+   - Inactive: color: var(--muted); opacity: 0.7; filter: none;
+   - Hover: color: var(--text); opacity: 1; filter: drop-shadow(0 0 2px color-mix(in srgb, var(--accent) 45%, transparent));
+   - Active/Pinned/Selected: color: var(--accent); opacity: 1; filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 60%, transparent));
+   - Transition: transition: color var(--dur-fast), filter var(--dur-fast), opacity var(--dur-fast); */
+.icon-glow,
+.icon-btn.icon-btn--glow,
+.icon-btn--glow {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: var(--muted);
+  opacity: 0.7;
+  filter: none;
+  transition: color var(--dur-fast), filter var(--dur-fast), opacity var(--dur-fast);
+}
+.icon-glow:hover:not(:disabled),
+.icon-btn.icon-btn--glow:hover:not(:disabled),
+.icon-btn--glow:hover:not(:disabled) {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: var(--text);
+  opacity: 1;
+  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--accent) 45%, transparent));
+}
+.icon-glow:active:not(:disabled),
+.icon-glow[data-active='true'],
+.icon-glow[aria-pressed='true'],
+.icon-glow[data-pinned='true'],
+.icon-btn.icon-btn--glow:active:not(:disabled),
+.icon-btn.icon-btn--glow[data-active='true'],
+.icon-btn.icon-btn--glow[aria-pressed='true'],
+.icon-btn.icon-btn--glow[data-pinned='true'],
+.icon-btn--glow:active:not(:disabled),
+.icon-btn--glow[data-active='true'],
+.icon-btn--glow[aria-pressed='true'],
+.icon-btn--glow[data-pinned='true'] {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: var(--accent);
+  opacity: 1;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 60%, transparent));
+}
+.icon-glow[data-active='true']:hover,
+.icon-glow[aria-pressed='true']:hover,
+.icon-glow[data-pinned='true']:hover,
+.icon-btn.icon-btn--glow[data-active='true']:hover,
+.icon-btn.icon-btn--glow[aria-pressed='true']:hover,
+.icon-btn.icon-btn--glow[data-pinned='true']:hover,
+.icon-btn--glow[data-active='true']:hover,
+.icon-btn--glow[aria-pressed='true']:hover,
+.icon-btn--glow[data-pinned='true']:hover {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: var(--accent);
+  opacity: 1;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 60%, transparent));
+}
+.icon-glow:disabled,
+.icon-btn.icon-btn--glow:disabled,
+.icon-btn--glow:disabled {
+  opacity: 0.35;
+  filter: none;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* 아이콘+라벨 칩 버튼 (가변 폭, 줄바꿈 방지 — HomeTab 액션 버튼 등) */
+/* 발광 라인 — 알림 옵션 줄(2026-09-08 오너: "버튼식이 아니라 발광 라인 효과로, 좌우로 가득").
+   칩(테두리 박스)과 달리 좌우를 가득 채우고 아래 선 하나만 남긴다. 값이 설정됐거나 열려 있으면
+   그 선이 accent 로 빛난다 — `.field--seamless`(호버/포커스에서만 경계)와 같은 계열이고,
+   여기선 "설정됨"이라는 상태까지 선이 말한다. 새 색 토큰을 만들지 않는다. */
+.glowline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  /* 셋이 한 줄을 나눠 가진다(2026-09-08 오너: "시각·반복·시점은 한 줄") — `width:100%` 가 아니라
+     `flex:1` 이라야 좌우를 균등히 채운다. `min-width:0` 이 없으면 값이 길 때(예: "매주 화·목")
+     칸이 안 줄어 줄이 넘친다. */
+  flex: 1;
+  min-width: 0;
+  min-height: var(--ctrl-h-sm);
+  box-sizing: border-box;
+  /* 좌우 여백을 거의 두지 않는다 — 셋이 한 줄을 나눠 갖고 달력 그리드와 같은 폭을 쓴다. */
+  padding: 0 var(--space-1);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--dur-fast), box-shadow var(--dur-fast), color var(--dur-fast);
+}
+.glowline:hover {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+.glowline[data-set='true'],
+.glowline[data-open='true'] {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+  box-shadow: 0 1px 7px -4px var(--accent);
+}
+.glowline-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.glowline[data-set='false'] .glowline-value {
+  color: var(--faint);
+}
+
+.chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--ctrl-h-sm);
+  box-sizing: border-box;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  flex: none;
+  cursor: pointer;
+  transition: background var(--dur-fast), color var(--dur-fast), border-color var(--dur-fast), transform var(--dur-fast) cubic-bezier(0.2, 0, 0, 1);
+}
+.chip-btn:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.chip-btn:active {
+  transform: scale(0.97);
+}
+.chip-btn[data-active='true'] {
+  border-color: var(--accent);
+  background: var(--sel);
+  color: var(--accent);
+}
+
+/* ── 배지 — 글자 든 작은 알약 한 벌 (GRILL-2026-10-19 R8) ──────────────────────────────────────
+   settings/Badge.tsx 의 톤 문법(톤 색 35% 테두리 + 12% 틴트 + 톤 색 글자)을 토큰으로 올렸다. 설정 Badge ·
+   공용 Pill · AI 제안/계획 배지 · 관계도 노드 배지 · Finder 배지가 `.badge` 를 쓰고, 자기 모양이 따로 있는
+   관계도 칩(그룹 머리 칩 · 범례 칩 · 노드 버블 색 칩)은 --badge-tint/--badge-line 만 빌린다 — 틴트 식은
+   여기 한 곳이다. 톤은 data-tone 이 --badge-c 하나만 정한다(없거나 "muted" 면 --muted). 관계도 칩은
+   인라인 --badge-c(상태 슬롯 색)나 자기 data-tone(그룹 톤: accent/warn/done)을 쓴다.
+   점 · 색 견본 · 채운 숫자 배지(SettingsNav 개수 등) · 버튼은 이 어휘가 아니다.
+   글자색: 상태색(--danger/--warn/--ok/--info)은 라이트에서 이미 짙게 재지정돼 있어 그대로 쓴다.
+   accent 만 라이트에서 옅다(한지 위 ≈2:1) — --badge-accent-ink 비율로 --text 를 섞는다. 실측(accentPalette
+   의 hue 0~350° × 채도 5단 전부, 12% 틴트 위): 라이트 40% → 최저 4.90:1, 다크 100%(=accent 그대로) → 최저 6.63:1.
+   전역 --accent-text 를 고치지 않은 것은 브리핑(briefing.css)이 20여 곳에서 읽기 때문 — 그 화면까지 바꾸는 건
+   이 결정 밖이다. */
+:root{--badge-fill:12%;--badge-edge:35%;--badge-accent-ink:100%}
+:root[data-theme='light']{--badge-accent-ink:40%}
+.badge,
+.diagram-flow-group-chip,
+.diagram-legend-item,
+.diagram-bubble-mark{
+  --badge-tint:color-mix(in srgb,var(--badge-c,var(--muted)) var(--badge-fill),transparent);
+  --badge-line:color-mix(in srgb,var(--badge-c,var(--muted)) var(--badge-edge),transparent);
+}
+.badge[data-tone='accent'],.diagram-flow-group-chip[data-tone='accent']{--badge-c:var(--accent)}
+.badge[data-tone='danger']{--badge-c:var(--danger)}
+.badge[data-tone='warn'],.diagram-flow-group-chip[data-tone='warn']{--badge-c:var(--warn)}
+.badge[data-tone='info']{--badge-c:var(--info)}
+.badge[data-tone='success'],.diagram-flow-group-chip[data-tone='done']{--badge-c:var(--ok)}
+.badge{
+  /* type-scale-exempt: 배지 세로 1px — settings/Badge·Pill 이 쓰던 "1px 6px" 그대로(사다리 최소 4px 면 글줄보다 커진다) */
+  padding:1px var(--space-2);
+  /* 라운드는 기준인 설정 Badge 의 --radius-sm 그대로 — 16px 남짓한 높이에선 알약(--radius-pill)과 거의 같게 그려진다. */
+  border:1px solid var(--badge-line);border-radius:var(--radius-sm);
+  background:var(--badge-tint);color:var(--badge-c,var(--muted));
+  font-size:var(--text-label);font-weight:600;white-space:nowrap;
+}
+.badge[data-tone='accent']{color:color-mix(in srgb,var(--accent) var(--badge-accent-ink),var(--text))}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--ctrl-h-lg);
+  box-sizing: border-box;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: var(--text-md);
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-6);
+  user-select: none;
+  transition: background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast), transform var(--dur-fast) cubic-bezier(0.2, 0, 0, 1), box-shadow var(--dur-fast) ease;
+}
+.btn:hover {
+  background: var(--hover);
+  border-color: color-mix(in srgb, var(--divider) 60%, var(--accent));
+  color: var(--text);
+  transform: translateY(-0.5px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+.btn:active {
+  background: var(--sel);
+  transform: translateY(0.5px) scale(0.985);
+  box-shadow: inset 0 1px 1.5px rgba(0, 0, 0, 0.12);
+}
+@keyframes btn-primary-breathe {
+  0%, 100% {
+    box-shadow: 0 1px 3px color-mix(in srgb, var(--btn-primary-bg) 30%, transparent),
+                inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  }
+  50% {
+    box-shadow: 0 2px 10px color-mix(in srgb, var(--btn-primary-bg) 55%, transparent),
+                inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  }
+}
+
+.btn-primary {
+  color: var(--btn-primary-fg);
+  background: var(--btn-primary-bg);
+  border: 1px solid color-mix(in srgb, var(--btn-primary-bg) 80%, white);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+  transform: translateY(-0.5px);
+  animation: btn-primary-breathe 1.8s ease-in-out infinite;
+}
+.btn-primary:active:not(:disabled) {
+  animation: none;
+  filter: brightness(0.95);
+  transform: translateY(0.5px) scale(0.985);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+.btn:disabled, .btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+  filter: none !important;
+  animation: none !important;
+}
+
+/* 버튼 크기 및 위험/링크 변형 표준화 */
+.btn-sm, .btn--sm { min-height: var(--ctrl-h-sm); height: var(--ctrl-h-sm); padding: 0 var(--space-3); font-size: var(--text-sm); }
+.btn-xs, .btn--xs { min-height: 24px; height: 24px; padding: 0 var(--space-2); font-size: var(--text-xs); }
+
+@keyframes danger-pulse-breathe {
+  0%, 100% {
+    border-color: var(--danger);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--danger) 20%, transparent);
+    background: color-mix(in srgb, var(--danger) 10%, transparent);
+  }
+  50% {
+    border-color: color-mix(in srgb, var(--danger) 75%, #fff);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--danger) 38%, transparent);
+    background: color-mix(in srgb, var(--danger) 18%, transparent);
+  }
+}
+.btn-danger, .btn--danger { border-color: var(--danger); color: var(--danger); }
+.btn-danger:hover:not(:disabled), .btn--danger:hover:not(:disabled) {
+  animation: danger-pulse-breathe 1.3s ease-in-out infinite;
+  transform: translateY(-0.5px);
+}
+.btn-danger:active:not(:disabled), .btn--danger:active:not(:disabled) {
+  animation: none;
+  transform: translateY(0.5px) scale(0.985);
+  background: color-mix(in srgb, var(--danger) 26%, transparent) !important;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.22) !important;
+}
+.btn-link { border: none; background: transparent; padding: 0; color: var(--accent); font-size: var(--text-sm); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; transform: none !important; box-shadow: none !important; }
+
+/* 타임라인 크게보기 줌 슬라이더 (연/월/일 3칸 스냅) — 네이티브 input[type=range],
+   트랙/썸만 토큰 색상으로 재도색. Firefox는 -moz-range-*, WebKit(Tauri webview)은
+   -webkit-slider-* 의사요소를 각각 스타일링해야 한다. */
+.timeline-zoom-slider{
+  -webkit-appearance:none;appearance:none;
+  height:16px;background:transparent;cursor:pointer;
+}
+.timeline-zoom-slider::-webkit-slider-runnable-track{
+  height:3px;border-radius:2px;background:var(--divider);
+}
+.timeline-zoom-slider::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:14px;height:14px;border-radius:50%;margin-top:-5.5px;
+  background:var(--accent);border:2px solid var(--surface-base);
+  box-shadow:0 0 0 1px var(--divider);
+}
+.timeline-zoom-slider::-moz-range-track{
+  height:3px;border-radius:2px;background:var(--divider);
+}
+.timeline-zoom-slider::-moz-range-thumb{
+  width:14px;height:14px;border-radius:50%;border:2px solid var(--surface-base);
+  background:var(--accent);box-shadow:0 0 0 1px var(--divider);
+}
+.timeline-zoom-slider:focus-visible::-webkit-slider-thumb{outline:2px solid var(--accent);outline-offset:2px}
+.timeline-zoom-slider:focus-visible::-moz-range-thumb{outline:2px solid var(--accent);outline-offset:2px}
+
+/* 목록/메뉴 행 — 선택지 다이얼로그, 컨텍스트 메뉴, 트리 행의 공통 상호작용 */
+.menu-row{
+  display:flex;align-items:center;gap:var(--space-5);
+  min-height:var(--ctrl-h-lg);
+  padding:0 var(--space-6);
+  box-sizing:border-box;
+  border:1px solid var(--divider);
+  border-radius:var(--radius-sm);
+  background:transparent;
+  cursor:pointer;
+  transition:background var(--dur-fast),border-color var(--dur-fast);
+}
+.menu-row:hover,.menu-row:focus-visible{background:var(--hover);border-color:var(--accent);outline:none}
+.menu-row[data-selected='true']{background:var(--sel);border-color:var(--accent)}
+/* .menu-row 위에 얹는 "풀폭 좌측정렬 항목" 변형 — 트리 행·워크스페이스 행·컨텍스트 메뉴 항목이
+   공통으로 반복하던 인라인(width:100%; text-align:left; font:inherit; border:none)을 한 곳으로
+   모은다. `.menu-row.menu-item` 2-class 특이도라 .menu-row 의 기본 1px 테두리를 순서와 무관하게
+   덮는다. 테두리 있는 선택-다이얼로그 행(PromptDialog)은 .menu-row 만 쓰므로 영향 없다.
+   트리·설정 레일 등 in-flow 목록은 아래 overlay 규칙 밖이라 각자 padding 을 가진다. */
+.menu-row.menu-item{width:100%;min-height:0;text-align:left;font:inherit;border:none}
+/* 메뉴 항목 묶음 사이 구분선. 시트 우클릭 메뉴가 `.sheet-context-divider` 로 자기 것을
+   갖고 있던 자리 — 메뉴 계열 규칙 옆으로 옮겨 다음 메뉴도 그냥 쓰게 한다. */
+.menu-sep{height:1px;margin:var(--space-1) 0;background:var(--divider)}
+/* 사이드바 가상화 트리/목록 행 공통 (.treerow) —
+   부모 슬롯(타임라인 28px, 일반 트리 34px 등) 내에서 인접 행끼리 라운드 하이라이트 박스(호버/선택)가
+   서로 닿거나 침범하지 않도록 상하 1px 마진(2px 안전 간격)을 확보하고, min-height 를 해제한다. */
+.treerow{
+  min-height:0 !important;
+  height:calc(100% - 2px) !important;
+  /* type-scale-exempt: 가상화 행 사이 2px 간격을 위한 상하 1px 미세 마진 */
+  margin-top:1px;
+  /* type-scale-exempt: 가상화 행 사이 2px 간격을 위한 상하 1px 미세 마진 */
+  margin-bottom:1px;
+  box-sizing:border-box;
+}
+.assist-row {
+  font-family: var(--font-body);
+  font-size: calc(9px * var(--fs) + 1.5px);
+  font-weight: 500;
+  min-height: calc(10px + 12px * var(--fs));
+  color: var(--muted);
+  background: transparent !important;
+  border-color: transparent !important;
+  transition: color var(--dur-fast);
+}
+.assist-row:hover {
+  color: var(--text);
+  background: transparent !important;
+  border-color: transparent !important;
+}
+/* 포털 메뉴 밀도 — `.overlay` 가 그리는 떠 있는 목록(Select, 툴바 문단/블록, 컨텍스트 메뉴,
+   슬래시 명령, 뱃지 피커). body 의 15px 과 .menu-row 의 다이얼로그용 --space-5/6 을 그대로
+   물리면 트리거(--text-xs/sm)보다 한 단계 크고 칸이 헐렁해진다. 트리거와 같은 밀도는 여기
+   한 규칙이 소유한다. 인라인 padding/fontSize 로 또 덮지 말 것. */
+.overlay .menu-row.menu-item{
+  padding:var(--space-2) var(--space-4);
+  font-size:var(--text-sm);
+  gap:var(--space-3);
+  /* type-scale-exempt: 팝오버/드롭다운 목록 항목 간 2px 안전 간격을 위한 상하 1px 미세 마진 */
+  margin-top:1px;
+  /* type-scale-exempt: 팝오버/드롭다운 목록 항목 간 2px 안전 간격을 위한 상하 1px 미세 마진 */
+  margin-bottom:1px;
+}
+
+/* Wave 2: 폴더 row hover 시 카운트 자리에 "+" 가 들어차는 토글 — CSS 만으로 동작하므로
+   컴포넌트 state 추가 없음. 둘 다 위치(같은 셀) 는 같고 보이는 쪽만 swap. CSS 만으로 토글되므로
+   부모 row 가 <button> 이더라도 별도 JS state 도움 없이 자연스럽게 동작. */
+.menu-row.menu-item .folder-add-btn{display:none}
+.menu-row.menu-item:hover .folder-count{display:none}
+.menu-row.menu-item:hover .folder-add-btn{display:inline-flex}
+
+/* Wave 2.2: 노트 drop target 하이라이트. .menu-row:hover 보다 명시도 높고 (3-class vs
+   2-class) hover/drag-over 가 동시 활성돼도 drag-over 가 이김. ::after outline 으로
+   좌상/우하 1px 띠를 더해 폴더 chrome 이라는 시각신호를 분명히 한다 — 좌우 1px 만이라도
+   hover 와 구분돼 시각적 모호함이 사라진다. */
+.menu-row.menu-item.drag-over{
+  background:color-mix(in srgb, var(--accent) 14%, transparent) !important;
+  border-color:var(--accent) !important;
+  box-shadow:inset 0 0 0 1.5px var(--accent), inset 3px 0 0 var(--accent) !important;
+  border-radius:var(--radius-sm);
+}
+/* 포인터 기반 노트 드래그(lib/noteDrag.ts)의 드롭 대상 하이라이트 — 행이든 지도든 같은 신호를
+   쓴다. HTML5 DnD 를 못 쓰는 이유는 그 파일 상단 주석 참고. */
+.note-drop-over{
+  background:color-mix(in srgb, var(--accent) 14%, transparent) !important;
+  box-shadow:inset 0 0 0 1.5px var(--accent), inset 3px 0 0 var(--accent) !important;
+  border-radius:var(--radius-sm);
+}
+.note-drop-over.map-drop-zone{background:none;box-shadow:0 0 0 2px var(--accent)}
+.menu-row.menu-item .folder-add-btn:hover{background:var(--hover);color:var(--text)}
+
+.search-box-input-wrap,
+.map-search-input-wrap,
+/* AI에게 묻기 요청문 상자도 같은 테두리·글로우를 쓴다(6안 D20) — 앱에서 "여기에 입력한다"를
+   뜻하는 신호가 두 벌이 되지 않게, 규칙을 복제하지 않고 이 셀렉터 목록에 얹는다. */
+.askai-composer__editor.field {
+  border: 1px solid var(--divider);
+  transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
+}
+.search-box-input-wrap:hover:not(:focus-within),
+.map-search-input-wrap:hover:not(:focus-within),
+.askai-composer__editor.field:hover:not(:focus-within) {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--divider));
+  box-shadow: 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.search-box-input-wrap:focus-within,
+.map-search-input-wrap:focus-within,
+.askai-composer__editor.field:focus-within,
+.map-search-input-wrap[data-active='true'] {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 55%, transparent) !important;
+}
+.search-box-input-wrap:focus-within > svg,
+.map-search-input-wrap:focus-within > svg,
+.map-search-input-wrap[data-active='true'] > svg {
+  color: var(--accent) !important;
+  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--accent) 50%, transparent));
+  transition: color var(--dur-fast), filter var(--dur-fast);
+}
+
+/* 폼 입력 — 투명 + 헤어라인(owner 피드백, 2026-07-24): 텍스트 입력/셀렉트는 in-flow 표면이라
+   불투명 --surface 를 칠하지 않는다(SINGLE-SHEET ACRYLIC CONTRACT 2항) — 경계는 테두리 하나가
+   만든다. 포커스 시 단일 라인 테두리 글로우로 깔끔하게 발광 강조한다. */
+.field{
+  width:100%;
+  min-height:var(--ctrl-h-lg);
+  box-sizing:border-box;
+  padding:0 var(--space-4);
+  background:transparent;
+  border:1px solid var(--divider);
+  border-radius:var(--radius-sm);
+  color:var(--text);
+  font:inherit;
+  font-size:var(--text-md);
+  outline:none;
+  transition:border-color var(--dur-fast), box-shadow var(--dur-fast);
+}
+.field:hover:not(:focus) {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--divider));
+  box-shadow: 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.field:focus{
+  border-color:var(--accent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.field:focus-visible{
+  outline:none;
+  border-color:var(--accent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.field::placeholder{color:var(--faint)}
+
+/* 입력 필드 크기 및 무테 변형 */
+.field--sm { height: var(--ctrl-h-sm); font-size: var(--text-sm); padding: 0 var(--space-2); }
+.field--compact { height: 30px; font-size: var(--text-sm); padding: 0 var(--space-3); }
+.field--seamless { border: none; border-bottom: 1px solid transparent; background: transparent; outline: none; box-shadow: none; }
+/* 테두리를 없애면 "여기가 입력"이라는 신호가 사라지므로 hover/focus 에서만 경계를 드러낸다
+   (오너 피드백 2026-09-07: 입력 테두리가 과하다). 키보드 포커스 링은 .field:focus-visible 이
+   이미 소유하므로(위, 더 높은 specificity) 손대지 않는다 — 이건 그 보조 신호일 뿐이다. */
+.field--seamless:hover, .field--seamless:focus { border-bottom-color: var(--divider); }
+.field--seamless:focus { border-bottom-color: var(--accent); }
+
+/* ── AI에게 묻기 컴포저(PLAN-2026-09-15, components/ai/composer/*) ─────────────────────────
+   .field 위에 얹는 TipTap 요청문 상자. 문장 안에 있는 것은 텍스트와 슬롯(굵은 값 칩, accent 밑줄)
+   뿐이고, 컨텍스트는 상자 **밖 위쪽**의 .askai-ctxstrip 이 소유한다(6안 D14·D15).
+   .askai-slash-menu = `/` 메뉴·슬롯 픽커 공용 팝업(.overlay 위), .askai-ghost = 호버 미리보기(D11).
+   테두리·포커스 글로우는 검색창과 같은 규칙군에 얹혀 있다(이 파일 .search-box-input-wrap). */
+/* 요청문 상자는 **높이 고정**(6안 D20) — 모달 본문이 고정 높이라 상자는 남는 높이를 채우고,
+   글이 길어지면 상자 안에서만 스크롤한다. EditorContent 가 끼워 넣는 래퍼 div 까지 사슬을 이어야
+   min-height:0 이 실제로 먹는다. */
+.askai-composer{position:relative;flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+.askai-composer > div:not(.askai-ghost){flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+/* 요청문 상자와 호버 미리보기(.askai-ghost)는 **이 한 규칙에서** 글꼴·크기·줄높이·안쪽 여백을 받는다 —
+   미리보기는 스탬프될 문장과 같은 자리·같은 크기로 겹쳐야 미리보기다. 편집기는 TipTap 이라 노트 본문용
+   `.ProseMirror`(15px·에디터 글꼴·문단 위아래 0.7em)를 함께 입고, 그게 새어 들어와 미리보기(.field 13px)와
+   글자 크기도 세로 위치도 어긋났었다(2026-09-26 실측: 15.75 vs 13.65px, 첫 줄 11px 차). 둘 다 입력 필드
+   계약(.field = --text-md, UI 글꼴)으로 고정한다 — 특정도 (0,2,x) 가 `.ProseMirror`(0,1,x) 를 이긴다. */
+.askai-composer__editor.field,.askai-composer .askai-ghost{
+  font-family:inherit;font-size:var(--text-md);line-height:var(--lh-ui);font-feature-settings:normal;
+  /* 오른쪽은 "프리셋으로 저장" 버튼(.askai-savepreset, 22px = --space-8) 자리만큼 늘 비운다 — 버튼이 뜨고 질 때 글이
+     다시 흐르지 않게. 생성·검토 단계는 이 대신 아래 한 줄을 비운다(아래 [data-phase] 규칙, --askai-foot-reserve). */
+  padding:var(--space-3) calc(var(--space-4) + var(--space-8)) var(--space-3) var(--space-4);
+  white-space:pre-wrap;overflow-wrap:anywhere;
+}
+.askai-composer__editor.field{flex:1 1 auto;min-height:calc(var(--ctrl-h-lg)*2);overflow-y:auto}
+.askai-composer__editor.field p,.askai-composer .askai-ghost p{margin:0}
+.askai-composer[data-disabled] .askai-composer__editor{opacity:.6;pointer-events:none}
+.askai-slot{
+  display:inline;
+  padding:0 var(--space-1);
+  font-weight:600;
+  color:var(--text);
+  background:color-mix(in srgb,var(--accent) 14%,transparent);
+  border-bottom:1.5px solid var(--accent);
+  border-radius:var(--radius-sm) var(--radius-sm) 0 0;
+}
+.askai-slot[data-kind='lang'],.askai-slot[data-kind='tone']{cursor:pointer}
+.askai-slot:empty::before{content:attr(data-ph);color:var(--faint);font-weight:400}
+/* 컨텍스트 줄(components/ai/AskAiContextStrip.tsx, 6안 D14) — 프롬프트 상자 **위**의 한 줄.
+   항목을 누르면 활성/비활성이 토글되고, 비활성은 흐리게 + 취소선으로 남는다(지우지 않는다).
+   한 줄에 안 들어가면 두 줄까지 접히고 그 다음은 이 줄이 스크롤한다. */
+.askai-ctxstrip{
+  display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2);
+  flex:none;max-height:52px;overflow-y:auto;min-width:0;
+}
+.askai-ctxstrip__chip{display:inline-flex;align-items:center;min-width:0}
+.askai-ctxstrip__item{
+  display:inline-flex;align-items:center;gap:var(--space-1);min-width:0;
+  height:22px;padding:0 var(--space-2);
+  background:transparent;border:1px solid var(--line);border-radius:var(--radius-sm);
+  font-size:var(--text-xs);font-weight:400;color:var(--muted);cursor:pointer;
+  transition:color var(--dur-fast),border-color var(--dur-fast),opacity var(--dur-fast);
+}
+.askai-ctxstrip__item svg{color:var(--accent);flex:none}
+.askai-ctxstrip__item b{font-weight:600;color:var(--text);white-space:nowrap}
+.askai-ctxstrip__label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.askai-ctxstrip__item:hover{color:var(--text);border-color:var(--accent)}
+.askai-ctxstrip__item[data-active='false']{opacity:.5;text-decoration:line-through}
+.askai-ctxstrip__item[data-active='false'] svg,.askai-ctxstrip__item[data-active='false'] b{color:var(--faint)}
+.askai-ctxstrip__remove{
+  display:inline-flex;align-items:center;
+  margin-left:calc(-1 * var(--space-1));padding:0 var(--space-1);
+  border:none;background:transparent;color:var(--faint);cursor:pointer;
+  opacity:0;transition:opacity var(--dur-fast),color var(--dur-fast);
+}
+.askai-ctxstrip__chip:hover .askai-ctxstrip__remove,.askai-ctxstrip__remove:focus-visible{opacity:1}
+.askai-ctxstrip__remove:hover{color:var(--text)}
+.askai-slash-menu{position:fixed;z-index:var(--z-dropdown);min-width:240px;padding:var(--space-1);box-shadow:var(--shadow-lg)}
+.askai-slash-menu__list{display:flex;flex-direction:column;gap:var(--space-2xs);max-height:280px;overflow-y:auto}
+.askai-slash-menu__group{padding:var(--space-1) var(--space-3) 0;font-size:var(--text-xs);color:var(--faint)}
+.askai-slash-menu__item{color:inherit;font-size:var(--text-sm)}
+.askai-slash-menu__item[aria-disabled]{opacity:.5;cursor:not-allowed}
+.askai-slash-menu__meta{margin-left:auto;font-size:var(--text-xs);color:var(--faint)}
+.askai-slash-menu__empty{padding:var(--space-3);font-size:var(--text-sm);color:var(--muted)}
+/* 호버 미리보기(D11) — 요청문 상자 위에 **같은 상자**로 겹친다. 예전엔 불투명 배경(--app-sheet-base)으로
+   상자를 덮어 호버할 때마다 상자 색이 바뀌었다. 이제 배경을 칠하지 않고, 미리보기가 떠 있는 동안에만
+   상자 속 글자(자리표시자 포함)를 숨긴다 — 테두리·포커스 글로우는 상자 것이 그대로 보인다. 미리보기의
+   테두리는 같은 폭의 투명선이라 글자 자리가 1px 도 밀리지 않는다. */
+.askai-composer .askai-ghost{
+  position:absolute;inset:0;pointer-events:none;overflow:hidden;
+  color:var(--faint);background:transparent;border-color:transparent;box-shadow:none;
+}
+.askai-composer[data-ghost] .askai-composer__editor > *{visibility:hidden}
+.askai-ghost .askai-slot{color:var(--faint);background:color-mix(in srgb,var(--accent) 7%,transparent);border-bottom-color:color-mix(in srgb,var(--accent) 45%,transparent)}
+
+/* ── AI에게 묻기 모달 본문 (components/AskAiModal.tsx, PLAN-2026-09-15 D1, 6안 D20) ────────
+   좌 250px = 타일 그리드(4열) · 우 = 컨텍스트 줄 + 컴포저 + 동작 줄. 폭 720 모달 기준.
+   본문은 **높이 고정**이다 — 탭(프리셋↔히스토리)을 바꾸거나 컨텍스트가 늘어도 모달이 흔들리지
+   않게, 각 칸이 자기 안에서 스크롤한다. 크기 생값은 전부 여기 — TSX 에는 두지 않는다.
+   정렬 계약(2026-09-26): 좌 탭 줄과 우 컨텍스트 줄은 같은 높이(--askai-head-h)라 그 아래 타일 그리드와
+   요청문 상자의 윗변이 한 선에 선다. 두 칸의 세로 간격은 똑같이 --space-3 이다. */
+.askai-modal-body{
+  --askai-body-h:380px;
+  --askai-head-h:var(--ctrl-h);
+  display:flex;flex-direction:column;gap:var(--space-3);
+  height:var(--askai-body-h);min-width:0;
+}
+/* 위 2단(프리셋 · 요청문) — 평소엔 이 하나가 본문 높이를 전부 쓴다. */
+.askai-modal-top{
+  display:grid;grid-template-columns:250px minmax(0,1fr);gap:var(--space-5);
+  flex:1 1 auto;min-height:0;align-items:stretch;
+}
+/* 결과·메타 단계(그릴링 세션 2026-09-28, Q1·Q4·Q6) — .askai-modal-body 에 data-stage 가 있으면 위 2단은
+   `--askai-top-h` 로 타이트해지고(좌 타일 그리드는 이미 각자 스크롤하므로 내용이 잘려도 스크롤이 받는다,
+   Q9), 그 아래 .askai-modal-stage 가 남은 높이를 전부(2단 너비 다 씀) 쓴다. 총 높이(--askai-body-h)는
+   그대로라 모달이 흔들리지 않는다 — 위 「본문은 높이 고정이다」 계약과 같다. */
+.askai-modal-body[data-stage] > .askai-modal-top{
+  flex:none;height:150px;
+}
+.askai-modal-stage{
+  flex:1 1 auto;min-height:0;min-width:0;display:flex;flex-direction:column;gap:var(--space-3);
+}
+.askai-modal-right{display:flex;flex-direction:column;gap:var(--space-3);min-width:0;min-height:0}
+.askai-modal-hint{margin:0;flex:none;font-size:var(--text-xs);color:var(--muted)}
+.askai-modal-hint--warn{color:var(--text)}
+/* 컨텍스트 줄(왼쪽, 늘어남) + 메타데이터 스위치(오른쪽 끝). 줄 높이는 좌 탭 줄과 같다. */
+.askai-modal-ctxrow{
+  display:flex;align-items:center;gap:var(--space-3);
+  flex:none;min-width:0;min-height:var(--askai-head-h);box-sizing:border-box;
+}
+.askai-modal-ctxrow > .askai-ctxstrip{flex:1 1 auto}
+.askai-meta{display:inline-flex;align-items:center;gap:var(--space-2);flex:none;margin-left:auto}
+.askai-meta__label{font-size:var(--text-xs);color:var(--muted);cursor:pointer;user-select:none;white-space:nowrap}
+.askai-meta[data-on='true'] .askai-meta__label{color:var(--text)}
+.askai-meta[data-disabled='true'] .askai-meta__label{cursor:not-allowed;opacity:.6}
+/* 드롭 영역(AskAiAttachmentDropzone) — 테두리 없는 배치 래퍼다. 예전엔 여기에 테두리·안쪽 여백이 있어
+   요청문 상자(.field)를 한 겹 더 감쌌고, 상자의 왼쪽 변이 컨텍스트 줄·동작 줄보다 7px 안으로 들어가
+   있었다(오너 2026-09-26 "박스가 한 겹 더 씌워진 게 불편"). 드래그 중 신호는 상자 자체가 진다.
+   첨부 파일 목록은 위 컨텍스트 줄의 file 칩이 소유한다(여기 있던 칩 줄은 그 중복이라 뺐다). */
+.askai-dropzone{position:relative;display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
+/* 요청문 상자 우하단 한 줄(PLAN-2026-09-27 §3.5) — [Enter 힌트][책갈피 = 프리셋으로 저장] 순서의 flex 줄 하나가
+   상자 오른쪽 아래 모서리에 선다. 자리는 이 줄이 잡고 안의 둘은 흐름대로 놓인다 — 예전엔 책갈피 버튼도 따로
+   absolute 라 이 줄 안에서 Enter 힌트 위에 겹쳤다. 글이 이 줄 밑으로 들어가지 않게 하는 여백은 상자 쪽이
+   진다: 작성 단계는 책갈피 버튼 하나뿐이라 오른쪽 여백(.askai-composer__editor.field), 생성·검토 단계는 힌트 폭이
+   로케일마다 달라 아래 한 줄(--askai-foot-reserve, 이 파일 아래 [data-phase] 규칙). */
+.askai-composer-footer-hints{
+  position:absolute;right:var(--space-2);bottom:var(--space-2);
+  display:flex;align-items:center;gap:var(--space-2);
+  pointer-events:none;
+}
+.askai-composer-footer-hints > *{pointer-events:auto}
+.askai-composer-enter-hint{font-size:var(--text-xs);color:var(--faint);white-space:nowrap;user-select:none}
+/* 프리셋으로 저장(오너 2026-09-27 "적은 내용을 바로 프리셋으로") — 위 줄의 맨 끝. 작성·검토 두 단계에서 같은
+   자리다(검토 단계에선 상자가 한두 줄로 줄어도 모서리를 따라간다). 한 변 22px = --space-8 — 상자 여백 계산이
+   이 값을 쓴다. */
+.askai-savepreset{
+  display:inline-flex;align-items:center;justify-content:center;flex:none;width:22px;height:22px;padding:0;
+  background:transparent;border:none;border-radius:var(--radius-sm);color:var(--faint);cursor:pointer;
+  transition:color var(--dur-fast),background var(--dur-fast);
+}
+.askai-savepreset:hover,.askai-savepreset:focus-visible{color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);outline:none}
+.askai-dropzone[data-dragging] .askai-composer__editor.field{
+  border-style:dashed;border-color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 8%,transparent);
+}
+/* 동작 줄(components/ai/AskAiActionBar.tsx) — 모든 컨트롤이 한 높이(--ctrl-h-sm)를 쓴다. 예전엔 인라인
+   26px 과 보내기 30px 이 섞여 윗변이 2px 어긋났다. */
+.askai-actionbar{display:flex;align-items:center;gap:var(--space-2);flex:none;min-width:0}
+.askai-actionbar .btn{
+  height:var(--ctrl-h-sm);min-height:var(--ctrl-h-sm);flex:none;
+  padding:0 var(--space-2);gap:var(--space-1);font-size:var(--text-xs);
+}
+.askai-actionbar__icon{color:var(--muted)}
+.askai-actionbar__icon[data-on='true']{color:var(--accent)}
+.askai-actionbar__spacer{margin-left:auto}
+.askai-actionbar__label{display:inline-flex;align-items:center;gap:var(--space-1);font-size:var(--text-xs);color:var(--muted)}
+.askai-actionbar__fixed{
+  display:inline-flex;align-items:center;gap:var(--space-1);
+  height:var(--ctrl-h-sm);box-sizing:border-box;padding:0 var(--space-3);
+  border:1px dashed var(--divider);border-radius:var(--radius-pill);
+  font-size:var(--text-xs);color:var(--muted);
+}
+.askai-actionbar .btn.askai-actionbar__send{padding:0 var(--space-4);font-weight:600}
+.askai-actionbar__send kbd{font-size:var(--text-xs);opacity:.7}
+/* 한 모달에서 작성 → 생성 → 검토(2026-09-27, 오너). 생성·검토 단계(.askai-modal-right[data-phase])에선
+   요청문 상자가 몇 줄로 줄고 — 고쳐서 Enter 하면 다시 보낸다 — 그 아래를 결과 패널(ai/AiResultPanel,
+   inline)이 채운다. 행동 줄은 패널의 것이라 동작 줄은 작성 단계에만 선다. */
+.askai-modal-right:not([data-phase="compose"]) .askai-dropzone,
+.askai-modal-right:not([data-phase="compose"]) .askai-composer{flex:none}
+/* 이 단계엔 우하단 줄에 Enter 힌트가 붙는다(.askai-composer-footer-hints). 힌트 폭은 로케일마다 달라 오른쪽
+   여백으로는 못 비우므로, 글 아래로 그 줄 하나(줄 위치 --space-2 + 책갈피 버튼 22px + 틈 --space-1)를 비운다 —
+   상자와 미리보기(.askai-ghost)가 같은 값을 받는다. 높이 상한은 그만큼(원래 아래 여백 --space-3 을 뺀 만큼)
+   함께 올린다 — border-box 라 안 올리면 둘째 줄이 반쯤 잘린다. */
+.askai-modal-right:not([data-phase="compose"]){
+  --askai-foot-reserve:calc(var(--space-2) + var(--space-8) + var(--space-1));
+}
+.askai-modal-right:not([data-phase="compose"]) .askai-composer__editor.field,
+.askai-modal-right:not([data-phase="compose"]) .askai-composer .askai-ghost{
+  padding-right:var(--space-4);padding-bottom:var(--askai-foot-reserve);
+}
+.askai-modal-right:not([data-phase="compose"]) .askai-composer__editor.field{
+  flex:none;
+  min-height:calc(var(--ctrl-h-lg) + var(--askai-foot-reserve) - var(--space-3));
+  max-height:calc(var(--ctrl-h-lg)*2 + var(--askai-foot-reserve) - var(--space-3));
+}
+.ai-result-panel:not(.ai-result-panel--inline){
+  display:grid;gap:var(--space-4);padding-top:var(--space-3);
+}
+.ai-result-panel--inline{display:flex;flex-direction:column;gap:var(--space-3);flex:1 1 auto;min-height:0}
+/* 단일 결과 상자 (PLAN-2026-09-27 §3.3) — 머리 한 줄 + 몸 + 발 한 줄 (헤어라인, --radius-sm) */
+.ai-result-box{
+  display:flex;flex-direction:column;border:1px solid var(--divider);
+  border-radius:var(--radius-sm);overflow:hidden;
+  flex:1 1 auto;min-height:0;
+}
+.ai-result-panel:not(.ai-result-panel--inline) .ai-result-box{max-height:380px}
+.ai-result-box__head{
+  display:flex;align-items:center;justify-content:space-between;gap:var(--space-2);
+  padding:0 var(--space-3);border-bottom:1px solid var(--divider);
+  background:var(--hover);flex:none;min-height:var(--ctrl-h-sm);
+}
+.ai-result-box__title{
+  font-size:var(--text-xs);font-weight:600;color:var(--text);
+  display:inline-flex;align-items:center;gap:var(--space-1);
+}
+.ai-result-box__title--error{color:var(--danger)}
+.ai-result-box__head-extra{
+  display:inline-flex;align-items:center;gap:var(--space-2);
+  font-size:var(--text-xs);color:var(--muted);font-variant-numeric:tabular-nums;
+}
+.ai-result-box__body{
+  flex:1 1 auto;min-height:0;overflow-y:auto;padding:var(--space-3) var(--space-4);
+  display:flex;flex-direction:column;gap:var(--space-2);
+}
+.ai-result-box__body--pending{justify-content:center;align-items:stretch;gap:var(--space-3)}
+.ai-result-box__foot{
+  display:flex;align-items:center;justify-content:flex-end;gap:var(--space-2);
+  padding:var(--space-1) var(--space-3);border-top:1px solid var(--divider);
+  flex:none;font-size:var(--text-xs);color:var(--faint);
+}
+.ai-result-box__foot .ai-result-panel__meta-caption{font-size:var(--text-xs);color:var(--faint,var(--muted))}
+/* 생성 중 스켈레톤 라인 (흐린 자리표시 줄 3개) */
+.ai-result-box__skeleton{
+  display:flex;flex-direction:column;gap:var(--space-3);padding:var(--space-3) 0;width:100%;
+}
+.ai-skeleton-line{
+  height:12px;background:var(--line);border-radius:var(--radius-xs);
+  opacity:.55;animation:ai-skeleton-pulse 1.8s ease-in-out infinite;
+}
+.ai-result-box__skeleton .ai-skeleton-line:nth-child(1){width:92%}
+.ai-result-box__skeleton .ai-skeleton-line:nth-child(2){width:78%}
+.ai-result-box__skeleton .ai-skeleton-line:nth-child(3){width:55%}
+@keyframes ai-skeleton-pulse{
+  0%,100%{opacity:.35}
+  50%{opacity:.75}
+}
+/* 기존 미리보기 상자 — 상자(.ai-result-box) 안에서는 테두리 제거 */
+.ai-result-panel__preview{
+  overflow-y:auto;white-space:pre-wrap;overflow-wrap:anywhere;
+  padding:var(--space-3) var(--space-4);border:1px solid var(--divider);
+  border-radius:var(--radius-sm);font-size:var(--text-md);
+}
+.ai-result-box .ai-result-panel__preview{
+  border:none;border-radius:0;padding:0;flex:1 1 auto;min-height:0;
+}
+.ai-result-panel:not(.ai-result-panel--inline) .ai-result-panel__preview{max-height:320px}
+.ai-result-panel--inline .ai-result-panel__preview{flex:1 1 auto;min-height:0}
+.ai-result-panel__brief{
+  display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-3);
+  padding:var(--space-2) var(--space-3);border-radius:var(--radius-sm);
+  background:var(--hover);font-size:var(--text-sm);
+}
+.ai-result-panel__brief-text{flex:1 1 260px}
+.ai-result-panel__window-target{font-size:var(--text-md);color:var(--muted)}
+.ai-result-panel__pending{
+  display:grid;gap:var(--space-3);justify-items:center;padding:var(--space-8) 0;
+}
+.ai-result-panel--inline .ai-result-panel__pending{flex:1 1 auto;align-content:center}
+.ai-result-panel__pending-status{font-size:var(--text-lg);font-weight:600}
+.ai-result-panel__pending-meta{font-size:var(--text-sm);color:var(--muted)}
+.ai-result-panel__pending-warning{font-size:var(--text-sm);color:var(--danger)}
+.ai-result-panel__empty-msg{margin:0;color:var(--danger);font-size:var(--text-sm)}
+.ai-result-panel__meta-caption{font-size:var(--text-sm);color:var(--muted)}
+.ai-result-panel__error-box{display:grid;gap:var(--space-2)}
+.ai-result-box .ai-result-panel__error-box{padding:0}
+.ai-result-panel__error-title{font-size:var(--text-md);font-weight:600}
+.ai-result-panel__error-hint{margin:0;color:var(--danger);font-size:var(--text-md)}
+.ai-result-panel__error-subhint{margin:0;color:var(--muted);font-size:var(--text-sm)}
+.ai-result-panel__error-summary{font-size:var(--text-sm);color:var(--muted);cursor:pointer}
+.ai-result-panel__error-pre{
+  margin:var(--space-2) 0 0;white-space:pre-wrap;overflow-wrap:anywhere;
+  font-size:var(--text-sm);color:var(--muted);
+}
+/* 검토 단계 행동 줄 = 작성 단계 동작 줄(.askai-actionbar)과 같은 높이·글자·간격 — 단계가 바뀌어도 줄이
+   튀지 않는다(오너 2026-09-27 "정렬"). 대상 문구가 왼쪽, 버튼이 오른쪽. */
+.ai-result-panel__actions{
+  display:flex;align-items:center;justify-content:flex-end;gap:var(--space-3);
+}
+.ai-result-panel--inline .ai-result-panel__actions{
+  gap:var(--space-2);margin-top:auto;flex-wrap:wrap;
+}
+.ai-result-panel--inline .ai-result-panel__actions .btn{
+  height:var(--ctrl-h-sm);min-height:var(--ctrl-h-sm);flex:none;
+  padding:0 var(--space-3);font-size:var(--text-xs);
+}
+.ai-result-panel--inline .ai-result-panel__actions .btn.btn-primary{padding:0 var(--space-4)}
+.ai-result-panel__target{
+  margin-right:auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:var(--text-xs);color:var(--muted);
+}
+/* 버전 넘기개(‹ 2/3 ›) — 머리 우측으로 이동. 숫자는 폭이 흔들리지 않게 고정폭 숫자. */
+.askai-pager{display:inline-flex;align-items:center;gap:var(--space-1);flex:none}
+.askai-pager__pos{font-size:var(--text-xs);color:var(--muted);font-variant-numeric:tabular-nums;min-width:calc(var(--text-xs)*2.4);text-align:center}
+.askai-version__meta{font-size:var(--text-sm);color:var(--muted)}
+/* 이어서 다듬기 칩(2026-09-27 2단계) — 결과 상태에서만 상자 밖 바로 아래 한 줄. 넘치면 가로 스크롤. */
+.askai-refine{
+  display:flex;flex-wrap:nowrap;overflow-x:auto;align-items:center;gap:var(--space-2);
+  flex:none;scrollbar-width:none;-ms-overflow-style:none;padding:var(--space-2xs) 0;
+}
+.askai-refine::-webkit-scrollbar{display:none}
+.askai-refine__chip{
+  display:inline-flex;align-items:center;height:22px;padding:0 var(--space-3);
+  background:transparent;border:1px solid var(--line);border-radius:var(--radius-pill);
+  font-size:var(--text-xs);color:var(--muted);cursor:pointer;white-space:nowrap;flex:none;
+  transition:color var(--dur-fast),border-color var(--dur-fast);
+}
+.askai-refine__chip:hover,.askai-refine__chip:focus-visible{color:var(--text);border-color:var(--accent);outline:none}
+.askai-refine__sep{
+  width:1px;height:14px;background:var(--line);margin:0 var(--space-1);flex:none;
+}
+/* W3: 원문 보기 토글 및 형식별 본문 렌더링 스타일 */
+.ai-result-box__raw-toggle{
+  display:inline-flex;align-items:center;gap:var(--space-1);
+  background:transparent;border:1px solid transparent;border-radius:var(--radius-xs);
+  padding:var(--space-2xs) var(--space-2);font-size:var(--text-xs);color:var(--muted);cursor:pointer;
+  transition:color var(--dur-fast),border-color var(--dur-fast),background var(--dur-fast);
+}
+.ai-result-box__raw-toggle:hover,.ai-result-box__raw-toggle:focus-visible{
+  color:var(--text);border-color:var(--line);background:var(--hover);outline:none;
+}
+.ai-result-panel__text-editor{
+  font-size:var(--text-md);line-height:var(--lh-read);color:var(--text);
+  overflow-wrap:anywhere;
+}
+.ai-result-panel__text-editor .ProseMirror{
+  outline:none;
+}
+.ai-result-panel__text-editor .ProseMirror p:first-child{margin-top:0}
+.ai-result-panel__text-editor .ProseMirror p:last-child{margin-bottom:0}
+.ai-result-raw-view{
+  font-family:var(--font-mono);font-size:var(--text-xs);line-height:1.5;
+  white-space:pre-wrap;overflow-wrap:anywhere;margin:0;padding:var(--space-2) var(--space-3);
+  background:var(--surface-sunken,var(--hover));border-radius:var(--radius-sm);
+  color:var(--text);border:1px solid var(--divider);
+}
+.ai-result-diagram{
+  display:flex;flex-direction:column;gap:var(--space-3);
+}
+.ai-result-diagram__stats{
+  display:inline-flex;align-items:center;gap:var(--space-2);
+  font-size:var(--text-xs);font-weight:600;color:var(--muted);
+}
+.ai-result-diagram__chips{
+  display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center;
+}
+.ai-result-diagram__chip{
+  display:inline-flex;align-items:center;gap:var(--space-1);
+  padding:var(--space-2xs) var(--space-3);border-radius:var(--radius-pill);
+  background:var(--surface-sunken,var(--hover));border:1px solid var(--line);
+  font-size:var(--text-xs);color:var(--text);white-space:nowrap;
+}
+/* 메타데이터 제안(components/ai/AskAiMetaPanel.tsx, 오너 2026-09-27 "따로 분리된 게 싫다") — 결과 패널과 같은
+   틀(.ai-result-panel--inline)·같은 상자 구조(.ai-result-box). 행은 [체크][이름][이전 → 제안][상태] 네 칸 격자,
+   태그는 다듬기 칩과 같은 문법의 토글 칩(+추가·−제거, 켜짐 = 적용한다).
+   삽입 뒤 제안([data-meta])일 때는 왼쪽 타일과 컨텍스트 줄이 쉰다 — 눌러도 이어질 것이 없다. */
+.askai-modal-body[data-meta] .askai-tiles,.askai-modal-body[data-meta] .askai-modal-ctxrow{opacity:.45;pointer-events:none}
+.askai-metapanel__done{display:flex;align-items:center;gap:var(--space-2);flex:none;font-size:var(--text-sm);color:var(--muted)}
+.askai-metapanel__done svg{color:var(--accent);flex:none}
+.askai-metapanel__box{
+  flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;
+  border:1px solid var(--divider);border-radius:var(--radius-sm);
+}
+.askai-metapanel__head{
+  flex:none;font-size:var(--text-xs);font-weight:600;color:var(--text);
+  padding:0 var(--space-3);border-bottom:1px solid var(--divider);
+  background:var(--hover);min-height:var(--ctrl-h-sm);display:flex;align-items:center;
+}
+.askai-metapanel__body{
+  flex:1 1 auto;min-height:0;overflow-y:auto;padding:var(--space-3) var(--space-4);
+  display:flex;flex-direction:column;gap:var(--space-3);
+}
+.askai-metapanel__foot{
+  display:flex;align-items:center;justify-content:flex-end;gap:var(--space-2);
+  padding:var(--space-1) var(--space-3);border-top:1px solid var(--divider);
+  flex:none;font-size:var(--text-xs);color:var(--faint);
+}
+.askai-metapanel__pending{flex:1 1 auto;display:grid;place-items:center;font-size:var(--text-md);color:var(--muted)}
+.askai-metapanel__rows{display:flex;flex-direction:column;gap:var(--space-3)}
+.askai-metapanel__row{
+  display:grid;grid-template-columns:14px 44px minmax(0,1fr) auto;align-items:baseline;gap:var(--space-3);
+  font-size:var(--text-md);color:var(--text);
+}
+label.askai-metapanel__row{cursor:pointer}
+.askai-metapanel__row input{margin:0;align-self:center}
+.askai-metapanel__label{font-size:var(--text-xs);color:var(--muted);white-space:nowrap}
+.askai-metapanel__value{min-width:0;overflow-wrap:anywhere}
+/* .askai-metapanel__badge 모양·톤은 `.badge` + STATE_BADGE_TONE(AiProposalPanel 과 같은 표, R8). */
+.askai-metapanel__tags{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2)}
+.askai-metapanel__tag{
+  display:inline-flex;align-items:center;height:22px;padding:0 var(--space-3);
+  background:transparent;border:1px solid var(--line);border-radius:var(--radius-pill);
+  font-family:inherit;font-size:var(--text-xs);color:var(--muted);
+}
+.askai-metapanel__tag[data-kind='kept']{border-color:transparent;padding:0 var(--space-1)}
+button.askai-metapanel__tag{cursor:pointer;transition:color var(--dur-fast),border-color var(--dur-fast)}
+button.askai-metapanel__tag:hover,button.askai-metapanel__tag:focus-visible{color:var(--text);outline:none}
+.askai-metapanel__tag[data-kind='add'][aria-pressed='true']{color:var(--text);border-color:var(--accent)}
+.askai-metapanel__tag[data-kind='remove'][aria-pressed='true']{color:var(--warn);border-color:var(--warn);text-decoration:line-through}
+.askai-metapanel__note{margin:0;font-size:var(--text-xs);color:var(--muted)}
+.askai-metapanel__note[data-warn]{color:var(--warn)}
+.askai-running{flex:1 1 auto;display:grid;place-items:center;font-size:var(--text-lg);font-weight:600;color:var(--muted)}
+
+/* 폼 타이포그래피 표준 클래스 */
+.form-label { display: block; font-size: var(--text-sm); color: var(--muted); margin-bottom: var(--space-2); }
+.form-label--sm { display: block; font-size: var(--text-xs); font-weight: 600; color: var(--muted); margin-bottom: var(--space-1); }
+.form-hint { font-size: var(--text-xs); color: var(--muted); margin-top: var(--space-1); line-height: 1.45; }
+.form-error { font-size: var(--text-xs); color: var(--danger); margin-top: var(--space-1); }
+
+/* `.field-select` 트리거 톤 — .field 와 같은 투명+헤어라인. 예전엔 네이티브 <select> 자체에 붙던
+   클래스였고 펼쳐진 옵션 목록은 OS 렌더링이라 스타일링이 안 닿는 게 허용된 한계였다(W7-b 이전).
+   지금은 이 클래스를 쓰는 실제 엘리먼트가 전부 `Select`(src/components/Select.tsx) 의 <button>
+   트리거뿐이다 — 네이티브 <select> 는 이 코드베이스에 더 이상 없다(2026-08-04, W7-b 전면 이전).
+   화살표는 테마별 정적 색(다크=밝은 회색, 라이트=어두운 회색)의 인라인 SVG — data URI 안에는
+   CSS 커스텀 프로퍼티를 넣을 수 없어 var(--divider) 를 직접 참조하지 못하므로, 각 테마 톤에 맞는
+   고정 hex 를 그 근사값으로 쓴다. */
+.field-select{
+  appearance:none;
+  -webkit-appearance:none;
+  -moz-appearance:none;
+  display:inline-flex;
+  align-items:center;
+  min-height:var(--ctrl-h-lg);
+  box-sizing:border-box;
+  background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23c9c7c3' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right var(--space-3) center / 10px 6px;
+  border:1px solid var(--divider);
+  border-radius:var(--radius-sm);
+  color:var(--text);
+  font:inherit;
+  font-size:var(--text-md);
+  padding:0 var(--space-7) 0 var(--space-4);
+  outline:none;
+  cursor:pointer;
+  transition:border-color var(--dur-fast);
+}
+/* 예전엔 여기서 OS 팝업 가독성을 위해 --surface 불투명 배경을 강제했다(네이티브 select 의 열린
+   목록은 컨트롤 자신의 background-color 로 칠해지는데, transparent 라 다크 테마에서 흰 목록이
+   튀었다). 이제 열린 목록은 `Select` 컴포넌트가 그리는 `.overlay` 포털이라 이 워크어라운드가
+   필요 없다 — 트리거도 다른 in-flow 폼 컨트롤처럼 SINGLE-SHEET 계약을 그대로 따른다(불투명
+   배경 없음). 제거: 2026-08-04 W7-b. */
+:root[data-theme='light'] .field-select{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%235a5550' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.field-select:focus{border-color:var(--accent)}
+.field-select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+
+/* 대문자 트래킹 소형 라벨 (섹션 제목, 스트립 캡션) */
+.label-caps{
+  font-size:var(--text-label);
+  font-weight:600;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+
+/* 아이콘 팔레트 스와치 (IconPicker) — 정사각 버튼, hover/active 는 여기서만 소유(인라인 금지). */
+.icon-swatch{
+  display:grid;place-items:center;
+  aspect-ratio:1;
+  min-height:38px;
+  border:1px solid var(--divider);
+  border-radius:var(--radius-sm);
+  background:transparent;
+  color:var(--muted);
+  cursor:pointer;
+  transition:background var(--dur-fast),border-color var(--dur-fast),color var(--dur-fast);
+}
+.icon-swatch:hover,.icon-swatch:focus-visible{background:var(--hover);border-color:var(--accent);color:var(--text);outline:none}
+.icon-swatch[data-active='true']{background:var(--sel);border-color:var(--accent);color:var(--accent)}
+
+@media (prefers-reduced-motion: reduce){
+  .icon-btn,.menu-row,.field,.icon-swatch{transition:none}
+}
+.app .tag-accent{background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent);border-radius:var(--radius-sm)}
+.app :focus-visible{outline-color:var(--accent)}
+.app ::selection{background:color-mix(in srgb,var(--accent) 30%,transparent)}
+
+/* 타일/칩: 테두리를 클래스가 소유해야 :hover 가 인라인 스타일과 싸우지 않는다
+   (인라인에 border 를 남기면 !important 없이는 덮을 수 없다). */
+.attach,.related-chip,.preset-chip{
+  border:1px solid var(--divider);
+  border-radius:var(--radius-sm);
+  cursor:pointer;
+  transition:border-color var(--dur-fast);
+}
+.attach:hover,.related-chip:hover,.preset-chip:hover{border-color:var(--accent)}
+
+/* 프리셋/AI 액션 스트립의 칩 (PresetList) — 아이콘 + 짧은 라벨. 긴 커스텀 프리셋 이름은
+   max-width 에서 잘리고 전체 이름은 title 툴팁이 맡는다. */
+.preset-chip{
+  display:inline-flex;align-items:center;gap:var(--space-2);
+  min-height:var(--ctrl-h-sm);
+  box-sizing:border-box;
+  max-width:180px;
+  padding:0 var(--space-3);
+  font:inherit;font-size:var(--text-xs);
+  color:var(--text);
+  background:transparent;
+}
+.preset-chip>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Owner spec (6차 QA): active-preview highlight — a soft ring (var(--sel), accent @20%) around
+   the already-accented border so it reads as distinct from plain :hover (border-color only). */
+.attach[data-active='true']{border-color:var(--accent);box-shadow:0 0 0 2px var(--sel)}
+
+.toolbar-btn{
+  width:var(--ctrl-h-sm);min-height:var(--ctrl-h-sm);height:var(--ctrl-h-sm);flex:none;display:grid;place-items:center;cursor:pointer;
+  border:none;border-radius:var(--radius-sm);box-shadow:none;
+  box-sizing:border-box;
+  background:transparent;color:var(--text);opacity:0.7;filter:none;
+  transition:color var(--dur-fast),filter var(--dur-fast),opacity var(--dur-fast),transform var(--dur-fast) cubic-bezier(0.2, 0, 0, 1);
+}
+.toolbar-btn:hover{
+  background:transparent;
+  box-shadow:none;
+  color:var(--text);
+  opacity:1;
+  filter:drop-shadow(0 0 2px color-mix(in srgb, var(--accent) 45%, transparent));
+}
+.toolbar-btn:active{
+  transform:scale(0.92);
+}
+.toolbar-btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.toolbar-btn[data-active='true'],
+.toolbar-btn[data-active='true']:hover{
+  background:transparent;
+  box-shadow:none;
+  color:var(--accent);
+  opacity:1;
+  filter:drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 60%, transparent));
+}
+.toolbar-btn[data-active='partial'],
+.toolbar-btn[data-active='partial']:hover{
+  background:transparent;
+  box-shadow:none;
+  color:var(--accent);
+  opacity:0.85;
+  filter:drop-shadow(0 0 2px color-mix(in srgb, var(--accent) 45%, transparent));
+}
+.toolbar-btn:disabled{
+  opacity:0.35;
+  cursor:not-allowed;
+  filter:none;
+  pointer-events:none;
+}
+/* 글자를 담은 툴바 버튼. .toolbar-btn 는 30px 정사각 + display:grid 라 라벨+셰브런이 못 들어간다.
+   기존에 buttons.tsx:654(표 삽입 실행 버튼)가 인라인으로 하던 것 = 3번째 사용처가 생겨 클래스화. */
+.toolbar-btn--text{
+  width:auto;
+  min-height:var(--ctrl-h-sm);
+  height:var(--ctrl-h-sm);
+  box-sizing:border-box;
+  display:inline-flex;align-items:center;gap:var(--space-1);
+  padding:0 var(--space-3);
+  font:inherit;font-size:var(--text-sm);white-space:nowrap;
+}
+.toolbar-btn--text:active{
+  transform:scale(0.96);
+}
+
+.tab-close{
+  display:grid;place-items:center;color:var(--faint);cursor:pointer;transition:color var(--dur-fast);
+  background:transparent;border:none;padding:0;
+}
+.tab-close:hover{color:var(--text)}
+.tab-new-btn{
+  display:grid;place-items:center;width:44px;flex:none;cursor:pointer;
+  color:var(--muted);background:transparent;border:none;
+  border-left:1px solid var(--divider);
+  transition:background var(--dur-fast),color var(--dur-fast);
+}
+.tab-new-btn:hover{color:var(--text);background:var(--line)}
+
+.view-tab-indicator{
+  position:absolute;top:0;bottom:0;left:0;
+  background:var(--accent);z-index:0;pointer-events:none;
+  transition:transform var(--dur-fast) cubic-bezier(0.2, 0, 0, 1);
+}
+.sidebar-view-pane{
+  flex:1;min-height:0;display:flex;flex-direction:column;
+  animation:fade var(--dur-fast) ease-out;
+}
+
+/* Timeline range capsule button (with hover accent glow) */
+.timeline-range-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--surface-base);
+  border: 1px solid var(--divider);
+  color: var(--text);
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-md);
+  line-height: 1.2;
+  cursor: pointer;
+  box-sizing: border-box;
+  user-select: none;
+  transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease, transform var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.timeline-range-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 35%, transparent),
+              inset 0 0 4px color-mix(in srgb, var(--accent) 15%, transparent);
+  transform: translateY(-0.5px);
+}
+.timeline-range-chip:active {
+  transform: translateY(0.5px) scale(0.98);
+}
+.timeline-range-chip[data-active='true'],
+.timeline-range-chip[aria-expanded='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+/* Timeline range popover menu */
+.timeline-range-menu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  min-width: 270px;
+  max-width: 320px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  background: var(--app-sheet-base); /* = .overlay 레시피(툴 버블 통일 2026-09-21) */
+  border: 1px solid var(--divider);
+  box-sizing: border-box;
+}
+.timeline-range-menu-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.timeline-range-menu-title {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  padding: 0 var(--space-1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.timeline-range-menu-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text);
+  font-size: var(--text-xs);
+  width: 100%;
+  text-align: left;
+  box-sizing: border-box;
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.timeline-range-menu-row:hover,
+.timeline-range-menu-row:focus-visible {
+  background: var(--hover);
+  color: var(--accent);
+}
+.timeline-range-menu-row[data-active="true"] {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.tag-btn{
+  display:inline-flex;align-items:center;gap:var(--space-2);
+  min-height:var(--ctrl-h-lg);
+  box-sizing:border-box;
+  padding:0 var(--space-4);
+  border:1px dashed var(--divider);
+  border-radius:var(--radius-sm);
+  color:var(--muted);
+  font-size:var(--text-xs);
+  cursor:pointer;
+  transition:border-color var(--dur-fast),color var(--dur-fast);
+  background:transparent;
+}
+.tag-btn:hover{border-color:var(--accent);color:var(--text)}
+
+/* ProseMirror and mdbody editor fonts */
+.ProseMirror, .mdbody {
+  outline:none;
+  font-family:var(--font-editor);
+  font-weight:400;
+  font-size:calc(15px*var(--fs));
+  line-height:var(--lh-read);
+  color:var(--ink,var(--text));
+  padding: 8px var(--space-6) 40px;
+  /* Bug fix: `ch` scales with font-size, so the old `max-width:76ch` made the reading measure
+     (and the empty side gutters) move every time the app-wide "Taille police" slider (--fs)
+     changed. 800px is a fixed measure that never depends on --fs — comfortably inside the
+     classic ~60-90-characters-per-line range for this serif body font at its base 15px size —
+     and it's noticeably wider than 76ch computed at fs=1 (~570-600px), which is what made the
+     side gutters feel wastefully wide. */
+  max-width: 800px; margin: 0 auto; width: 100%;
+}
+/* Editor width toggle (comfortable ↔ full-width) — scoped to `.editor-desktop`, the class
+   EditorPanel.tsx puts on the scroll container wrapping EditorContent + the ghost-preview
+   overlay (both share `.mdbody`/`.ProseMirror`, see the comment there). Deliberately NOT edited
+   into the bare `.ProseMirror, .mdbody` rule above: that rule is also inherited by
+   MobileNote.tsx's own `.mdbody` (no `.editor-desktop` ancestor there), so scoping keeps mobile's
+   reading width completely untouched.
+   Comfortable (default): left-anchored, not centered — drop `margin:0 auto`. Half the base
+   padding: the rule above applies twice (`.mdbody` wraps `.ProseMirror`, EditorContent's own
+   wrapper nests TipTap's content div), so the *effective* inset is already double a single
+   declaration — halving here restores the intended ~1×`--space-6` per side instead of 2×.
+   Full-width (`.editor-fullwidth`, set together with `.editor-desktop`): drops the 800px cap
+   entirely so the column fills the panel; comfortable's max-width:800px above still applies
+   until this more-specific rule overrides it. */
+.editor-desktop .mdbody, .editor-desktop .ProseMirror {
+  /* W24: 좌우 7px(space-6/2) → --content-inset(14px) — 에디터 컬럼의 "좌측 시작점"을 섹션 탭
+     라벨·타이틀·첨부 타일과 같은 14px 라인에 정렬(가장자리 균형 사례 수집, 오너). */
+  padding: 8px var(--content-inset) 40px;
+  margin: 0;
+}
+/* 실험적(2026-09-20, 오너가 보고 뺄 수 있다) — 본문 폭 3단(editorWidth: narrow/normal/wide,
+   stores/settings.ts). "normal" 은 새 클래스가 안 붙어 위 800px 규칙을 그대로 쓴다(손대지 않음).
+   800px 이 바로 위처럼 리터럴이라 여기도 같은 표현으로 맞춘다(커스텀 프로퍼티로 승격하지 않음) —
+   narrow/wide 둘 다 이 파일의 다른 곳에서 재사용되지 않는 값이라 토큰화할 이유가 없다.
+   editor-fullwidth 가 함께 있으면 이 두 규칙은 무시돼야 한다: EditorPanel.tsx 가 JS 레벨에서
+   editorFullWidth 일 때 이 클래스 자체를 안 붙이고(1차 안전장치), 아래 .editor-fullwidth 규칙이
+   이 파일에서 더 뒤에 오게 둬 동일 특이도에서 소스 순서로도 이긴다(2차 안전장치, CSS 온리 우회
+   경로 대비). 삭제하려면: 이 블록 + EditorPanel.tsx 의 editorWidth 구독/클래스 분기만 지우면
+   된다(다른 무엇도 이 두 클래스명을 참조하지 않는다). */
+.editor-desktop.editor-width-narrow .mdbody, .editor-desktop.editor-width-narrow .ProseMirror {
+  max-width: 640px;
+}
+.editor-desktop.editor-width-wide .mdbody, .editor-desktop.editor-width-wide .ProseMirror {
+  max-width: 1000px;
+}
+.editor-desktop.editor-fullwidth .mdbody, .editor-desktop.editor-fullwidth .ProseMirror {
+  max-width: none;
+}
+.mdbody:focus, .ProseMirror:focus {outline:none}
+.ProseMirror h1, .mdbody h1{font-family:var(--font-editor);font-size:1.65em;font-weight:600;line-height:var(--lh-tight);margin:.6em 0 .3em}
+.ProseMirror h2, .mdbody h2{font-family:var(--font-editor);font-size:1.32em;font-weight:600;line-height:var(--lh-tight);margin:.7em 0 .3em}
+.ProseMirror h3, .mdbody h3{font-family:var(--font-editor);font-size:1.1em;font-weight:600;line-height:var(--lh-ui);margin:.6em 0 .25em}
+.ProseMirror p, .mdbody p{margin:.7em 0}
+.ProseMirror ul, .mdbody ul, .ProseMirror ol, .mdbody ol{padding-left:1.35em;margin:.4em 0}
+.ProseMirror li, .mdbody li{margin:.22em 0}
+.ProseMirror blockquote, .mdbody blockquote{margin:.6em 0;padding:.25em 0 .25em .9em;border-left:3px solid var(--accent);color:var(--muted)}
+.ProseMirror code, .mdbody code{background:color-mix(in srgb,var(--accent) 16%,transparent);padding:.1em .38em;border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:.86em;font-weight:400}
+.ProseMirror pre, .mdbody pre{background:color-mix(in srgb,#000 24%,transparent);padding:12px 15px;border-radius:var(--radius-md);overflow:auto;margin:.7em 0}
+.ProseMirror pre code, .mdbody pre code{background:none;padding:0;color:var(--text)}
+.brise-code-block{position:relative;margin:.7em 0}
+.brise-code-block>pre{margin:0;padding-right:72px}
+.brise-code-block-copy{position:absolute;top:7px;right:7px;z-index:1;border:1px solid var(--divider);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);padding:3px 7px;font:600 var(--text-xs)/1 var(--font-ui);cursor:pointer;opacity:0;pointer-events:none;transition:opacity var(--dur-fast) ease,background var(--dur-fast) ease,border-color var(--dur-fast) ease,color var(--dur-fast) ease,transform var(--dur-fast) cubic-bezier(0.2, 0, 0, 1)}
+.brise-code-block:hover>.brise-code-block-copy,.brise-code-block:focus-within>.brise-code-block-copy,.brise-code-block-copy[data-copied='true']{opacity:1;pointer-events:auto}
+.brise-code-block-copy:hover{background:var(--hover)}
+.brise-code-block-copy:active{transform:scale(0.94)}
+.brise-code-block-copy[data-copied='true']{border-color:var(--accent);color:var(--accent)}
+.brise-code-block-copy:focus-visible{background:var(--hover);outline:2px solid var(--accent);outline-offset:1px}
+.ProseMirror a, .mdbody a{color:var(--accent);text-underline-offset:3px}
+/* Wiki-links (note:// href) — visually distinct from a regular link: no underline, since
+   clicking them navigates inside the app rather than opening a URL. */
+.ProseMirror a[href^="note://"], .mdbody a[href^="note://"]{text-decoration:none;cursor:pointer}
+.ProseMirror input[type=checkbox], .mdbody input[type=checkbox]{accent-color:var(--accent);margin-right:7px;transform:translateY(1px)}
+
+/* Task lists (ul[data-type="taskList"]) — TaskItem's node view renders each <li> as
+   <label contenteditable=false><input>…</label><div>{contentDOM}</div>; with no flex here the
+   block-level content <div> wraps onto its own line below the inline label — the reported
+   "typing next to a checkbox jumps to the next line" bug. Nested task lists (TaskItem
+   `nested:true`) fall out for free: a nested <ul> is just another block child inside the
+   content <div>, indented by its own padding-left same as any other nested list. */
+.ProseMirror ul[data-type="taskList"], .mdbody ul[data-type="taskList"]{list-style:none;padding-left:1.35em}
+.ProseMirror ul[data-type="taskList"] li, .mdbody ul[data-type="taskList"] li{display:flex;align-items:flex-start}
+.ProseMirror ul[data-type="taskList"] li>label, .mdbody ul[data-type="taskList"] li>label{flex:0 0 auto;user-select:none}
+.ProseMirror ul[data-type="taskList"] li>div, .mdbody ul[data-type="taskList"] li>div{flex:1 1 auto;min-width:0}
+.ProseMirror ul[data-type="taskList"] li>div>p, .mdbody ul[data-type="taskList"] li>div>p{margin:0}
+
+/* Placeholder (Placeholder.configure in EditorPanel.tsx) — default emptyEditorClass/attribute
+   pair ("is-editor-empty" + data-placeholder) tiptap puts on the first node when the whole doc
+   is empty; there was no CSS consuming them, so the placeholder text never rendered at all. */
+.ProseMirror p.is-editor-empty:first-child::before{content:attr(data-placeholder);color:var(--muted);float:left;height:0;pointer-events:none}
+
+/* Images — max-width constraint for desktop and mobile responsive layout (P0-3 / D5) */
+.ProseMirror img, .mdbody img { max-width: 100%; height: auto; border-radius: var(--radius-md); }
+
+/* D5 desktop free-drag resize — NodeView (ImageNodeView.tsx). Width lives on the wrap so the
+   handle stays on the image corner; the <img> fills the wrap. Mobile hides the handle
+   (mobile.css) and uses 3-step buttons instead.
+   Owner QA 6, item 7 (multiple images per line): inline-block, not block — BriseImage is now
+   configured `inline: true` (EditorPanel.tsx/mdSerialize.ts), so several image nodes can sit in
+   the same paragraph and wrap naturally like inline content. vertical-align:top keeps a row of
+   different-height images lined up at their tops instead of baseline-aligning (which would leave
+   a ragged row with the resize handle areas overlapping). Margin gained a right/left component
+   (was vertical-only under `display:block`, where adjacency never happened) so adjacent inline
+   images get breathing room instead of touching edge-to-edge. */
+.brise-image-node { display: inline-block; vertical-align: top; line-height: 0; margin: 0.25em 0.35em 0.25em 0; }
+.brise-image-wrap { position: relative; display: inline-block; max-width: 100%; line-height: 0; vertical-align: top; }
+.brise-image-img { width: 100%; height: auto; display: block; border-radius: var(--radius-md); max-width: 100%; }
+.brise-image-node--selected .brise-image-wrap,
+.ProseMirror-selectednode .brise-image-wrap {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-md);
+}
+.brise-image-resize-handle {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  width: 12px;
+  height: 12px;
+  box-sizing: border-box;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  border-radius: 2px;
+  cursor: ew-resize;
+  touch-action: none;
+  opacity: 0;
+  transition: opacity var(--dur-fast) ease;
+  z-index: 1;
+}
+.brise-image-node--selected .brise-image-resize-handle,
+.brise-image-wrap:hover .brise-image-resize-handle,
+.brise-image-resize-handle:focus-visible {
+  opacity: 1;
+}
+.brise-image-resize-handle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Code blocks — background/padding/radius/overflow already existed above; missing: monospace
+   font (was inheriting the serif editor body font) and a complete set of lowlight's hljs-* token
+   classes, mapped onto existing theme tokens instead of a full highlight.js theme import. */
+.ProseMirror pre code, .mdbody pre code{font-family:var(--font-mono)}
+.ProseMirror pre .hljs-keyword, .mdbody pre .hljs-keyword, .ProseMirror pre .hljs-selector-tag, .mdbody pre .hljs-selector-tag{color:var(--accent);font-weight:600}
+.ProseMirror pre .hljs-string, .mdbody pre .hljs-string, .ProseMirror pre .hljs-title, .mdbody pre .hljs-title, .ProseMirror pre .hljs-section, .mdbody pre .hljs-section{color:var(--ok)}
+.ProseMirror pre .hljs-comment, .mdbody pre .hljs-comment, .ProseMirror pre .hljs-quote, .mdbody pre .hljs-quote{color:var(--muted);font-style:italic}
+.ProseMirror pre .hljs-number, .mdbody pre .hljs-number, .ProseMirror pre .hljs-literal, .mdbody pre .hljs-literal, .ProseMirror pre .hljs-symbol, .mdbody pre .hljs-symbol{color:var(--info)}
+.ProseMirror pre .hljs-type, .mdbody pre .hljs-type, .ProseMirror pre .hljs-class, .mdbody pre .hljs-class, .ProseMirror pre .hljs-built_in, .mdbody pre .hljs-built_in{color:var(--accent)}
+.ProseMirror pre .hljs-attr, .mdbody pre .hljs-attr, .ProseMirror pre .hljs-attribute, .mdbody pre .hljs-attribute, .ProseMirror pre .hljs-variable, .mdbody pre .hljs-variable{color:var(--text)}
+
+/* Tables — no border/collapse rules existed at all, so cell edges were invisible.
+   table-layout:fixed (owner QA 6, item 6 — "비율이 내장 텍스트길이에 따라 바뀌는데"): Table.configure
+   always renders a <colgroup>/<col> per column (extension-table's TableView, regardless of the
+   `resizable:false` we run with — see its updateColumns/getColStyleDeclaration), but with no
+   colwidth attrs ever set (no resize UI), every <col> gets only a `min-width`, no `width`. Under
+   the default table-layout:auto that leaves column width entirely up to CONTENT — a cell with
+   more text visibly claimed more of the row. table-layout:fixed makes the browser ignore cell
+   content for sizing and split the table's own width (100%, already set) equally across columns
+   that have no explicit width, which is exactly this case. Not a persisted attribute — no
+   colwidth is written to body_md either way (BriseImage-style width tracking doesn't apply to
+   table cells at all), so markdown round-trip is unaffected. overflow-wrap on th/td is required
+   alongside it: fixed layout no longer lets a cell grow to fit its content, so long unbroken text
+   must wrap within the now-fixed column instead of forcing the table wider (`.tableWrapper`
+   below still exists as the "wide table as a whole" escape hatch — this instead keeps ONE
+   overlong cell from single-handedly blowing out its column). */
+.ProseMirror table, .mdbody table{border-collapse:collapse;width:100%;table-layout:fixed;margin:.6em 0}
+.ProseMirror th, .mdbody th, .ProseMirror td, .mdbody td{border:1px solid var(--divider);padding:.35em .6em;text-align:left;overflow-wrap:break-word}
+.ProseMirror th, .mdbody th{background:var(--line);font-weight:600}
+/* 셀 안의 <p> 는 문단 여백(.5em 위·아래)을 그대로 들고 온다 — padding .35em 과 겹쳐 세로만
+   0.85em 이 되어 가로(.6em)보다 확연히 두꺼웠다. 여백은 셀의 padding 한 곳에서만 준다:
+   .35em + 줄높이 반여백(≈.25em) ≈ .6em 으로 가로와 광학적으로 같아진다. */
+.ProseMirror th>p, .mdbody th>p, .ProseMirror td>p, .mdbody td>p{margin:0}
+.ProseMirror .selectedCell{position:relative}
+.ProseMirror .selectedCell::after{content:"";position:absolute;inset:0;z-index:2;pointer-events:none;background:color-mix(in srgb,var(--accent) 20%,transparent);box-shadow:inset 0 0 0 2px var(--accent)}
+@media (forced-colors:active){.ProseMirror .selectedCell::after{background:transparent;box-shadow:inset 0 0 0 2px Highlight}}
+/* Table v1 UI: Table.configure({ renderWrapper: true }) (EditorPanel.tsx) wraps every table in
+   a `.tableWrapper` div (extension-provided class name, not ours to rename) — scroll a wide
+   table horizontally instead of stretching/blowing out the (now narrower, comfortable-mode)
+   editor column. No merge/split, no resize — table.width:100% above still governs cell layout. */
+.tableWrapper{overflow-x:auto}
+/* 표 열 너비 드래그(오너 2026-09-21) — extension-table columnResizing 플러그인
+   (EditorPanel.tsx 에서만 resizable:true). 핸들 DOM 은 플러그인이 열 경계 호버·드래그 중에만
+   넣는다(항상 떠 있지 않음) — 그래서 별도 :hover 셀렉터 없이 존재 자체가 곧 "호버 중"이다.
+   히트존은 handleWidth(기본 5px, JS 쪽)로 넓게 두고 시각적 두께만 2px 로 얇게 — 두꺼우면
+   표 안쪽 셀 구분선처럼 보인다. resize-cursor 는 플러그인이 드래그 활성 상태에서
+   .ProseMirror 루트에 붙이는 클래스. */
+/* 핸들은 셀 안 absolute — 셀이 positioned 가 아니면 에디터 컨테이너 기준으로 날아간다(prosemirror-tables 기본 CSS 와 같은 전제). */
+.ProseMirror td, .ProseMirror th{position:relative}
+.ProseMirror .column-resize-handle{position:absolute;right:-1px;top:0;bottom:-2px;width:2px;background:var(--accent);pointer-events:none;z-index:var(--z-table-handle)}
+.ProseMirror.resize-cursor{cursor:col-resize}
+
+/* Details/summary — the editor's live node view (@tiptap/extension-details) renders
+   <div data-type="details"><button>(empty, aria-label only)</button><div>{summary}{content}</div></div>
+   and toggles an "is-open" class on the outer div; the button had no visual glyph at all. The
+   read-only .mdbody preview instead gets the *serialized* form — real <details><summary> tags
+   (see mdSerialize.ts passthrough) — so the browser already draws its own native disclosure
+   marker there; only the content indent needs touching for that side. */
+.ProseMirror div[data-type="details"]{display:flex;align-items:flex-start;gap:.3em;margin:.5em 0}
+.ProseMirror div[data-type="details"]>button{all:unset;cursor:pointer;color:var(--muted);padding-top:.2em}
+.ProseMirror div[data-type="details"]>button::before{content:"▸";display:inline-block;transition:transform var(--dur-fast) ease}
+.ProseMirror div[data-type="details"].is-open>button::before{transform:rotate(90deg)}
+.mdbody details{margin:.5em 0}
+.mdbody details>summary{cursor:pointer;font-weight:600}
+.ProseMirror div[data-type="detailsContent"], .mdbody div[data-type="detailsContent"]{margin-top:.3em;padding-left:.7em;border-left:2px solid var(--divider)}
+
+/* Preset hover-preview ghost (EditorPanel.tsx's ghost-preview block) — shares `.mdbody`/
+   `.ProseMirror` so geometry never drifts from the real editor; these two rules are the only
+   ghost-specific treatment layered on top. Selector specificity (2 classes + universal beats
+   1 class + 2 type-selectors, e.g. `.mdbody pre code`) wins the color override without
+   `!important` — every descendant of the ghost, not just text nodes that don't already set a
+   color of their own (blockquote/code do). */
+.mdbody.ghost-preview, .mdbody.ghost-preview *{color:var(--faint)}
+.ghost-preview{
+  -webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 48px),transparent 100%);
+  mask-image:linear-gradient(to bottom,#000 calc(100% - 48px),transparent 100%);
+  transition:opacity var(--dur-fast) ease;
+}
+@media (prefers-reduced-motion: reduce){.ghost-preview{transition:none}}
+/* 관계도 배치 미리보기: 살아있는 캔버스 위에 뜨는 동안 기존 그림을 완전히 가린다(EditorGhostOverlay). */
+.ghost-preview[data-over-content="true"]{background:var(--surface);-webkit-mask-image:none;mask-image:none}
+
+/* Suppresses Tiptap's own empty-body placeholder (editor.body_placeholder; the is-editor-empty rule above)
+   while the preset ghost is visible, so the two hints never overlap. */
+[data-preset-preview="true"] .ProseMirror p.is-editor-empty:first-child::before{content:none}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   타이포 감사(Task 1): "편집 가능한 내용은 세리프, 그 외(크롬)는 산세리프" 하나의 규칙.
+   .ProseMirror/.mdbody(에디터 본문)는 이미 --font-editor — 위 대로 올바르다. 아래 두 곳은
+   다른 에이전트가 소유한 파일(EditorPanel.tsx, PromptDialog.tsx) 안에 있어 그 파일을 고칠 수
+   없지만, 이미 렌더된 마크업에 이 파일(tokens.css, 이번 판 소유)의 셀렉터로 도달할 수 있다.
+   두 인풋 모두 인라인 style 로 font-family(또는 font 단축)를 이미 설정해두어(font:inherit 포함)
+   !important 없이는 이기지 못한다. */
+/* 섹션 탭 이름 변경 인풋 — EditorPanel.tsx 의 data-testid="section-tabs" 컨테이너 안,
+   이름변경 중에만 나타나는 유일한 <input> (평소 탭 라벨은 <div>라 크롬으로 남아 sans 유지). */
+[data-testid="section-tabs"] input{font-family:var(--font-editor) !important}
+/* SectionTabBar.tsx 의 "+" 섹션 추가 버튼 — 하이라이트(fh-highlight)가 배경을 맡으므로 이 규칙은
+   아이콘 색만 다룬다. 잠금 상태는 disabled 라 :hover 가 자연히 걸리지 않는다. */
+.section-add-btn{color:var(--muted);transition:color var(--dur-fast)}
+.section-add-btn:hover:not(:disabled){color:var(--text)}
+/* 소스/메모 원문 붙여넣기 textarea — PromptDialog.tsx, 앱 전체에서 <textarea>는 이것 하나뿐이라
+   .field 로 스코프해도 다른 입력과 충돌하지 않는다. 지금까지 하드코딩된 모노스페이스였다:
+   메모/소스도 "편집 가능한 내용"이므로 세리프로 통일(하드코딩된 family → 토큰 치환). */
+textarea.field{font-family:var(--font-editor) !important}
+
+/* 1차 CTA(.addnote="새 노트") — 플랫 스타일. 이전의 "솟아오른 유리" 버전(그라디언트 +
+   다층 box-shadow + 시머 ::after + hover 부양)은 테마 커스터마이즈 실험의 잔재였고, owner 가
+   그림자/입체를 걷어내고 "테마 강조색 플랫" 으로 바꾸기를 요청했다. 배경은 단색
+   --btn-primary-bg(테마별 CTA 톤), 그림자 없음. 인라인 style(background:var(--accent))을 이기기
+   위해 background/color 는 !important 유지. hover 는 명도만 살짝 올린다(부양/그림자 없음). */
+.addnote{
+  background:var(--btn-primary-bg) !important;
+  color:var(--btn-primary-fg) !important;
+  box-shadow:none;
+  transition:background var(--dur-med) ease;
+}
+.addnote:hover{background:color-mix(in srgb,var(--btn-primary-bg) 88%,#fff) !important}
+.addnote:active{background:color-mix(in srgb,var(--btn-primary-bg) 92%,#000) !important}
+.addnote svg{transition:transform var(--dur-slow) ease}
+.addnote:hover svg{transform:rotate(90deg)}
+
+/* 좌하단 AI 버튼 아이콘의 강조는 icons.tsx IconAi 가 스스로 붙이는 `icon-ai-anim`(ICON-ANIMATION
+   섹션, 발광 효과)이 담당한다 — 2026-09-02: 전용 흰색 점멸(.ai-btn-blink)을 걷어내고 다른 모든
+   AI 아이콘과 같은 발광으로 통일. */
+
+/* W24: 세로 리사이즈 그립 공용 어포던스 — 사이드바(leftpanel)·스플릿(App.tsx) 둘 다 이 규칙을
+   쓴다(레이아웃 밖 절대배치 히트존 + 가운데 짧은 바, hover 시 accent 발광). 구 .lgrip
+   그라디언트는 삭제. */
+.rgrip .rbar{transition:all var(--dur-med) ease;background:var(--divider);border-radius:var(--radius-sm)}
+.rgrip:hover .rbar{background:var(--accent);height:70px !important;box-shadow:0 0 12px color-mix(in srgb,var(--accent) 70%,transparent)}
+
+/* W22 ⑤: 첨부 바 상단 리사이즈 그립 — rgrip과 같은 문법(가운데 어포던스만 강조), ns-resize라
+   hover 시 세로 대신 가로로 넓어진다. */
+.attach-rgrip .rbar{transition:all var(--dur-med) ease;background:var(--divider);border-radius:var(--radius-sm)}
+.attach-rgrip:hover .rbar{background:var(--accent);width:70px !important;box-shadow:0 0 12px color-mix(in srgb,var(--accent) 70%,transparent)}
+@media (prefers-reduced-motion: reduce){
+  .attach-rgrip .rbar{transition:none}
+}
+
+@keyframes spin { 100% { transform: rotate(360deg); } }
+/* L1: Wave 3B 받아쓰기 녹음 표시(DictateControl, EditorPanel.tsx) — 이전엔 컴포넌트 내부 인라인 <style> */
+@keyframes dictpulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(1.3); } }
+
+/* Map pulsing neighborhood circle around active pin */
+@keyframes map-pulse {
+  0% { transform: scale(0.95); opacity: 0.45; }
+  50% { transform: scale(1.05); opacity: 0.15; }
+  100% { transform: scale(0.95); opacity: 0.45; }
+}
+.map-pulse-circle {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: map-pulse 3s ease-in-out infinite;
+}
+@keyframes pending-sweep {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(120%); }
+  100% { transform: translateX(300%); }
+}
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+.skeleton-bar {
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+  background: var(--line);
+  border-radius: var(--radius-sm);
+}
+@media (prefers-reduced-motion: reduce) {
+  .map-pulse-circle {
+    animation: none;
+    opacity: 0.3;
+  }
+  .skeleton-bar {
+    animation: none;
+    opacity: 0.5;
+  }
+  .pending-bar {
+    animation: none;
+    opacity: 0.5;
+  }
+}
+
+/* 달력 우측 패널의 **현재 시각 눈금** (components/home/calendar/DayDetailPanel.tsx) — 오너 실기
+   2026-09-11: 1px 실선 한 줄은 눈에 안 띈다. 굵기와 색은 요소가 인라인으로 갖고(accent 2px),
+   여기서는 맥동하는 발광만 준다 — 새 색 토큰 없이 --accent 한 색에서 나온다.
+   .btn-primary 의 btn-primary-breathe 와 같은 형태이고, 이 파일의 관례대로 reduced-motion 에서는
+   멈추되 **가장 밝은 프레임을 고정**해 눈에 띄는 정도는 잃지 않는다(.map-pulse-circle 과 같은 처방). */
+@keyframes cal-now-breathe {
+  0%, 100% { box-shadow: 0 0 3px color-mix(in srgb, var(--accent) 40%, transparent); }
+  50% { box-shadow: 0 0 9px color-mix(in srgb, var(--accent) 85%, transparent); }
+}
+.cal-now-line {
+  animation: cal-now-breathe 2.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cal-now-line {
+    animation: none;
+    box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 70%, transparent);
+  }
+}
+
+/* 시간축의 **시각 라벨** — 24시간 눈금(00~23)과 현재 시각 라벨이 같은 이 클래스를 쓴다
+   (DayDetailPanel.tsx, 달력 W11 ②). 정렬·자간만 공유하는 자리 — 배경은 없다.
+   정정(그릴 2026-09-16, 오너 실기): 눈금 배경(아래 ⓑ)을 없앴다 — "시간 숫자에 배경색이 있는데
+   없애도 된다"는 지시. 남은 것은 정렬 토큰(line-height·자간·좌우 여백)뿐이라 두 라벨이 여전히
+   같은 자리에 앉는다. 현재 시각 라벨만은 대비 문제(아래 옛 ⓐ)가 실재해 `.cal-tick-label--solid`
+   로 배경을 되살린다 — cal-time-now-label 사용처, 이 파일 바로 아래.
+   옛 처방(오너 실기 2026-09-11, 지금은 --solid 로 옮겨간 것): ⓐ "폰트가 흰색인데 뒤가 밝은색
+   이라 안 보인다" — 현재 시각 라벨이 accent 로 칠한 알약 위에 흰 글자(--on-solid)였다.
+   accent(#9cc5a4 / 라이트 #7da98c)는 밝은 세이지라 흰 글자와의 대비가 2:1 남짓이고, 바로 아래
+   .cal-now-line 의 발광이 같은 색으로 번져 글자가 아예 묻혔다. ⓑ "`--<시간>--` 처럼 라인과
+   자연스럽게 이어지는 느낌" — 라벨이 자기 배경으로 뒤의 가로선을 끊는다. */
+.cal-tick-label {
+  line-height: var(--lh-tight);
+  font-variant-numeric: tabular-nums;
+  padding: 0 var(--space-1);
+}
+
+/* 현재 시각 라벨(cal-time-now-label) 전용 — .cal-now-line 의 맥동 발광 위에서 대비를 지키려면
+   불투명 배경이 필요하다(위 옛 ⓐ). `.app` 시트와 같은 4겹(--bg)을 같은 repeat/size 로 다시 깔아
+   톤이 정확히 이어진다. acrylic 프리셋에서는 --bg 자체가 반투명 틴트라 선이 라벨 뒤로 아주 옅게
+   남는다 — 가리는 선이 --line(13% alpha) 한 겹이라 눈에 띄지 않는다.
+   ponytail: 불투명을 보장하려면 --surface-base 를 깔아야 하는데, 그러면 acrylic 에서 라벨만
+   불투명한 사각형으로 떠오른다. 시트와 같은 값을 쓰는 쪽을 골랐다. */
+.cal-tick-label--solid {
+  background: var(--bg);
+  background-repeat: var(--bg-repeat);
+  background-size: var(--bg-size);
+}
+
+/* Home header weather vignette (components/home/WeatherVignette.tsx) — used to have its own
+   wx-pulse/wx-drift/wx-drift-fog/wx-bolt CSS-animated classes on the (then-lucide) icon, plus a
+   separate wx-fall/wx-snowfall falling-streak/dot layer beside it to fake precipitation. Removed:
+   the Meteocons SVG icons (assets/weather/icons.tsx) that replaced the lucide ones carry that
+   same motion baked into their own SMIL <animate>/<animateTransform> (sun rays turning, clouds
+   drifting, rain/snow actually falling) — including under the header's larger vignette size and
+   the calendar day-cell's smaller one — so this CSS layer became a second, redundant motion
+   source and was deleted along with the component code that referenced it. Reduced motion is now
+   handled inside those icon components (static SVG variant), not by a media-query fallback here. */
+
+/* Header clock / weather-temp tick (HomeHeader.tsx, WeatherSlot.tsx) — short fade+slide on
+   remount (minute change or temp update). transform/opacity only. */
+@keyframes home-clock-tick {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.home-clock-tick {
+  animation: home-clock-tick 280ms ease-out both;
+}
+
+/* 하늘 그라데이션 박스 (src/lib/skyGradient.ts) — 배경은 분 단위 시계 틱에서만 바뀌므로 전이를
+   길게 준다. 색상 전이도 같이 거는 이유: 팔레트 휘도가 임계를 넘는 순간 on-gradient 톤(밝은 글씨
+   ↔ 어두운 글씨)이 한 번 뒤집히는데, 그 전환이 튀지 않게 하려는 것.
+   W7-c: W6-c 의 `.sky-header`(헤더 밴드 전체를 칠하던 클래스)에서 개명 — 이제 그라데이션은
+   날씨칩만 감싸는 라운드박스이고(WeatherSlot.tsx), 헤더 나머지는 일반 테마색이다. */
+.sky-box {
+  /* type-scale-exempt: gradual sky color blend */
+  transition: background 2s linear, color 2s linear;
+  /* W24: 마운트 페이드 — 날씨 fetch 가 끝나야 박스가 나타나는데(WeatherSlot 조기 반환) 그
+     등장이 대시보드 로드 직후 "툭 튀는" 인상을 줬다(오너). 레이아웃은 안 움직인다(헤더 그리드
+     양옆 1fr) — 등장만 부드럽게. */
+  animation: fade var(--dur-slow) ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-clock-tick {
+    animation: none;
+  }
+  .sky-box { transition: none; animation: none; }
+}
+
+/* .diagram-stage = 그림이 들어가는 스크롤 상자(DiagramSection). 그 상자는 섹션에 남은 높이를
+   전부 먹고(flex:1 + min-height:0), 안의 내용은 auto 마진으로 가운데에 놓인다. justify-content:
+   center 가 아니라 마진인 이유: 플렉스 auto 마진은 "남은 공간이 양수일 때만" 먹는다 — 그림이
+   상자보다 커지는 순간 0으로 접혀서, 가운데 정렬 때문에 위쪽이 스크롤로 닿지 않게 되는 고전적인
+   버그가 생기지 않는다. 그림/빈 상태/미지원 종류가 전부 같은 상자의 자식이라 섹션을 옮겨다녀도
+   패널 높이가 변하지 않는다. textarea(소스 편집)만 예외 — 글은 위에서 시작해야 한다. */
+/* flex:none 은 "높이를 채운다"는 위 설명과 모순처럼 보이지만 지우면 안 된다 — 채우는 건 상자
+   (.diagram-stage)이고, 자식은 여전히 자기 내용만큼만 커야 한다. 플렉스 자식의 기본값은
+   `0 1 auto`(=줄어듦)이고 .diagram-canvas 는 명시적 min-height:120px 이 있어 자동 최소 크기
+   보호도 못 받는다 → 상자보다 큰 그림이 상자 높이로 눌리고, 소스 편집 textarea 는 세로 resize
+   핸들이 먹통이 된다. */
+.diagram-stage > *{flex:none}
+.diagram-stage > :not(textarea){margin-block:auto}
+
+
+/* 그림 위 직접 조작(DiagramCanvas.tsx) — 드래그로 연결/이동, 호버 핸들, 인라인 이름칸, 우클릭
+   메뉴. 위치는 여전히 mermaid 것이다: 여기 있는 건 전부 그림 "위"에 얹는 우리 크롬이고, 노드
+   좌표를 흉내내는 것은 하나도 없다. 캔버스가 좌표계의 기준이라 position:relative 는 필수. */
+/* cursor:grab — 빈 공간 드래그는 이제 팬(캔버스 이동)이다. 노드에서 시작한 드래그만 연결을 쓴다
+   (DiagramCanvas 상단 "pan vs connect" 주석). 움직이지 않은 클릭은 여전히 소스 편집으로 들어간다. */
+.diagram-canvas{position:relative;cursor:grab;min-height:120px;outline:none}
+.diagram-canvas[data-panning]{cursor:grabbing}
+.diagram-canvas:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:var(--radius-sm)}
+
+/* ── 다이어그램 동사 팝오버 / 팝업 메뉴 (2026-08-25 W6 정리) ─────────────────────────
+   VerbButtons / VerbMenu 가 사용하는 팝업 스타일. */
+.diagram-bubble-danger{color:var(--danger)}
+.diagram-bubble-menu{position:fixed;z-index:var(--z-dropdown);min-width:132px;max-height:240px;overflow-y:auto;padding:var(--space-1);box-shadow:var(--shadow-lg)}
+.diagram-bubble-menu .menu-row{
+  min-height:0;
+  padding:var(--space-2) var(--space-4);
+  font-size:var(--text-sm);
+  /* type-scale-exempt: 다이어그램 팝오버 목록 항목 간 2px 안전 간격 */
+  margin-top:1px;
+  /* type-scale-exempt: 다이어그램 팝오버 목록 항목 간 2px 안전 간격 */
+  margin-bottom:1px;
+}
+/* 도형/선 종류 픽커(우클릭 메뉴)는 W7-b 로 NodePicker 와 같은 인앱 리스트박스(`Select` 컴포넌트)
+   로 이전했다 — 예전엔 여기 남은 두 개가 "네이티브 select 중 OS 팝업이 흰 배경으로 튀는" 마지막
+   워크어라운드 대상이었지만, 이제 열린 목록은 `.overlay` 포털이라 그 문제 자체가 없다. */
+
+/* 빈 관계도(DiagramSection의 세 번째 상태) — 오류 문구가 아니라 초대장이다. 배경 없음(단일 시트
+   계약), 가운데 정렬, 조용한 먹, 그리고 "+ 관계도"와 똑같은 템플릿 갤러리. */
+.diagram-empty{display:flex;flex-direction:column;align-items:center;gap:var(--space-2);text-align:center;padding:var(--space-4) 0;color:var(--muted)}
+.diagram-empty>div{width:100%;max-width:460px;text-align:left}
+
+/* ── React Flow 캔버스 (FlowCanvas.tsx) ────────────────────────────────────────────────────────
+   구조화된 flowchart 는 mermaid SVG 대신 React Flow 로 그린다(박스를 끌어 옮길 수 있고, 그 좌표가
+   `%% brise:pos` 주석으로 소스에 남는다). 저장 형식은 여전히 mermaid 텍스트다.
+   색은 전부 CSS 변수 경유 — 라이브러리 기본 CSS 의 --xy-* 는 여기서만 덮는다. mermaid 경로처럼
+   테마 hex 를 소스에 굽지 않으므로 라이트/다크 전환에 리렌더도 재저장도 필요 없다. */
+.diagram-stage > .diagram-flow{flex:1;min-height:340px;margin-block:0;align-self:stretch;width:100%}
+.diagram-flow{position:relative;display:flex;flex-direction:column;min-width:0}
+.diagram-flow .react-flow{flex:1;min-height:0}
+.diagram-flow-error{color:var(--danger);font-size:var(--text-sm);margin-bottom:var(--space-3);white-space:pre-wrap}
+/* 인라인 생성 칸 — create / createGroup 전용 (아직 대상 요소가 없어 좌표 기반으로 띄운다).
+   이름·간선·메타·그룹 이름 수정은 각 요소 내부에서 제자리(in-place)로 렌더된다. */
+.diagram-flow-inline{
+  position:absolute;z-index:var(--z-canvas-float);
+  /* type-scale-exempt: 인라인 생성칸 기하 — 캔버스 좌표 위에 띄우는 고정 치수 */
+  width:150px;padding:3px 6px;font-size:var(--text-sm);
+  background:var(--surface);box-shadow:var(--shadow-lg);
+}
+.diagram-flow .react-flow,
+.diagram-flow .react-flow__background{
+  background-color:transparent;
+}
+.diagram-flow .react-flow{
+  --xy-background-color:transparent;
+  --xy-background-pattern-color:var(--line);
+  --xy-edge-stroke:color-mix(in srgb, var(--text) 32%, transparent);
+  --xy-edge-stroke-selected:var(--accent);
+  --xy-edge-stroke-width:1.5;
+  --xy-connectionline-stroke:var(--accent);
+  --xy-edge-label-background-color:color-mix(in srgb, var(--surface) 86%, transparent);
+  --xy-edge-label-color:var(--muted);
+  --xy-handle-background-color:var(--accent);
+  --xy-handle-border-color:var(--surface);
+  --xy-controls-button-background-color:var(--surface);
+  --xy-controls-button-background-color-hover:var(--hover);
+  --xy-controls-button-color:var(--text);
+  --xy-controls-button-color-hover:var(--text);
+  --xy-controls-button-border-color:var(--divider);
+  --xy-controls-box-shadow:var(--shadow-lg);
+  --xy-minimap-background-color:var(--surface);
+  --xy-minimap-mask-background-color:color-mix(in srgb,var(--app-canvas) 62%,transparent);
+  --xy-minimap-node-background-color:var(--divider);
+  font-family:var(--font-body);
+}
+/* 엣지 라벨 — SVG 텍스트가 아니라 EdgeLabelRenderer 가 밖으로 빼주는 진짜 DOM 상자다(BriseFlowEdge).
+   도트 배경 위에서 읽히도록 칩(배경+테두리+라운드)을 깐다. 색은 전부 변수 경유. */
+.diagram-flow-edge-label, .diagram-flow-edge-label-input{pointer-events:auto}
+.diagram-flow-edge-label{
+  position:absolute;
+  padding:1px 5px;border:1px solid color-mix(in srgb, var(--text) 20%, transparent);border-radius:var(--radius-sm);
+  background:color-mix(in srgb, var(--surface) 86%, transparent);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  color:var(--muted);
+  font-size:var(--text-xs);font-family:var(--font-body);line-height:var(--lh-ui);
+  max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.diagram-flow-edge-label-input{
+  border-color:var(--accent);color:var(--text);outline:none;
+  text-align:center;box-sizing:border-box;box-shadow:0 0 0 1px var(--accent);
+}
+.diagram-flow-edge-label[data-empty="true"]:not(:focus-within){min-width:16px;min-height:16px;opacity:0}
+button[data-testid="diagram-add-edge-toggle"][data-active="true"],
+button[data-testid="diagram-lock-toggle"][data-active="true"]{
+  background:var(--sel);color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);
+}
+/* 핸들은 연결을 시작하는 손잡이일 뿐 — 선은 이제 노드 테두리에서 뜬다. 평소엔 숨기고 hover 때만. */
+.diagram-flow .react-flow__handle{
+  width:8px;height:8px;
+  background:var(--accent);border:1.5px solid var(--surface);
+  border-radius:50%;
+  opacity:0;transition:opacity var(--dur-fast),transform var(--dur-fast);
+}
+.diagram-flow .react-flow__handle::before{
+  content:'';
+  position:absolute;
+  top:-14px;left:-14px;right:-14px;bottom:-14px;
+  border-radius:50%;
+}
+.diagram-flow .react-flow__node:hover .react-flow__handle,
+.diagram-flow .react-flow__handle:hover,
+.diagram-flow .react-flow__handle.connectingfrom,
+.diagram-flow .react-flow__handle.connectingto{opacity:.85}
+.diagram-flow .react-flow__handle:hover,
+.diagram-flow .react-flow__handle.connectingto{
+  opacity:1;
+  transform-origin:center center;
+  box-shadow:0 0 0 4px color-mix(in srgb, var(--accent) 35%, transparent);
+  z-index:var(--z-canvas-top);
+}
+/* 방향별 정확한 기본 transform 유지하면서 확대 (우측/하단 안으로 이동하는 버그 방지) */
+.diagram-flow .react-flow__handle-top:hover,
+.diagram-flow .react-flow__handle-top.connectingto,
+.diagram-flow .react-flow__handle-left:hover,
+.diagram-flow .react-flow__handle-left.connectingto{
+  transform:translate(-50%, -50%) scale(1.35) !important;
+}
+.diagram-flow .react-flow__handle-bottom:hover,
+.diagram-flow .react-flow__handle-bottom.connectingto{
+  transform:translate(-50%, 50%) scale(1.35) !important;
+}
+.diagram-flow .react-flow__handle-right:hover,
+.diagram-flow .react-flow__handle-right.connectingto{
+  transform:translate(50%, -50%) scale(1.35) !important;
+}
+.diagram-flow-defs{position:absolute;width:0;height:0;overflow:hidden}
+#brise-flow-arrow polyline{fill:none;stroke:color-mix(in srgb, var(--text) 32%, transparent);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+#brise-flow-arrow-accent polyline{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+#brise-flow-arrow-warn polyline{fill:none;stroke:var(--danger-soft);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+#brise-flow-arrow-done polyline{fill:none;stroke:var(--ok);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+#brise-flow-arrow-muted polyline{fill:none;stroke:var(--muted);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+
+.diagram-flow-edge[data-tone="accent"] path.react-flow__edge-path{stroke:var(--accent)}
+.diagram-flow-edge[data-tone="warn"] path.react-flow__edge-path{stroke:var(--danger-soft)}
+.diagram-flow-edge[data-tone="done"] path.react-flow__edge-path{stroke:var(--ok)}
+.diagram-flow-edge[data-tone="muted"] path.react-flow__edge-path{stroke:var(--muted)}
+/* 노드 — 크기는 flowLayout.ts 의 nodeSize() 가 라벨 길이로 정하고(NODE_W 최소, NODE_MAX_W 최대,
+   넘치면 2줄), React Flow 가 그 값을 래퍼에 인라인으로 박는다. 여기서 100% 로 받는다 — 픽셀을
+   두 곳에 적으면 dagre 가 잡은 간격과 실제 상자가 어긋난다.
+   도형 5종은 테두리 반경/클립으로 구분한다. mermaid 의 마름모를 그대로 흉내내면 라벨이 밖으로
+   삐져나오므로, 좌우가 뾰족한 육각형으로 대체한다 — "판단" 신호는 유지하고 글자는 지킨다. */
+.diagram-flow-node{
+  position:relative;overflow:visible;
+  box-sizing:border-box;width:100%;height:100%;min-width:144px;min-height:36px;
+  /* type-scale-exempt: 캔버스 노드 내부 기하 — 줌 배율과 함께 그려지는 치수라 --space 사다리(최소 4px)로 올리면 노드 레이아웃이 달라진다 */
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  padding:var(--space-1) var(--space-3);
+  --node-border:color-mix(in srgb, var(--text) 22%, transparent);
+  border:1px solid var(--node-border);
+  border-radius:var(--radius-md);
+  background:color-mix(in srgb, var(--surface) 82%, transparent);
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+  color:var(--text);font-size:var(--text-xs);text-align:center;
+  box-shadow:var(--shadow-sm);
+  transition:transform var(--dur-fast),box-shadow var(--dur-fast),border-color var(--dur-fast),background-color var(--dur-fast);
+}
+.diagram-flow-node:hover{
+  transform:translateY(-1px);
+  box-shadow:var(--shadow-md);
+  --node-border:color-mix(in srgb,var(--accent) 45%,var(--divider));
+  border-color:var(--node-border);
+}
+.diagram-flow-node[data-has-header]{
+  min-height:44px;
+}
+
+/* 상단 헤더 영역 */
+.diagram-flow-node-header{
+  position:absolute;top:3px;left:6px;right:6px;
+  display:flex;align-items:center;justify-content:space-between;gap:6px;
+  pointer-events:none;z-index:var(--z-canvas-badge);
+}
+.diagram-flow-node-header-left, .diagram-flow-node-header-right{
+  display:flex;align-items:center;gap:4px;pointer-events:auto;
+}
+
+/* Acrylic: same inline max() mix as .overlay */
+/* .diagram-canvas-float(legend · Reach 배너 · Finder)는 2026-09-09 까지 이 목록에 없어서
+   acrylic 에서 시트 투명도를 낮춰도 이 셋만 평평한 90% 로 남아 있었다. */
+:root[data-surface='acrylic'] .diagram-flow-node,
+:root[data-surface='acrylic'] .diagram-flow-inline,
+:root[data-surface='acrylic'] .diagram-flow-edge-label,
+:root[data-surface='acrylic'] .diagram-canvas-float,
+:root[data-surface='acrylic'] .diagram-flow .react-flow__controls-button,
+:root[data-surface='acrylic'] .diagram-flow .react-flow__minimap{
+  background:color-mix(in srgb, var(--surface-base) calc(max(var(--sheet-alpha), 0.92) * 100%), transparent);
+}
+.diagram-flow-node[data-shape="round"]{border-radius:var(--radius-md)}
+.diagram-flow-node[data-shape="stadium"]{border-radius:var(--radius-pill)}
+.diagram-flow-node[data-shape="circle"]{border-radius:50%}
+/* 육각형(diamond): 채움은 clip-path, 테두리는 FlowNode 가 뒤에 까는 SVG polygon(.diagram-flow-node-shape).
+   예전의 filter:drop-shadow ×4 는 CSS 순서상 clip-path 보다 먼저 적용돼 통째로 잘려 나갔고(테두리 0px),
+   backdrop-filter 는 clip 을 무시한 사각형 halo 를 남겼다(2026-09-20 실측). polygon 은 클립 경계 위에
+   놓이므로 stroke 의 바깥 절반이 잘린다 — 보이는 두께 = stroke-width / 2. */
+.diagram-flow-node[data-shape="diamond"]{
+  border-radius:0;
+  border:0 !important; /* 테두리는 polygon — border 를 남기면 padding box 가 1px 안으로 들어가 polygon 과 어긋난다 */
+  outline:none !important;
+  box-shadow:none !important;
+  backdrop-filter:none;-webkit-backdrop-filter:none;
+  clip-path:polygon(14px 0,calc(100% - 14px) 0,100% 50%,calc(100% - 14px) 100%,14px 100%,0 50%);
+}
+.diagram-flow-node-shape{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.diagram-flow-node-shape polygon{fill:none;stroke:var(--node-border);stroke-width:2;transition:stroke var(--dur-fast),stroke-width var(--dur-fast)}
+.diagram-flow-node[data-shape="diamond"]:hover .diagram-flow-node-shape polygon{stroke-width:3}
+.diagram-flow-node[data-shape="diamond"][data-flag="true"] .diagram-flow-node-shape polygon{stroke:var(--accent);stroke-width:3}
+.diagram-flow-node[data-shape="diamond"][data-selected] .diagram-flow-node-shape polygon{stroke:var(--accent);stroke-width:4}
+.diagram-flow-node[data-shape="diamond"][data-tone="muted"] .diagram-flow-node-shape polygon,
+.diagram-flow-node[data-shape="diamond"][data-state="2"] .diagram-flow-node-shape polygon,
+.diagram-flow-node[data-shape="diamond"][data-state="5"] .diagram-flow-node-shape polygon{stroke-dasharray:5 3}
+/* 긴 이름 라벨 & 인라인 인풋 */
+.diagram-flow-node-label, .diagram-flow-node-label-input{
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;
+  overflow:hidden;overflow-wrap:anywhere;line-height:var(--lh-tight);
+  font-weight:600;letter-spacing:-0.01em;
+}
+.diagram-flow-node-label-input{
+  border:0;background:transparent;outline:none;width:100%;
+  font:inherit;color:inherit;text-align:inherit;padding:0;
+}
+/* 중앙 바디 텍스트 위계 */
+.diagram-flow-node-text{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  width:100%;min-width:0;z-index:var(--z-canvas-input);padding:0 var(--space-2);
+}
+.diagram-flow-node[data-has-header] .diagram-flow-node-text{
+  padding-top:10px;
+}
+.diagram-flow-node[data-desc] .diagram-flow-node-text{align-items:flex-start;text-align:left}
+.diagram-flow-node[data-desc]{justify-content:center}
+/* type-scale-exempt: 캔버스 노드 내부 기하 — 줌 배율과 함께 그려지는 치수라 --space 사다리(최소 4px)로 올리면 노드 레이아웃이 달라진다 */
+/* type-scale-exempt: 노드 안 이모지/문자 아이콘 — 줌 배율과 함께 그려지는 캔버스 기하라
+   --text 사다리(본문 13px)에 올리면 노드 레이아웃이 달라진다. 이웃 규칙들과 같은 이유. */
+.diagram-flow-node-icon{flex:none;font-size:14px;line-height:var(--lh-tight)}
+.diagram-flow-node-desc{
+  font-size:var(--text-xs);color:var(--muted);font-weight:400;line-height:var(--lh-tight);
+  /* type-scale-exempt: 캔버스 노드 내부 기하 — 줌 배율과 함께 그려지는 치수라 --space 사다리(최소 4px)로 올리면 노드 레이아웃이 달라진다 */
+  max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;
+}
+/* 구획(rows): 라벨 아래 구획선, 한 줄 = 한 구획. 줄 높이 16px = flowLayout NODE_LINE_H (nodeSize 가 이 값으로 높이를 더한다). */
+.diagram-flow-node-rows{
+  /* type-scale-exempt: 캔버스 노드 내부 기하 — 이웃 desc 규칙과 같은 2px 간격, 줌 배율과 함께 그려진다 */
+  width:100%;margin-top:2px;border-top:1px solid var(--node-border);
+  /* type-scale-exempt: 캔버스 노드 내부 기하 — 16px = NODE_LINE_H, 상자 높이 계산과 같아야 한다 */
+  font-size:var(--text-xs);color:var(--muted);font-weight:400;line-height:16px;text-align:left;
+}
+.diagram-flow-node-row{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* quadrant 축 십자 + axes 라벨 — 뷰포트 좌표계(ViewportPortal), 포인터 통과. 선·라벨은 그룹 상자 사이 틈에만
+   놓이므로(quadrantAxes) 노드와 겹치지 않아 스태킹 순서가 필요 없다. */
+.diagram-flow-axes{
+  position:absolute;left:0;top:0;overflow:visible;pointer-events:none;
+  stroke:color-mix(in srgb, var(--text) 22%, transparent);stroke-width:1;
+  font-size:var(--text-xs);fill:var(--muted);
+}
+.diagram-flow-axes text{stroke:none}
+.diagram-flow-node-link{flex:none;color:var(--accent)}
+.diagram-flow-node-link[data-broken]{color:var(--muted);opacity:.65}
+.diagram-flow-node[data-selected]{
+  --node-border:var(--accent);
+  border-color:var(--accent);
+  outline:2px solid var(--accent);outline-offset:1px;
+  box-shadow:var(--shadow-md);
+  transform:translateY(-1px);
+}
+/* 톤(tone): 선명한 테두리 및 18% 소프트 틴트 강화 */
+.diagram-flow-node[data-tone="accent"]{
+  --node-border:var(--accent);
+  border-color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 18%,var(--surface));
+}
+.diagram-flow-node[data-tone="warn"]{
+  --node-border:var(--danger-soft);
+  border-color:var(--danger-soft);
+  background:color-mix(in srgb,var(--danger-soft) 18%,var(--surface));
+}
+.diagram-flow-node[data-tone="done"]{
+  --node-border:var(--ok);
+  border-color:var(--ok);
+  background:color-mix(in srgb,var(--ok) 18%,var(--surface));
+}
+.diagram-flow-node[data-tone="muted"]{
+  --node-border:color-mix(in srgb,var(--muted) 60%,var(--divider));
+  border-color:color-mix(in srgb,var(--muted) 60%,var(--divider));
+  color:var(--muted);
+  border-style:dashed;
+  background:color-mix(in srgb,var(--muted) 12%,var(--surface));
+}
+/* 상태 슬롯 6종: 선명한 테두리 및 18% 소프트 틴트 강화 */
+.diagram-flow-node[data-state="0"]{
+  --node-border:color-mix(in srgb,var(--danger-soft) 85%,transparent);
+  border-color:var(--node-border);
+  background:color-mix(in srgb,var(--danger-soft) 18%,var(--surface));
+}
+.diagram-flow-node[data-state="1"]{
+  --node-border:color-mix(in srgb,var(--ok) 85%,transparent);
+  border-color:var(--node-border);
+  background:color-mix(in srgb,var(--ok) 18%,var(--surface));
+}
+.diagram-flow-node[data-state="2"]{
+  --node-border:color-mix(in srgb,var(--muted) 75%,transparent);
+  border-color:var(--node-border);
+  color:var(--muted);
+  border-style:dashed;
+  background:color-mix(in srgb,var(--muted) 14%,var(--surface));
+}
+.diagram-flow-node[data-state="3"]{
+  --node-border:color-mix(in srgb,var(--info) 85%,transparent);
+  border-color:var(--node-border);
+  background:color-mix(in srgb,var(--info) 18%,var(--surface));
+}
+.diagram-flow-node[data-state="4"]{
+  --node-border:color-mix(in srgb,var(--danger) 85%,transparent);
+  border-color:var(--node-border);
+  background:color-mix(in srgb,var(--danger) 18%,var(--surface));
+}
+.diagram-flow-node[data-state="5"]{
+  --node-border:color-mix(in srgb,var(--ok) 75%,transparent);
+  border-color:var(--node-border);
+  border-style:dashed;
+  background:color-mix(in srgb,var(--ok) 16%,var(--surface));
+}
+/* 플래그(flag): 은은한 배경/보더 및 아웃라인 */
+.diagram-flow-node[data-flag="true"]{
+  outline:1.5px solid var(--accent);outline-offset:2px;
+  border-color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 8%,var(--surface));
+  box-shadow:var(--shadow-sm);
+}
+/* 배지(tag): 색·테두리·패딩은 `.badge[data-tone=accent]`(FlowNode.tsx, R8). 여기는 캔버스 안 크기·자리만 —
+   노드 안 글자라 한 단 작게(--text-2xs) 그린다. */
+.diagram-flow-node-tag{
+  display:inline-flex;align-items:center;
+  font-size:var(--text-2xs);line-height:var(--lh-tight);
+  z-index:var(--z-canvas-badge);pointer-events:none;
+}
+.diagram-flow-node:not([data-has-header]) .diagram-flow-node-tag{
+  position:absolute;top:-9px;right:-6px;
+}
+/* 관계도 범례 + 집계 하단 오버레이 바 (스포트라이트 & 통계 HUD) */
+/* 캔버스 위에 떠 있는 크롬(legend · Reach 배너 · Finder)의 **공통 표면**. 셋은 같은 캔버스
+   같은 자리에 뜨는 같은 성격인데 배경 88%/92%/--surface-raised, blur 10/8/12px, 그림자
+   sm/sm/md 로 각자 달랐다 — 나란히 뜨면 서로 다른 재질로 보였다. 재질은 여기 한 곳이 소유하고,
+   아래 규칙들은 자리·모양(radius)·상태 표시(테두리 색)만 덧댄다. */
+/* width:max-content 가 빠지면 안 된다 — absolute + left:50% 상자의 shrink-to-fit 폭은 "컨테이닝 블록 폭 − left",
+   즉 캔버스 **절반**이 상한이라 알약이 716px 캔버스에서도 두 줄로 접혀 타원이 되고 높이가 두 배가 됐다(그래서 맨 위
+   상자를 덮었다, 2026-10-18 화면 보드 12-note-diagram). 내용 폭을 그대로 쓰고 상한은 max-width(캔버스 − 양옆 여백)가
+   맡는다. 폭을 따로 정한 Finder 는 자기 규칙이 이긴다. 맞춤 보기가 비우는 위쪽 띠는 FlowCanvas.tsx LEGEND_FIT_TOP_PX. */
+.diagram-canvas-float{
+  position:absolute;top:var(--space-4);left:50%;transform:translateX(-50%);
+  width:max-content;max-width:calc(100% - 2*var(--space-4));
+  background:var(--app-sheet-base);border:1px solid var(--divider);box-shadow:var(--shadow-lg); /* = .overlay 레시피 */
+  color:var(--text);
+  z-index:var(--z-canvas-float);pointer-events:auto;
+}
+
+/* legend 는 상단 중앙 — 좌하단에 있을 때는 캔버스를 훑는 눈길이 닿지 않는 구석이었다(오너 지적).
+   자리를 Finder/Reach 배너와 공유하므로 아래 형제 규칙이 그 둘을 한 칸 내린다. */
+.diagram-flow-legend{
+  flex-wrap:wrap;justify-content:center;
+  display:inline-flex;align-items:center;gap:var(--space-2);
+  /* type-scale-exempt: 캔버스 위 알약 줄의 기하 — --space 사다리로 올리면 줄 높이가 달라져
+     아래 Reach/Finder 오프셋(34px)까지 같이 틀어진다 */
+  padding:4px 12px;
+  border-radius:var(--radius-pill);font-size:var(--text-xs);
+  user-select:none;
+}
+.diagram-legend-item{
+  display:inline-flex;align-items:center;gap:var(--space-1);
+  background:transparent;border:none;font:inherit;color:inherit;
+  padding:var(--space-1) var(--space-3);border-radius:var(--radius-pill);cursor:pointer;
+  transition:background var(--dur-fast),color var(--dur-fast),box-shadow var(--dur-fast);
+}
+.diagram-legend-item:hover{background:color-mix(in srgb,var(--sel) 60%,transparent)}
+/* 켜진 항목은 노드 버블의 켜진 색 칩과 한 규칙이다 — 아래 `.diagram-bubble-mark[data-selected]` 옆. */
+/* 상태 색 스와치 — 예전엔 본문에 박아 넣은 `■` 글자였다. UI 폰트에 따라 크기·정렬이 흔들리고
+   스크린리더가 읽어버린다. currentColor 를 칠하는 사각형이라 색은 그대로 인라인 color 로 온다. */
+.diagram-legend-marker{
+  /* type-scale-exempt: 색 스와치 치수 — 텍스트가 아니라 --text-xs 옆에 맞춘 도형이다 */
+  width:8px;height:8px;
+  flex:none;border-radius:2px;background:currentColor;
+}
+.diagram-legend-summary{display:inline-flex;align-items:center;gap:var(--space-1);color:var(--muted)}
+.diagram-legend-sep{color:var(--muted);opacity:.5;margin:0 var(--space-1)}
+.diagram-legend-clear{
+  display:inline-flex;align-items:center;gap:var(--space-1);
+  background:transparent;border:none;font:inherit;color:var(--muted);
+  padding:var(--space-1) var(--space-2);border-radius:var(--radius-pill);cursor:pointer;
+  font-size:var(--text-xs);transition:color var(--dur-fast),background var(--dur-fast);
+}
+.diagram-legend-clear:hover{color:var(--text);background:var(--hover)}
+/* Reach 배너·Finder 도 상단 중앙에 뜬다. 형제 선택자로 "legend 가 있으면 한 칸 아래" —
+   JS 로 서로의 존재를 알 필요가 없다(FlowCanvas 의 렌더 순서: legend → reach → finder).
+   34px = 알약 한 줄 높이 가정. FlowCanvas.tsx LEGEND_FIT_TOP_PX(맞춤 보기의 위쪽 띠)가 같은 가정을 쓴다 — 같이 바꾼다. */
+.diagram-flow-legend ~ .diagram-reach-banner,
+.diagram-flow-legend ~ .diagram-finder{top:calc(var(--space-4) + 34px)}
+
+/* 우측 하단 미니멀 플로팅 줌 컨트롤 및 미니맵 도킹 */
+.diagram-flow .react-flow__controls {
+  display: flex;
+  flex-direction: row;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--divider);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  background: var(--surface);
+  bottom: var(--space-4);
+  right: var(--space-4);
+  z-index: var(--z-canvas-chrome);
+}
+.diagram-flow .react-flow__controls-button {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  border: none;
+  border-right: 1px solid var(--divider);
+  color: var(--text);
+  padding: 0;
+  transition: background var(--dur-fast), color var(--dur-fast);
+}
+.diagram-flow .react-flow__controls-button:last-child {
+  border-right: none;
+}
+.diagram-flow .react-flow__controls-button:hover {
+  background: var(--hover);
+  color: var(--accent);
+}
+.diagram-flow .react-flow__controls-button svg {
+  fill: currentColor;
+  max-width: 13px;
+  max-height: 13px;
+}
+.diagram-flow .react-flow__minimap {
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  right: var(--space-4);
+  bottom: calc(var(--space-4) + 36px);
+  margin: 0;
+  z-index: var(--z-canvas-chrome);
+}
+/* W2 리더 4종 — 흐림(Dimming) 단일 상태 */
+.diagram-flow-node[data-dimmed="true"]{opacity:.12;transition:opacity var(--dur-fast)}
+.diagram-flow-edge[data-dimmed="true"] path,
+.diagram-flow .react-flow__edge[data-dimmed="true"] path,
+.diagram-flow-edge-label[data-dimmed="true"]{opacity:.12;transition:opacity var(--dur-fast)}
+/* W2 Finder 인라인 검색창 */
+.diagram-finder{
+  z-index:var(--z-canvas-top);
+  /* type-scale-exempt: 검색 패널 고정 폭 — 결과 줄이 잘리지 않는 최소치라 --space 축과 무관 */
+  width:340px;max-width:calc(100% - 2*var(--space-7));
+  border-radius:var(--radius-md);
+  /* 알약 줄이 아니라 목록을 담은 패널이라 한 단 더 띄운다. 재질(배경·blur·테두리)은 공통. */
+  box-shadow:var(--shadow-md);
+  overflow:hidden;display:flex;flex-direction:column;
+}
+.diagram-finder-input-row{
+  display:flex;align-items:center;gap:var(--space-2);
+  padding:var(--space-2) var(--space-3);border-bottom:1px solid var(--divider);
+}
+.diagram-finder-search-icon{color:var(--muted);flex:none}
+.diagram-finder-input{
+  flex:1;border:none;outline:none;background:transparent;
+  font-size:var(--text-sm);color:var(--text);font-family:var(--font-body);min-width:0;
+}
+.diagram-finder-close{flex:none;color:var(--muted)}
+.diagram-finder-results{max-height:220px;overflow-y:auto;padding:var(--space-1)}
+.diagram-finder-item{
+  padding:var(--space-2) var(--space-3);border-radius:var(--radius-sm);
+  cursor:pointer;display:flex;flex-direction:column;gap:var(--space-2xs);
+}
+.diagram-finder-item:hover, .diagram-finder-item[data-selected="true"]{background:var(--sel)}
+.diagram-finder-item-label{font-size:var(--text-sm);font-weight:600;color:var(--text)}
+.diagram-finder-item-desc{font-size:var(--text-xs);color:var(--muted)}
+/* 색·테두리는 `.badge[data-tone=accent]`(DiagramFinder.tsx, R8) — 노드 배지와 같은 크기로. */
+.diagram-finder-item-tag{align-self:flex-start;font-size:var(--text-2xs)}
+.diagram-finder-no-results{padding:var(--space-3);text-align:center;font-size:var(--text-xs);color:var(--muted)}
+/* W2 Reach 탐색 플로팅 바 */
+.diagram-reach-banner{
+  display:flex;align-items:center;gap:var(--space-3);
+  padding:var(--space-1) var(--space-3);border-radius:var(--radius-pill);
+  /* 테두리만 공통 표면에서 벗어난다 — 활성 리더 모드라는 상태 표시다. */
+  border-color:var(--accent);
+  font-size:var(--text-xs);
+}
+.diagram-reach-title{color:var(--text)}
+.diagram-reach-actions{display:flex;align-items:center;gap:var(--space-1)}
+.diagram-reach-actions button[data-active="true"]{background:var(--sel);color:var(--accent);font-weight:600}
+.diagram-reach-close{color:var(--muted)}
+/* subgraph 그룹 세련된 컨테이너 프레임 — 반투명 서피스 + 상단 좌측 글래스모피즘 헤더 칩 (Archify Phase/Boundary Frame) */
+.diagram-flow-group{
+  box-sizing:border-box;width:100%;height:100%;
+  border:1.5px dashed color-mix(in srgb,var(--divider) 80%,transparent);border-radius:var(--radius-lg);
+  background:color-mix(in srgb,var(--surface-base) 40%,transparent);
+  backdrop-filter:blur(8px);
+  transition:border-color var(--dur-fast),background-color var(--dur-fast),box-shadow var(--dur-fast);
+}
+.diagram-flow-group:hover{
+  border-color:color-mix(in srgb,var(--accent) 45%,var(--divider));
+}
+.diagram-flow-group[data-selected]{
+  border-color:var(--accent);border-style:solid;
+  background:color-mix(in srgb,var(--accent) 6%,transparent);
+  box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 25%,transparent);
+}
+
+/* 톤별 프레임 배경 틴트 및 보더 */
+.diagram-flow-group[data-tone="accent"]{
+  border-color:color-mix(in srgb,var(--accent) 55%,var(--divider));
+  background:color-mix(in srgb,var(--accent) 7%,transparent);
+}
+.diagram-flow-group[data-tone="warn"]{
+  border-color:color-mix(in srgb,var(--danger-soft) 55%,var(--divider));
+  background:color-mix(in srgb,var(--danger-soft) 7%,transparent);
+}
+.diagram-flow-group[data-tone="done"]{
+  border-color:color-mix(in srgb,var(--ok) 55%,var(--divider));
+  background:color-mix(in srgb,var(--ok) 7%,transparent);
+}
+.diagram-flow-group[data-tone="muted"]{
+  border-color:color-mix(in srgb,var(--muted) 40%,var(--divider));
+  background:color-mix(in srgb,var(--muted) 5%,transparent);
+}
+
+.diagram-flow-group-chip{
+  position:absolute;left:12px;top:-13px;
+  /* type-scale-exempt: 캔버스 노드 내부 기하 — 줌 배율과 함께 그려지는 치수라 --space 사다리(최소 4px)로 올리면 노드 레이아웃이 달라진다 */
+  display:inline-flex;align-items:center;gap:6px;padding:3px 10px;
+  /* 칠·테두리는 배지 틴트(R8) — 톤은 data-tone(accent/warn/done, 그 밖·muted 는 --muted)이 --badge-c 로 정한다
+     (`.badge` 블록). 틴트가 반투명이라 칩이 걸터앉은 프레임 점선이 비친다 — blur 가 그 선을 뭉갠다. */
+  border-radius:var(--radius-pill);background:var(--badge-tint);
+  backdrop-filter:blur(12px);border:1px solid var(--badge-line);
+  box-shadow:var(--shadow-sm);z-index:var(--z-canvas-badge);
+  cursor:pointer;
+  transition:border-color var(--dur-fast),background var(--dur-fast),box-shadow var(--dur-fast);
+}
+.diagram-flow-group-chip:hover{
+  border-color:var(--accent);
+  box-shadow:var(--shadow-md);
+}
+
+.diagram-flow-group-step-badge{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:18px;height:16px;padding:0 4px;
+  border-radius:var(--radius-pill);
+  background:var(--sel);color:var(--accent);
+  font-size:var(--text-label);font-weight:600;letter-spacing:0.5px;
+  font-family:var(--font-mono);line-height:1;
+}
+.diagram-flow-group-count{
+  display:inline-flex;align-items:center;justify-content:center;
+  /* type-scale-exempt: 캔버스 노드 내부 기하 — 줌 배율과 함께 그려지는 치수라 --space 사다리(최소 4px)로 올리면 노드 레이아웃이 달라진다 */
+  padding:0 5px;height:15px;border-radius:var(--radius-pill);
+  background:color-mix(in srgb,var(--muted) 18%,transparent);
+  color:var(--muted);font-size:var(--text-label);font-weight:600;font-family:var(--font-mono);line-height:1;
+}
+.diagram-flow-group-icon{color:var(--muted);flex:none}
+.diagram-flow-group[data-selected] .diagram-flow-group-icon{color:var(--accent)}
+.diagram-flow-group[data-selected] .diagram-flow-group-title{color:var(--accent)}
+.diagram-flow-group-title, .diagram-flow-group-title-input{
+  font-size:var(--text-xs);font-weight:600;color:var(--text);font-family:var(--font-body);
+  max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2;
+}
+.diagram-flow-group-title-input{border:0;background:transparent;outline:none;width:100%;font:inherit;color:inherit;padding:0}
+
+/* Diagram Floating Bubble (Floating Context Pill) */
+.diagram-floating-bubble{
+  position:absolute;
+  display:inline-flex;align-items:center;gap:var(--space-1);padding:var(--space-1) var(--space-2);
+  /* max-content: absolute + left 상자의 shrink-to-fit 폭은 "캔버스 − left" 가 상한이라, 노드가 오른쪽에 있을수록
+     색 칩 줄이 일찍 접혔다(범례 알약과 같은 함정). 접힘은 아래 .diagram-bubble-marks 의 max-width 로만 정한다. */
+  width:max-content;
+  background:var(--app-sheet-base);border:1px solid var(--divider); /* = .overlay 레시피 */
+  border-radius:var(--radius-pill);
+  box-shadow:var(--shadow-lg);
+  z-index:var(--z-canvas-top);
+  pointer-events:auto;
+  transform:translate(-50%,-100%);
+  user-select:none;
+  animation:overlayIn var(--dur-med) ease; /* 다른 툴 버블(.overlay)과 같은 등장 리듬 — scale 속성이라 transform 과 독립 */
+}
+.diagram-floating-bubble-btn{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:26px;height:26px;padding:0;
+  border-radius:var(--radius-pill);border:none;background:transparent;
+  color:var(--text);cursor:pointer;
+  transition:background var(--dur-fast),color var(--dur-fast);
+}
+.diagram-floating-bubble-btn:hover{
+  background:var(--sel);color:var(--accent);
+}
+.diagram-floating-bubble-btn[data-active="true"]{
+  background:var(--sel);color:var(--accent);font-weight:600;
+}
+.diagram-floating-bubble-btn.danger:hover{
+  background:color-mix(in srgb,var(--danger) 16%,transparent);color:var(--danger);
+}
+.diagram-floating-bubble-btn.diagram-floating-bubble-ai-btn{
+  width:auto;
+  padding:0 var(--space-2);
+  gap:var(--space-1);
+  font-size:var(--text-xs);
+  font-weight:600;
+  color:var(--accent);
+}
+.diagram-floating-bubble-btn.diagram-floating-bubble-ai-btn:hover{
+  background:var(--sel);
+}
+.diagram-floating-bubble-divider{
+  width:1px;height:14px;background:color-mix(in srgb, var(--text) 18%, transparent);margin:0 var(--space-1);flex:none;opacity:.7;
+}
+.diagram-floating-bubble-menu-anchor{position:relative;display:inline-flex}
+.diagram-floating-bubble-dropdown{
+  position:absolute;left:50%;transform:translateX(-50%);
+  background:var(--app-sheet-base);border:1px solid var(--divider); /* = .overlay 레시피 */
+  border-radius:var(--radius-md);box-shadow:var(--shadow-lg);
+  padding:var(--space-1);display:flex;flex-direction:column;gap:var(--space-1);
+  min-width:96px;z-index:var(--z-canvas-top);white-space:nowrap;
+}
+/* 툴바가 노드 상단에 위치할 때(기본): 위쪽으로 전개되어 노드 가림(occlusion) 완전 방지 */
+.diagram-floating-bubble:not([data-flipped="true"]) .diagram-floating-bubble-dropdown,
+.diagram-floating-bubble-dropdown[data-placement="top"]{
+  bottom:calc(100% + 8px);top:auto;
+}
+/* 툴바가 노드 하단에 위치할 때(플립): 아래쪽으로 전개되어 노드 가림 완전 방지 */
+.diagram-floating-bubble[data-flipped="true"] .diagram-floating-bubble-dropdown,
+.diagram-floating-bubble-dropdown[data-placement="bottom"]{
+  top:calc(100% + 8px);bottom:auto;
+}
+.diagram-floating-bubble-dropdown-item{
+  display:flex;align-items:center;gap:var(--space-2);padding:var(--space-1) var(--space-2);
+  border:none;background:transparent;border-radius:var(--radius-xs);
+  font-size:var(--text-xs);color:var(--text);cursor:pointer;text-align:left;width:100%;
+  transition:background-color var(--dur-fast),color var(--dur-fast);
+}
+.diagram-floating-bubble-dropdown-item:hover,
+.diagram-floating-bubble-dropdown-item[data-selected="true"]{
+  background:var(--sel);color:var(--accent);font-weight:600;
+}
+/* 노드 버블의 색 칩 한 줄(GRILL-2026-10-19 R6) — 기본 · 강조 · 상태 이름. 점은 범례 표식(.diagram-legend-marker)
+   그대로, 켜진 칩은 범례의 켜진 항목(.diagram-legend-item[data-active])과 같은 모양이라 둘이 한 벌로 읽힌다.
+   상태가 많으면(최대 8칩) 칩 줄만 여러 줄로 접힌다. */
+.diagram-bubble-marks{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-1);max-width:340px}
+.diagram-bubble-mark{
+  display:inline-flex;align-items:center;gap:var(--space-1);
+  height:26px;padding:0 var(--space-2);
+  border:none;border-radius:var(--radius-pill);background:transparent;
+  font:inherit;font-size:var(--text-xs);color:var(--text);white-space:nowrap;cursor:pointer;
+  transition:background var(--dur-fast),box-shadow var(--dur-fast);
+}
+.diagram-bubble-mark:hover{background:color-mix(in srgb,var(--sel) 60%,transparent)}
+/* 켜진 범례 항목 = 켜진 색 칩: 배지 틴트(R8)를 그 칩의 색(인라인 --badge-c — 상태 슬롯 색, 강조는 accent,
+   기본은 없음 → --muted)으로 칠한다. 테두리는 안쪽 그림자 — 꺼진 칩엔 테두리가 없어 켜고 끌 때 폭이 흔들리면
+   안 된다. 글자는 톤 색이 아니라 --text 그대로 둔다: 꺼진 칩이 --text 라 '흐리게'(--muted) 같은 톤 글자로
+   바꾸면 켠 칩이 오히려 흐려 보인다. hover 규칙보다 뒤에 있어야 켜진 칩 위 hover 가 틴트를 덮지 않는다. */
+.diagram-legend-item[data-active="true"],
+.diagram-bubble-mark[data-selected="true"]{
+  background:var(--badge-tint);font-weight:600;
+  box-shadow:inset 0 0 0 1px var(--badge-line);
+}
+/* 기본 = 색 없음: 칠 대신 점선 테두리 */
+.diagram-bubble-mark-dot[data-empty="true"]{background:transparent;border:1px dashed var(--muted)}
+
+/* 다중 선택 바 (DiagramToolbar 가운데 컨텍스트 군 및 모바일) */
+.diagram-multi-count{padding:0 var(--space-2);font-size:var(--text-xs);color:var(--muted);white-space:nowrap}
+.diagram-multi-group.icon-btn{
+  width:auto;min-width:0;height:26px;padding:0 var(--space-3);
+  display:inline-flex;align-items:center;gap:var(--space-2);
+  font-size:var(--text-sm);white-space:nowrap;
+  color:var(--accent);background:var(--sel);
+}
+.diagram-multi-group.icon-btn:hover{color:var(--accent);background:color-mix(in srgb,var(--accent) 22%,transparent)}
+
+/* 구조 편집이 없는 종류(sequenceDiagram 등) — 그림은 위에 그대로 그려진다. 조용한 각주 한 줄. */
+.diagram-unstructured{display:flex;align-items:center;justify-content:center;gap:var(--space-3);flex-wrap:wrap;padding:var(--space-3) var(--space-4);border-top:1px solid var(--divider);flex:none;font-size:var(--text-sm);color:var(--muted);text-align:center}
+
+/* ── ICON-ANIMATION ──────────────────────────────────────────────────────────────────────────
+   AI 아이콘 상시 애니메이션 (W7-b, docs/PLAN-2026-08-04-w7.md "AI 아이콘"; 2026-09-02 발광으로
+   교체). icons.tsx 의 IconAi 가 이 클래스를 자동으로 붙이므로 호출부는 신경 쓸 필요 없다 —
+   아이콘 하나(Sparkles, 13:1 다수결)로 통일한 김에 "여기 AI 가 있다"는 신호를 은은하게 상시
+   유지한다. drop-shadow 는 currentColor 기반이라 호출부가 이미 정한 색(버튼 강조색, 메뉴 행의
+   기본 텍스트색 등)을 그대로 따라가고 덮어쓰지 않는다. "도구는 사라지고 기록이 남는다"는 이
+   앱의 철학상 튀면 안 되므로 진폭은 최소로: 블러 2~5px, 3.2초 느린 주기(이전 breathe 와 같은
+   주기 유지). prefers-reduced-motion 사용자는 중간 강도로 고정(freeze). */
+@keyframes ai-glow-breathe {
+  0%, 100% { filter: drop-shadow(0 0 2px color-mix(in srgb, currentColor 45%, transparent)); }
+  50% { filter: drop-shadow(0 0 5px color-mix(in srgb, currentColor 75%, transparent)); }
+}
+.icon-ai-anim { display: inline-block; transform-origin: center; animation: ai-glow-breathe 3.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .icon-ai-anim { animation: none; filter: drop-shadow(0 0 3px color-mix(in srgb, currentColor 55%, transparent)); }
+}
+
+/* ── AI-GLOW ─────────────────────────────────────────────────────────────────────────────────
+   AI 가 이 요소를 손대는 동안의 신호(2026-09-26, 이전 "안쪽 번짐 순환" 대체). 계약은 그대로다:
+   store(useAiGlow) → data-ai-glow="active|fading", --ai-glow-stagger, data-ai-glow-inset.
+   신호는 호스트 크기에 따라 두 가지로 갈린다(오너 결정 2026-09-26 — 전부 박스로 두르니 과했다):
+     · 빛줄기(BEAM) — data-ai-glow-beam="true" 인 넓은 면만: 에디터 창, 챗 입력 칸.
+     · 잉크(INK)   — 나머지(트리 행·문서/섹션 탭·칩·어시스트 행·번역 바): 글자색이 흐른다.
+   그 밖에 AI 진입 버튼(AiActionsMenu, .ai-entry)만 상시로 글리프 자체가 빛난다(아래 AI-ENTRY 참고).
+   실측(16개 동시, 2026-09-26): 행·칩까지 빛줄기를 두르면 121→45fps. 비용은 작은 호스트
+   여럿의 마스크 재래스터에서 나오고 에디터 하나는 121fps 그대로였다 — 그래서 이렇게 나눴다. */
+
+/* ── BEAM ──
+   기법은 border-beam(github.com/Jakubantalik/Libraries.dev, MIT)의 md 변형을 옮겨 온 것이다.
+   패키지를 쓰지 않은 이유: 호스트를 <div> 로 감싸고 그 div 에 overflow:hidden 을 걸며
+   켜질 때마다 인스턴스별 <style> 을 주입한다. 여기서는 위 계약에 CSS 만 얹는다.
+     ::after  = 1px 링. 팔레트 얼룩(radial) 위에 스윕(conic)을 깔고, 호 마스크로 한 줄기만 남긴
+                뒤 content-box 를 빼서 테두리 두께만 보이게 한다.
+     ::before = 안쪽 번짐. 같은 호를 가장자리 28px 띠 안에서만 옅게.
+   배경을 칠하지만 마스크가 링·가장자리 띠만 남기므로 면이 되지 않는다(아크릴 단일 시트 계약).
+   각도는 inherits:false 로 등록하고 의사요소에서만 돌린다 — 원본처럼 호스트에서 돌리면 상속
+   때문에 에디터 서브트리 전체가 매 프레임 스타일 재계산된다. 원본의 색상 회전(hue-rotate 필터
+   애니메이션)은 뺐다 — 에디터 크기 레이어를 매 프레임 필터로 다시 칠하게 된다. */
+@property --ai-beam-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+/* ── INK ── 글자색 색상각. 호스트에서 돌리고 자손이 상속받는다(작은 호스트라 재계산이 싸다). */
+@property --ai-ink-hue {
+  syntax: "<angle>";
+  initial-value: 250deg;
+  inherits: true;
+}
+
+:root {
+  /* 빛줄기 팔레트 — border-beam 'colorful'. 테마·강조색을 따르지 않는 고정 AI 신호색이다
+     (이전 글로우의 노랑·보라·파랑·빨강 hex 도 같은 성격이었다). */
+  --ai-beam-rose: rgb(255, 50, 100);
+  --ai-beam-blue: rgb(40, 140, 255);
+  --ai-beam-green: rgb(50, 200, 80);
+  --ai-beam-teal: rgb(30, 185, 170);
+  --ai-beam-indigo: rgb(100, 70, 255);
+  --ai-beam-orange: rgb(255, 120, 40);
+  --ai-beam-magenta: rgb(240, 50, 180);
+  --ai-beam-violet: rgb(180, 40, 240);
+  /* 스윕(호의 가장 밝은 머리)과 안쪽 테두리 광택 — 다크는 흰빛, 라이트는 먹빛. */
+  --ai-beam-sweep: rgb(255, 255, 255);
+  --ai-beam-sheen: rgba(255, 255, 255, 0.27);
+  --ai-beam-stroke-opacity: 0.6;
+  --ai-beam-inner-opacity: 0.45;
+  --ai-beam-filter: brightness(1.3) saturate(1.2);
+  --ai-beam-duration: 2.4s;
+  /* 잉크 — 파랑(250°)→보라→장밋빛(370°=10°)을 오간다. 명도·채도는 본문 위에서 읽히는 선. */
+  --ai-ink-l: 0.82;
+  --ai-ink-c: 0.13;
+}
+:root[data-theme='light'] {
+  --ai-beam-sweep: rgba(0, 0, 0, 0.75);
+  --ai-beam-sheen: rgba(0, 0, 0, 0.14);
+  --ai-beam-stroke-opacity: 0.5;
+  --ai-beam-inner-opacity: 0.4;
+  --ai-beam-filter: saturate(1.5);
+  --ai-ink-l: 0.5;
+  --ai-ink-c: 0.16;
+}
+
+@keyframes ai-beam-spin {
+  to { --ai-beam-angle: 360deg; }
+}
+
+@keyframes ai-ink-flow {
+  from { --ai-ink-hue: 250deg; }
+  to { --ai-ink-hue: 370deg; }
+}
+
+/* ── BEAM 호스트 ── */
+[data-ai-glow-beam="true"][data-ai-glow="active"],
+[data-ai-glow-beam="true"][data-ai-glow="fading"] {
+  position: relative;
+}
+
+/* 모달 카드 호스트(ModalShell aiGlow — 생성 중인 AI 결과 창, 2026-09-27 오너 "AI 모달 자체에 빛줄기가 잘
+   드러나면", 단 상시는 금지). 에디터 세기 그대로면 스크림 위 작은 카드에서 묻힌다(라이트에서 특히) — 링·번짐만 한 단 올린다.
+   변수는 호스트에서 덮어도 의사요소가 상속받는다. */
+.overlay[data-ai-glow-beam="true"] {
+  --ai-beam-stroke-opacity: 0.85;
+  --ai-beam-inner-opacity: 0.6;
+}
+
+[data-ai-glow-beam="true"][data-ai-glow="active"]::before,
+[data-ai-glow-beam="true"][data-ai-glow="fading"]::before,
+[data-ai-glow-beam="true"][data-ai-glow="active"]::after,
+[data-ai-glow-beam="true"][data-ai-glow="fading"]::after {
+  /* 호 하나 — 링과 번짐이 같은 각도를 쓰도록 여기서 한 번만 정의한다. */
+  --ai-beam-arc: conic-gradient(
+    from var(--ai-beam-angle),
+    transparent 0% 30%,
+    rgba(0, 0, 0, 0.1) 36%, rgba(0, 0, 0, 0.35) 44%,
+    black 52% 80%,
+    rgba(0, 0, 0, 0.35) 86%, rgba(0, 0, 0, 0.1) 92%,
+    transparent 95% 100%
+  );
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: var(--z-overlay);
+  animation: ai-beam-spin var(--ai-beam-duration) linear infinite;
+  /* 활성·페이드 두 상태에 같은 값이어야 한다 — 도는 중에 delay 가 바뀌면 호가 튄다. */
+  animation-delay: calc(var(--ai-glow-stagger, 0) * 140ms);
+  /* type-scale-exempt: smooth glow fade */
+  transition: opacity 300ms ease;
+}
+
+/* 링 */
+[data-ai-glow-beam="true"][data-ai-glow="active"]::after,
+[data-ai-glow-beam="true"][data-ai-glow="fading"]::after {
+  /* type-scale-exempt: 링 두께 1px — 간격이 아니라 테두리 선이다(content-box 를 빼는 마스크의 폭) */
+  padding: 1px;
+  background:
+    conic-gradient(
+      from var(--ai-beam-angle),
+      transparent 0% 54%,
+      color-mix(in srgb, var(--ai-beam-sweep) 10%, transparent) 57%,
+      color-mix(in srgb, var(--ai-beam-sweep) 30%, transparent) 60%,
+      color-mix(in srgb, var(--ai-beam-sweep) 60%, transparent) 63%,
+      color-mix(in srgb, var(--ai-beam-sweep) 75%, transparent) 66%,
+      color-mix(in srgb, var(--ai-beam-sweep) 60%, transparent) 69%,
+      color-mix(in srgb, var(--ai-beam-sweep) 30%, transparent) 72%,
+      color-mix(in srgb, var(--ai-beam-sweep) 10%, transparent) 75%,
+      transparent 78% 100%
+    ),
+    /* 얼룩 크기는 원본 px 를 340×72 카드 기준 % 로 바꾼 것 — 입력 칸부터 에디터까지 같은 비율로
+       물들게. (Chromium 은 radial 크기에 px·% 혼합 calc/max 를 받지 않아 선언 전체가 버려진다.) */
+    radial-gradient(ellipse 21% 56% at 33% -7.4%, var(--ai-beam-rose), transparent),
+    radial-gradient(ellipse 18% 49% at 12% -5%, var(--ai-beam-blue), transparent),
+    radial-gradient(ellipse 12% 97% at 2.1% 68.3%, var(--ai-beam-green), transparent),
+    radial-gradient(ellipse 6% 49% at 2.1% 68.3%, var(--ai-beam-teal), transparent),
+    radial-gradient(ellipse 53% 44% at 74.4% 100%, var(--ai-beam-indigo), transparent),
+    radial-gradient(ellipse 25% 36% at 55% 100%, var(--ai-beam-blue), transparent),
+    radial-gradient(ellipse 22% 44% at 93.9% 0%, var(--ai-beam-orange), transparent),
+    radial-gradient(ellipse 8% 58% at 100% 27.1%, var(--ai-beam-magenta), transparent),
+    radial-gradient(ellipse 15% 67% at 100% 27.1%, var(--ai-beam-violet), transparent);
+  mask:
+    var(--ai-beam-arc),
+    linear-gradient(black 0 0) content-box,
+    linear-gradient(black 0 0);
+  mask-composite: intersect, exclude;
+  filter: var(--ai-beam-filter);
+  opacity: var(--ai-beam-stroke-opacity);
+}
+
+/* 안쪽 번짐 */
+[data-ai-glow-beam="true"][data-ai-glow="active"]::before,
+[data-ai-glow-beam="true"][data-ai-glow="fading"]::before {
+  background:
+    radial-gradient(ellipse 19% 50% at 33% -7.4%, color-mix(in srgb, var(--ai-beam-rose) 45%, transparent), transparent),
+    radial-gradient(ellipse 16% 44% at 12% -5%, color-mix(in srgb, var(--ai-beam-blue) 45%, transparent), transparent),
+    radial-gradient(ellipse 11% 87% at 2.1% 68.3%, color-mix(in srgb, var(--ai-beam-green) 45%, transparent), transparent),
+    radial-gradient(ellipse 5% 44% at 2.1% 68.3%, color-mix(in srgb, var(--ai-beam-teal) 45%, transparent), transparent),
+    radial-gradient(ellipse 48% 40% at 74.4% 100%, color-mix(in srgb, var(--ai-beam-indigo) 45%, transparent), transparent),
+    radial-gradient(ellipse 23% 32% at 55% 100%, color-mix(in srgb, var(--ai-beam-blue) 45%, transparent), transparent),
+    radial-gradient(ellipse 20% 40% at 93.9% 0%, color-mix(in srgb, var(--ai-beam-orange) 45%, transparent), transparent),
+    radial-gradient(ellipse 7% 52% at 100% 27.1%, color-mix(in srgb, var(--ai-beam-magenta) 45%, transparent), transparent),
+    radial-gradient(ellipse 14% 60% at 100% 27.1%, color-mix(in srgb, var(--ai-beam-violet) 45%, transparent), transparent);
+  box-shadow: inset 0 0 9px 1px var(--ai-beam-sheen);
+  mask:
+    var(--ai-beam-arc),
+    linear-gradient(black, transparent 28px, transparent calc(100% - 28px), black),
+    linear-gradient(to right, black, transparent 28px, transparent calc(100% - 28px), black);
+  mask-composite: intersect, add;
+  opacity: var(--ai-beam-inner-opacity);
+}
+
+/* 켜질 때 페이드 인 — 의사요소는 새로 생기므로 transition 이 안 걸린다. */
+@starting-style {
+  [data-ai-glow-beam="true"][data-ai-glow="active"]::before,
+  [data-ai-glow-beam="true"][data-ai-glow="active"]::after {
+    opacity: 0;
+  }
+}
+
+[data-ai-glow-beam="true"][data-ai-glow="active"]::before,
+[data-ai-glow-beam="true"][data-ai-glow="active"]::after {
+  transition-delay: calc(var(--ai-glow-stagger, 0) * 140ms);
+}
+
+/* 페이드 아웃 — 회전은 멈추지 않는다(멈추면 호가 0° 로 튄 채 사라진다). */
+[data-ai-glow-beam="true"][data-ai-glow="fading"]::before,
+[data-ai-glow-beam="true"][data-ai-glow="fading"]::after {
+  opacity: 0;
+}
+
+[data-ai-glow-beam="true"][data-ai-glow-inset="true"]::before,
+[data-ai-glow-beam="true"][data-ai-glow-inset="true"]::after {
+  inset: 1px;
+}
+
+/* ── INK 호스트 ── */
+[data-ai-glow="active"]:not([data-ai-glow-beam="true"]) {
+  animation: ai-ink-flow 1.6s ease-in-out infinite alternate;
+  /* 칩 여러 개가 한꺼번에 켜질 때(메타 칩 등) 물결처럼 어긋나게. */
+  animation-delay: calc(var(--ai-glow-stagger, 0) * 140ms);
+}
+
+/* !important 인 이유: 호스트 안의 라벨·카운트·아이콘이 제각기 색을 들고 있어서(muted 카운트,
+   강조색 태그, 폴더 색) 상속만으로는 글자가 안 바뀐다. 작업 중인 짧은 동안만 전부 덮는다. */
+[data-ai-glow="active"]:not([data-ai-glow-beam="true"]),
+[data-ai-glow="active"]:not([data-ai-glow-beam="true"]) * {
+  color: oklch(var(--ai-ink-l) var(--ai-ink-c) var(--ai-ink-hue)) !important;
+}
+
+[data-ai-glow]:not([data-ai-glow-beam="true"]),
+[data-ai-glow]:not([data-ai-glow-beam="true"]) * {
+  transition: color var(--dur-slow) ease;
+}
+
+/* ── AI-ENTRY ── AI 진입 버튼(AiActionsMenu)의 글리프가 상시로 빛난다(2026-09-26 오너 결정 — 테두리
+   링 대신 "글자 자체가 발광"). 버튼은 노트 제목 줄(☆ 옆) 한 곳에만 있다.
+   색은 잉크와 같은 흐름(파랑→보라→장밋빛)을 더 느리게, 빛은 currentColor drop-shadow 라 그 색을
+   그대로 받아 번진다. 아이콘의 기본 숨쉬기(.icon-ai-anim)를 이 버튼에서만 두 겹 발광으로 키운다. */
+@keyframes ai-entry-glow {
+  0%, 100% {
+    filter:
+      drop-shadow(0 0 2px color-mix(in srgb, currentColor 60%, transparent))
+      drop-shadow(0 0 6px color-mix(in srgb, currentColor 25%, transparent));
+  }
+  50% {
+    filter:
+      drop-shadow(0 0 3px color-mix(in srgb, currentColor 85%, transparent))
+      drop-shadow(0 0 10px color-mix(in srgb, currentColor 45%, transparent));
+  }
+}
+
+.ai-entry {
+  animation: ai-ink-flow 4s ease-in-out infinite alternate;
+}
+
+.ai-entry > * {
+  color: oklch(var(--ai-ink-l) var(--ai-ink-c) var(--ai-ink-hue));
+}
+
+.ai-entry > .icon-ai-anim {
+  animation: ai-entry-glow 3.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-ai-glow-beam="true"][data-ai-glow="active"]::before,
+  [data-ai-glow-beam="true"][data-ai-glow="fading"]::before,
+  [data-ai-glow-beam="true"][data-ai-glow="active"]::after,
+  [data-ai-glow-beam="true"][data-ai-glow="fading"]::after,
+  [data-ai-glow="active"]:not([data-ai-glow-beam="true"]),
+  .ai-entry,
+  .ai-entry > .icon-ai-anim {
+    animation: none;
+  }
+  /* 호는 정지한 채 남고 잉크는 파랑에 머문다. 페이드 인/아웃은 그대로 — 켜짐·꺼짐 신호는 유지. */
+}
+
+/* ── REC-EQ ──────────────────────────────────────────────────────────────────────────────────
+   폰 UI 녹음 중 배경 신호(2026-10-07 오너 "녹음은 보더빔 말고 아래에서 이퀄라이저인 듯 아닌 듯 은은하게").
+   화면 바닥에 붙은 얇은 띠 안에서 따뜻한 빛기둥들이 마이크 레벨을 따라 출렁인다. 소비처는 src/styles/mobileAmbient.css
+   한 곳(MobileAmbient — AI 빛줄기와 같은 고정 레이어)이고 색·불투명도는 전부 여기 토큰이다.
+   알파 상한은 **버튼 글자 대비가 정한다**: 레이어가 시트 위에 얹히므로 띠가 겹치는 일시정지·완료·취소 버튼은 글자·면이 같이
+   물든다(S22 실기에서 두꺼운 글로우가 버튼을 베이지로 바래게 했다). 코어+할로 중첩 최대치(≈ 코어 + 할로·(1−코어))에서도
+   본문 글자 대비 6:1 이상(AA 4.5 + 여유) — mobileAmbient.contract.test.ts 가 이 값들로 직접 계산한다(다크 ≤0.30·라이트 ≤0.19). 다크=밝은 따뜻한 빛, 라이트=짙은 따뜻한 먹.
+   --rec-eq-rest 는 JS 의 바닥 높이(recEqualizerMath.ts EQ_FLOOR)와 같아야 한다(첫 프레임 전 모양). --rec-eq-static 은 모션 줄이기의
+   고정 띠 높이. 띠 높이(--rec-eq-height)는 화면 높이의 20% 이하(첫 값 14% 는 S22 실기에서 조용한 방 기준 거의 안 보였다 —
+   기둥이 띠의 ~20% 높이로 쉬고 그 아래쪽만 칠해져 버튼 밑 한 줄로만 비쳤다, 2026-10-08). AI 빛줄기와 겹치면 --rec-eq-ai-dim 배로 줄인다. */
+:root {
+  --rec-eq-core: rgba(255, 112, 80, 0.24);
+  --rec-eq-halo: rgba(255, 150, 80, 0.07);
+  --rec-eq-height: 20%;
+  --rec-eq-rest: 0.16;
+  --rec-eq-static: 0.3;
+  --rec-eq-paused-opacity: 0.5;
+  --rec-eq-ai-dim: 0.55;
+}
+:root[data-theme='light'] {
+  --rec-eq-core: rgba(224, 74, 44, 0.13);
+  --rec-eq-halo: rgba(224, 110, 50, 0.06);
+}
+
+/* AI result arrival animation (grain dissolve + settle).
+   Overlay layer only — single-sheet acrylic contract compliance. */
+@keyframes ai-arrive-dissolve {
+  0% {
+    opacity: 1;
+    backdrop-filter: contrast(160%) brightness(125%) saturate(140%);
+    box-shadow:
+      inset 0 0 24px 4px color-mix(in srgb, var(--accent) 45%, transparent),
+      inset 0 0 8px 1px color-mix(in srgb, #8b6bc9 35%, transparent);
+  }
+  50% {
+    opacity: 0.65;
+    backdrop-filter: contrast(120%) brightness(110%) saturate(115%);
+    box-shadow:
+      inset 0 0 12px 2px color-mix(in srgb, var(--accent) 25%, transparent),
+      inset 0 0 4px 0 color-mix(in srgb, #8b6bc9 15%, transparent);
+  }
+  100% {
+    opacity: 0;
+    backdrop-filter: contrast(100%) brightness(100%) saturate(100%);
+    box-shadow: inset 0 0 0 0 transparent;
+  }
+}
+
+[data-ai-arriving="true"] {
+  position: relative;
+}
+
+[data-ai-arriving="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: var(--z-overlay);
+  animation: ai-arrive-dissolve 900ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-ai-arriving="true"]::after {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+/* ── Modern Vector Weather Micro-Animations ── */
+.wx-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  overflow: visible;
+}
+.wx-sun__rays {
+  transform-origin: 12px 12px;
+  animation: wx-spin 24s linear infinite;
+}
+.wx-cloud-body,
+.wx-cloud-front {
+  animation: wx-float 4s ease-in-out infinite alternate;
+}
+.wx-sun-behind {
+  transform-origin: 12px 12px;
+  animation: wx-pulse 3.5s ease-in-out infinite alternate;
+}
+.wx-fog-1 {
+  animation: wx-fog-drift 3s ease-in-out infinite alternate;
+}
+.wx-fog-2 {
+  animation: wx-fog-drift 3.6s ease-in-out infinite alternate-reverse;
+}
+.wx-drop {
+  animation: wx-rain-fall 1.3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+.wx-drop-1 { animation-delay: 0s; }
+.wx-drop-2 { animation-delay: 0.42s; }
+.wx-drop-3 { animation-delay: 0.85s; }
+
+.wx-heavy-1 { animation-delay: 0s; animation-duration: 0.85s; }
+.wx-heavy-2 { animation-delay: 0.28s; animation-duration: 0.85s; }
+.wx-heavy-3 { animation-delay: 0.56s; animation-duration: 0.85s; }
+
+.wx-flake {
+  animation: wx-snow-fall 2.4s ease-in-out infinite;
+}
+.wx-flake-1 { animation-delay: 0s; }
+.wx-flake-2 { animation-delay: 0.5s; }
+.wx-flake-3 { animation-delay: 1.1s; }
+.wx-flake-4 { animation-delay: 1.6s; }
+.wx-flake-5 { animation-delay: 0.8s; }
+
+.wx-bolt {
+  animation: wx-flash 2.6s ease-in-out infinite;
+}
+
+@keyframes wx-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes wx-float {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-1.2px); }
+}
+@keyframes wx-pulse {
+  0% { opacity: 0.75; transform: scale(0.96); }
+  100% { opacity: 1; transform: scale(1.04); }
+}
+@keyframes wx-fog-drift {
+  0% { transform: translateX(-1px); }
+  100% { transform: translateX(1px); }
+}
+@keyframes wx-rain-fall {
+  0% { transform: translateY(-3px); opacity: 0; }
+  35% { opacity: 0.9; }
+  100% { transform: translateY(3px); opacity: 0; }
+}
+@keyframes wx-snow-fall {
+  0% { transform: translateY(-2px) translateX(-0.5px); opacity: 0; }
+  50% { opacity: 0.9; }
+  100% { transform: translateY(2.5px) translateX(0.5px); opacity: 0; }
+}
+@keyframes wx-flash {
+  0%, 90%, 100% { opacity: 0.85; }
+  92%, 96% { opacity: 1; filter: drop-shadow(0 0 2px var(--accent)); }
+  94% { opacity: 0.3; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wx-icon,
+  .wx-sun__rays,
+  .wx-cloud-body,
+  .wx-cloud-front,
+  .wx-sun-behind,
+  .wx-fog-line,
+  .wx-drop,
+  .wx-flake,
+  .wx-bolt {
+    animation: none !important;
+  }
+}
+
+
+/* ── AI에게 묻기 · 타일 그리드 (components/ai/AskAiTileGrid.tsx, PLAN-2026-09-15 D3) ──────────
+   타일은 실행 버튼이 아니라 문장 스탬프다. 표면은 .btn 과 같은 문법(투명 배경·헤어라인·hover
+   --hover·active --sel)이고, 아이콘 20px + 두 줄까지의 라벨을 세로로 쌓는다. 4열이 아래로 무한히 쌓이며
+   스크롤은 **칸**(.askai-tiles__pane)이 소유한다 — 프리셋/히스토리 두 탭이 같은 높이의 그 칸을
+   공유해서 탭을 바꿔도 모달이 흔들리지 않는다(6안 D20). 크기 생값은 전부 여기 — TSX 에는 두지 않는다.
+   4열(2026-09-26, 오너): 5열이면 칸이 44px 라 라벨이 두 글자에서 잘렸다. */
+.askai-tiles{display:flex;flex-direction:column;gap:var(--space-3);min-width:0;min-height:0}
+/* 스크롤바 자리는 칸 **바깥**(열 사이 간격)으로 뺀다 — 안쪽 여백으로 두면 타일 그리드의 오른쪽 변이 탭 줄
+   끝선보다 그만큼 안으로 들어간다(2026-09-26 실측 4px). */
+.askai-tiles__pane{flex:1 1 auto;min-height:0;overflow-y:auto;margin-right:calc(-1*var(--space-1));padding-right:var(--space-1)}
+/* 탭 줄 높이 = 우 컨텍스트 줄 높이(--askai-head-h, .askai-modal-body). 탭은 줄 높이를 꽉 채워 밑줄이
+   구분선 바로 위에 앉고, 편집 버튼·커스텀 배지는 가운데 선다. */
+.askai-tiles__tabs{
+  display:flex;align-items:stretch;gap:var(--space-3);
+  min-height:var(--askai-head-h);box-sizing:border-box;border-bottom:1px solid var(--divider);
+}
+.askai-tiles__tab{
+  appearance:none;border:0;background:transparent;cursor:pointer;
+  display:inline-flex;align-items:center;padding:0 var(--space-1);
+  font-size:var(--text-sm);font-weight:400;color:var(--muted);
+  transition:color var(--dur-fast),box-shadow var(--dur-fast);
+}
+.askai-tiles__tab:hover{color:var(--text)}
+.askai-tiles__tab[aria-selected='true']{color:var(--text);font-weight:600;box-shadow:inset 0 -2px 0 var(--accent)}
+.askai-tiles__custom{
+  display:inline-flex;align-items:center;gap:var(--space-1);
+  padding:0 var(--space-3);min-height:var(--ctrl-h-sm);box-sizing:border-box;
+  border:1px dashed var(--accent);border-radius:var(--radius-pill);
+  font-size:var(--text-xs);color:var(--accent);white-space:nowrap;
+}
+.askai-tiles__custom::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.askai-tiles__custom,.askai-tiles__edit{align-self:center}
+.askai-tiles__edit{margin-left:auto}
+.askai-tiles__grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--space-2)}
+.askai-tile{
+  position:relative;height:62px;box-sizing:border-box;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-1);
+  padding:0 var(--space-1);
+  background:transparent;border:1px solid var(--divider);border-radius:var(--radius-sm);
+  color:var(--muted);cursor:pointer;
+  transition:background var(--dur-fast),border-color var(--dur-fast),color var(--dur-fast);
+}
+.askai-tile__icon{color:var(--muted);display:grid;place-items:center;transition:color var(--dur-fast)}
+/* 라벨은 두 줄까지 감싸고 넘치면 말줄임(2026-10-18) — 한 줄 말줄임이면 「새 프리셋」 같은 사용자
+   프리셋 이름이 「새 프리…」로 잘렸다. 한국어는 어절 단위로 먼저 끊고(keep-all), 한 어절이 칸보다
+   길면 아무 데서나 끊는다(anywhere). 높이 예산(테두리 빼고 60px): 아이콘 20 + 간격 4 + 2줄×(11px×1.2×--fs)
+   = --fs 1 에서 50.4px, 슬라이더 최대 1.35 에서 59.6px — 빠듯하게 들어간다. --fs 상한(settings_schema.rs
+   font_scale 0.85..=1.35)이나 타일 높이를 바꾸면 이 합을 다시 잰다. */
+.askai-tile__label{
+  font-size:var(--text-xs);font-weight:400;line-height:1.2;text-align:center;
+  max-width:100%;overflow:hidden;white-space:normal;word-break:keep-all;overflow-wrap:anywhere;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;
+}
+.askai-tile:hover,.askai-tile:focus-visible{background:var(--hover);color:var(--text);outline:none}
+.askai-tile:hover .askai-tile__icon,.askai-tile:focus-visible .askai-tile__icon{color:var(--accent)}
+.askai-tile:active{background:var(--sel)}
+.askai-tile[aria-pressed='true']{border-color:var(--accent);background:var(--sel);color:var(--text)}
+.askai-tile[aria-pressed='true'] .askai-tile__icon{color:var(--accent)}
+/* 최근 사용 — 우상단 5px 점 */
+.askai-tile[data-recent='true']::after{
+  content:"";position:absolute;top:var(--space-1);right:var(--space-1);
+  width:5px;height:5px;border-radius:50%;background:var(--accent);
+}
+.askai-tile--add{border-style:dashed;color:var(--faint)}
+.askai-tile--add:hover{color:var(--text)}
+/* 히스토리 목록 */
+.askai-history{display:flex;flex-direction:column}
+.askai-history__row{
+  appearance:none;border:0;border-bottom:1px solid var(--divider);background:transparent;cursor:pointer;
+  display:flex;flex-direction:column;gap:var(--space-1);text-align:left;
+  padding:var(--space-3) var(--space-2);min-width:0;
+  transition:background var(--dur-fast);
+}
+.askai-history__row:hover,.askai-history__row:focus-visible{background:var(--hover);outline:none}
+.askai-history__text{
+  font-size:var(--text-sm);color:var(--text);line-height:1.4;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.askai-history__text b{font-weight:600}
+.askai-history__refs{display:flex;flex-wrap:wrap;gap:var(--space-1)}
+.askai-history__ctx{
+  display:inline-flex;align-items:center;vertical-align:baseline;
+  padding:0 var(--space-2);
+  border:1px solid var(--divider);border-radius:var(--radius-xs);
+  font-size:var(--text-xs);color:var(--muted);line-height:1.5;white-space:nowrap;
+}
+.askai-history__meta{
+  display:flex;align-items:center;gap:var(--space-2);
+  font-size:var(--text-xs);color:var(--muted);min-width:0;
+}
+.askai-history__meta > span:first-child{flex:1 1 auto;min-width:0;display:inline-flex;align-items:center;gap:var(--space-2xs);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.askai-history__meta svg{flex:none}
+.askai-history__date{font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--faint);flex:none}
+.askai-history__empty{font-size:var(--text-sm);color:var(--faint);padding:var(--space-5) var(--space-2)}
+/* 타이틀바(components/ai/AskAiHeader.tsx, 6안 D19) — `✦ AI` 만. 폴더·노트·통계는 컨텍스트 줄의
+   첫 항목이 대신한다. */
+.askai-head{display:flex;align-items:center;min-width:0;flex:1 1 auto;gap:var(--space-2)}
+.askai-head__brand{display:inline-flex;align-items:center;gap:var(--space-1);color:var(--text);flex:none;cursor:default}
+.askai-head__brand svg{color:var(--accent)}
+.askai-head__provider{font-size:var(--text-xs);color:var(--muted);font-weight:400}
+/* 모양·톤은 `.badge[data-tone=accent]`(R8) — 여기는 자리만. */
+.askai-head__badge{margin-left:var(--space-1)}
+.askai-head__help{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:18px;height:18px;border-radius:var(--radius-pill);border:1px solid var(--line);
+  background:transparent;color:var(--muted);font-size:var(--text-2xs);cursor:pointer;
+  padding:0;line-height:1;margin-left:auto;margin-right:var(--space-2);
+  transition:color var(--dur-fast),border-color var(--dur-fast);
+}
+.askai-head__help:hover,.askai-head__help:focus-visible{
+  color:var(--text);border-color:var(--accent);outline:none;
+}
+
+/* 첫 실행 환영/활용/데이터 안내 카드 (PLAN-2026-09-27 §3.6) */
+.askai-welcome-card{
+  display:flex;flex-direction:column;flex:1 1 auto;min-height:0;
+  border:1px solid var(--divider);border-radius:var(--radius-sm);
+  background:var(--hover);padding:var(--space-4);gap:var(--space-3);
+  box-sizing:border-box;
+}
+.askai-welcome-card__head{
+  font-size:var(--text-md);font-weight:600;color:var(--text);flex:none;
+}
+.askai-welcome-card__body{
+  display:flex;flex-direction:column;gap:var(--space-2);flex:1 1 auto;overflow-y:auto;
+}
+.askai-welcome-card__step{
+  margin:0;font-size:var(--text-sm);color:var(--text);line-height:var(--lh-read);
+}
+.askai-welcome-card__divider{
+  height:1px;background:var(--divider);flex:none;
+}
+.askai-welcome-card__footer{
+  display:flex;align-items:flex-end;justify-content:space-between;gap:var(--space-3);flex:none;
+}
+.askai-welcome-card__data{
+  display:flex;flex-direction:column;gap:var(--space-1);font-size:var(--text-xs);color:var(--muted);
+  max-width:calc(100% - 90px);
+}
+.askai-welcome-card__settings-btn{
+  align-self:flex-start;padding:0 var(--space-2);height:var(--ctrl-h-sm);
+  min-height:var(--ctrl-h-sm);font-size:var(--text-xs);
+}
+.askai-welcome-card__start-btn{
+  align-self:flex-end;flex:none;
+}
+
+/* 설정 > AI > 고급 > 앱 내부 지침(components/settings/AiSettings.tsx, PLAN-2026-09-27 §7.1). 주의 배너는
+   --warn(양 테마 호박색) 한 색으로 Badge(settings/Badge.tsx)의 톤 문법을 따른다 — 1px color-mix 35% 테두리
+   + 옅은 틴트. 선은 1px 헤어라인(굵은 왼쪽 띠로 위계를 만들지 않는다). */
+.ai-instructions{margin-top:var(--space-4)}
+.ai-instructions__warning{
+  display:flex;flex-direction:column;gap:var(--space-1);
+  margin-bottom:var(--space-4);padding:var(--space-3) var(--space-4);
+  border:1px solid color-mix(in srgb,var(--warn) 35%,transparent);border-radius:var(--radius-md);
+  background:color-mix(in srgb,var(--warn) 8%,transparent);
+  font-size:var(--text-sm);line-height:var(--lh-ui);color:var(--text);
+}
+.ai-instructions__warning-title{font-weight:600}
+.ai-instructions__warning-desc{font-size:var(--text-xs);color:var(--muted)}
+.ai-instructions__picker{display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-3)}
+.ai-instructions__prompt{
+  width:100%;resize:vertical;
+  font-family:var(--font-mono);font-size:var(--text-xs);line-height:var(--lh-ui);
+}
+.ai-instructions__foot{display:flex;align-items:center;justify-content:space-between;margin-top:var(--space-3)}
+.ai-instructions__custom-mark{font-size:var(--text-xs);color:var(--muted)}
+
+/* 활동 기록 목록(ActivityHistoryPanel) — 날짜 머리글 아래 한 줄 행. 모든 행이 같은 높이(스냅샷 버튼이
+   있든 없든)라 리듬이 일정하고, 위계는 색이 아니라 진하기로 만든다: 노트 제목(--text) > 종류·시각(--muted).
+   삭제만 위험색. 구분선 대신 hover 배경으로 행을 가른다(둥근 모서리 + border-bottom 이 겹쳐 선 끝이
+   휘어 보이던 문제 제거). */
+.activity-day{padding:var(--space-4) var(--space-2) var(--space-2);font-size:var(--text-xs);color:var(--muted);letter-spacing:.02em}
+section:first-child > .activity-day{padding-top:var(--space-1)}
+.activity-row{display:flex;align-items:center;gap:var(--space-3);min-height:36px;padding:0 var(--space-2);border-radius:var(--radius-sm)}
+.activity-row:hover{background:var(--hover)}
+.activity-row__main{display:flex;align-items:center;gap:var(--space-3);flex:1;min-width:0;align-self:stretch;outline:none}
+.activity-row__main[data-clickable]{cursor:pointer}
+.activity-row__main:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;border-radius:var(--radius-sm)}
+.activity-row__kind{display:inline-flex;flex:none;color:var(--muted)}
+.activity-row__kind-label{flex:none;white-space:nowrap;font-size:var(--text-sm);color:var(--muted);min-width:2.2em}
+.activity-row__title{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:var(--text-md);color:var(--text)}
+.activity-row__title[data-gone]{color:var(--muted)}
+.activity-row__tag{flex:none;font-size:var(--text-xs);color:var(--faint);border:1px solid var(--divider);border-radius:var(--radius-sm);padding:0 var(--space-2)}
+.activity-row__time{flex:none;min-width:3.2rem;text-align:right;font-size:var(--text-xs);color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.activity-row[data-kind="delete"] .activity-row__kind,
+.activity-row[data-kind="delete"] .activity-row__kind-label{color:var(--danger)}

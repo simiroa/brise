@@ -1,0 +1,129 @@
+/* 내보내기 모달 — 왼쪽 종이 미리보기, 오른쪽 형식·범위·용지·달라지는 점.
+   (docs/mockups/2026-10-07-export-preview §3) 종이 안쪽 CSS 는 exportPaper.ts 가 따로 갖는다(앱 테마와 무관). */
+.export-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  column-gap: 0;
+  align-items: stretch;
+}
+.export-stage {
+  min-width: 0;
+  padding-right: var(--space-7);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.export-stage__hint {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--faint);
+}
+/* 종이를 앉히는 어두운 판 — 종이가 테마와 무관하게 흰색이라 판은 테마의 가장 깊은 면을 쓴다. */
+.export-stage__well {
+  background: var(--surface-sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: var(--space-6);
+  height: min(60vh, 560px);
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+.export-stage__status {
+  margin: auto;
+  font-size: var(--text-md);
+  color: var(--muted);
+  text-align: center;
+}
+.export-paper {
+  flex: none;
+  display: block;
+  border: 0;
+  box-shadow: var(--shadow-lg);
+}
+
+.export-side {
+  min-width: 0;
+  padding-left: var(--space-7);
+  border-left: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+.export-field__label {
+  font-size: var(--text-sm);
+  color: var(--faint);
+  margin-bottom: var(--space-2);
+}
+.export-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.export-chips--below {
+  margin-top: var(--space-1);
+}
+.export-scope-static {
+  font-size: var(--text-md);
+  color: var(--muted);
+}
+
+.export-diffs {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-5);
+}
+.export-diffs__head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--faint);
+  margin-bottom: var(--space-1);
+}
+.export-diff {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  font-size: var(--text-md);
+  color: var(--muted);
+}
+.export-diff__mark {
+  flex: none;
+  width: 1em;
+  text-align: center;
+  color: var(--info);
+}
+.export-diff__mark[data-kind='ok'] {
+  color: var(--ok);
+}
+.export-note {
+  font-size: var(--text-sm);
+  color: var(--faint);
+  line-height: 1.5;
+}
+
+.export-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.export-foot__file {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--text-md);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 좁아지면 한 단으로 접힌다 — 카드는 maxWidth:100% 라 실제로 좁아진다. */
+@media (max-width: 860px) {
+  .export-grid { grid-template-columns: minmax(0, 1fr); row-gap: var(--space-7); }
+  .export-stage { padding-right: 0; }
+  .export-side { padding-left: 0; border-left: 0; }
+}

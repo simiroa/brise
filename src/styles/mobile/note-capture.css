@@ -1,0 +1,372 @@
+/* mobile/note-capture.css — capture/edit chrome: the bottom dock (tool slot), capture presets row, body stage + the ＋ speed dial (floating FAB on text sections, dock slot on diagram/sheet) */
+
+/* Capture preset row — lives in the dock's tool slot (.mobile-dock-slot below) while the capture is empty,
+ * gone the instant the draft has real content or a preset was applied. ONE horizontal row that scrolls
+ * (owner 2026-10-07: it used to wrap to two ~115px rows between the editor and the action bar). The pills
+ * are `.mobile-filter-pill` (48px, flex:none — modal-contents.css), so the row only needs to lay them out
+ * and never wrap. The More sheet rides MobileModal (a portal), so nothing here clips it. The sheet's own
+ * rows reuse `.menu-row.menu-item` (tokens.css button reset) + `.mobile-ai-action` (row sizing). */
+.mobile-preset-row {
+  flex: none;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.mobile-preset-custom-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.mobile-preset-custom-row .mobile-ai-action {
+  flex: 1;
+  min-width: 0;
+}
+
+.mobile-preset-ai-row {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-1) var(--space-2);
+}
+.mobile-preset-ai-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-md);
+}
+.mobile-preset-ai-input::placeholder { color: var(--faint); }
+
+/* AI 프리셋 편집 sheet (item 6) — prompt textarea, same field language as .mobile-preset-ai-input
+ * above just multi-line. */
+.mobile-settings-prompt-textarea {
+  width: 100%;
+  min-height: 96px;
+  padding: var(--space-3);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-md);
+  resize: vertical;
+  box-sizing: border-box;
+}
+.mobile-settings-prompt-textarea::placeholder { color: var(--faint); }
+.mobile-preset-ai-submit {
+  flex: none;
+  min-height: 48px;
+  padding: 0 var(--space-4);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  font: inherit;
+  font-weight: 600;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.mobile-preset-ai-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Body stage (owner 2026-10-07) — the positioning root for the floating ＋ speed dial (FAB). The scrolling
+ * .mobile-note-body-wrap can't be it (the FAB must not scroll away with the text), so MobileNote wraps the
+ * body and the FAB in this non-scrolling box. It takes the column slot the body-wrap used to take by itself.
+ *
+ * --m-fab-clear = how much of the body's bottom the CLOSED FAB covers: ＋ 56 + bottom inset 12 + 12 breathing
+ * room. (The opened dial overlaps the body only while it is open — it is not reserved.) THE SAME NUMBER is
+ * FAB_CLEARANCE_PX in MobileNoteFab.tsx (the caret's ProseMirror scrollMargin — useFabScrollMargin) and
+ * MobileNoteFab.test.tsx fails if they drift. */
+.mobile-note-stage {
+  --m-fab-clear: 80px;
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* Reserve the FAB's footprint under the content so the LAST line / attachment can scroll up above it.
+ * (Padding fixes the scrolled-to-end case only; the caret while typing is the scrollMargin's.) */
+.mobile-note-stage .mobile-note-body-wrap {
+  padding-bottom: var(--m-fab-clear);
+  scroll-padding-bottom: var(--m-fab-clear);
+}
+/* Diagram / sheet sections have no floating FAB — their ＋ lives in the dock's tool slot — so nothing hovers over the
+ * bottom of the body: the "소스 편집" row and the sheet tools sit right above the dock (the overlap was the bug). */
+.mobile-note-stage[data-fab="dock"] .mobile-note-body-wrap {
+  padding-bottom: var(--space-5);
+  scroll-padding-bottom: 0;
+}
+
+/* Floating ＋ (56, accent) bottom-right of the body (owner 2026-10-07) on TEXT sections. The wrapper is click-through
+ * (pointer-events:none) and only the ＋ and the opened actions take taps, so text beside them stays tappable.
+ * z-index stays under --z-dropdown so the image BubbleMenu paints over it. The wrapper is the stacking context the
+ * dial's layer + tap-catcher live in (MobileSpeedDial). */
+.mobile-note-fab {
+  position: absolute;
+  right: max(var(--m-gutter), env(safe-area-inset-right));
+  bottom: var(--space-5);
+  z-index: var(--z-overlay);
+  pointer-events: none;
+  transition: transform var(--dur-med) ease, opacity var(--dur-med) ease;
+}
+.mobile-note-fab[data-hidden="true"] {
+  transform: translateY(calc(100% + var(--space-5)));
+  opacity: 0;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mobile-note-fab {
+    transition: opacity var(--dur-med) ease;
+  }
+  .mobile-note-fab[data-hidden="true"] {
+    transform: none;
+  }
+}
+
+/* ───────────── Speed dial (MobileSpeedDial) — ＋ → 녹음 · 사진 · 파일 첨부 rise above it, springy ─────────────
+ * Same component in two placements:
+ *   float — inside .mobile-note-fab (text sections). The layer is anchored to the ＋ (position:relative root) and opens up.
+ *   dock  — inside the dock's tool slot (diagram / sheet sections, MobileDockSlot). The SLOT is overflow-x:auto (so
+ *           overflow-y clips too): anything positioned against the slot or against a wrapper inside it would be cut to
+ *           the 48px row. So the dock root is deliberately NOT positioned — the layer's containing block is then the dock
+ *           bar itself (.mobile-capture-bar, position:relative), which sits OUTSIDE the clipping slot and is not clipped.
+ *
+ * Motion: ONLY transform + opacity (+ visibility, delayed so the exit finishes first) — never layout.
+ *   enter  a spring ("텐션"): each action travels up from the ＋ with ~12% overshoot, scale .5 → 1, ~45ms stagger
+ *          (the one nearest the ＋ first). The easing is a sampled damped spring (zeta .56) as linear(); engines without
+ *          linear() fall back to an overshooting cubic-bezier.
+ *   exit   quick ease-in back into the ＋, no stagger.
+ *   prefers-reduced-motion → no movement at all: just a fade (see the media block at the end of this section).
+ * DELIBERATE departure from the --dur-* ladder (docs/DESIGN.md: --dur-fast/med/slow = .12/.16/.22s, longer values are
+ * decorative-only): a spring needs ~460ms to settle and the owner asked for the springy "텐션" entrance (2026-10-07). The two
+ * raw numbers (460ms spring, 45ms stagger) sit ON the transition lines below, each under a reasoned exemption comment for
+ * check:type-scale ⓕ — not hidden behind a custom property, so the deviation stays visible and greppable.
+ * Opacity and the exit still use --dur-med / --dur-fast. */
+.mobile-speed-dial {
+  --m-dial-step: calc(48px + var(--space-3));
+  --m-dial-ease: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --m-dial-out: cubic-bezier(0.4, 0, 1, 1);
+}
+@supports (transition-timing-function: linear(0, 1)) {
+  .mobile-speed-dial {
+    --m-dial-ease: linear(0, 0.06 5%, 0.206 9%, 0.391 14%, 0.581 18%, 0.754 23%, 0.895 27%, 1 32%, 1.069 36%, 1.107 41%, 1.119 45%, 1.114 50%, 1.098 55%, 1.076 59%, 1.054 64%, 1.032 68%, 1.015 73%, 1.002 77%, 0.993 82%, 0.988 86%, 1);
+  }
+}
+.mobile-speed-dial[data-placement="float"] { position: relative; }
+.mobile-speed-dial[data-placement="dock"] { flex: none; }
+
+/* The layer holds the actions. Click-through itself; only the OPEN actions take taps. It comes AFTER the ＋ in the DOM (tab and
+ * screen-reader order: ＋ → 녹음 → 사진 → 파일 첨부), so it also paints above it — harmless: the layer sits a gap above the ＋ and
+ * never overlaps it. */
+.mobile-speed-dial-layer {
+  position: absolute;
+  z-index: var(--z-overlay);
+  pointer-events: none;
+}
+.mobile-speed-dial[data-placement="float"] .mobile-speed-dial-layer {
+  right: 0;
+  bottom: calc(100% + var(--space-3));
+}
+.mobile-speed-dial[data-placement="dock"] .mobile-speed-dial-layer {
+  left: var(--m-gutter);
+  bottom: calc(100% + var(--space-3));
+}
+
+/* Light, NON-dimming tap-catcher: a tap anywhere outside closes the dial. It is the FIRST child of the dial root — before the ＋
+ * and the layer, which share its z-index and so paint above it by DOM order (the ＋ stays tappable: a second tap toggles; the
+ * actions stay tappable). It is not focusable, so it takes no part in the tab order. position:fixed is the viewport (no
+ * transformed ancestor once the screen slide has finished — and the dock slot's overflow does not clip a fixed box). */
+.mobile-speed-dial-catcher {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  pointer-events: auto;
+  background: transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-speed-dial-actions {
+  position: relative;
+  display: flex;
+  flex-direction: column-reverse; /* DOM order = nearest the ＋ first, so 녹음 sits right above it */
+  gap: var(--space-3);
+}
+.mobile-speed-dial[data-placement="float"] .mobile-speed-dial-actions { align-items: flex-end; }
+.mobile-speed-dial[data-placement="dock"] .mobile-speed-dial-actions { align-items: flex-start; }
+
+/* One action = the whole row is the button (text label + 48px circle), so the target is ≥48 tall and the label is tappable.
+ * --i (0 = nearest the ＋) is set inline by the component. Closed = invisible AND non-interactive (visibility flips after the
+ * exit transition) so the hidden buttons never cover the body bottom / diagram controls. */
+.mobile-speed-dial-item {
+  --m-dial-origin: calc(100% - 24px); /* the circle's centre — scale shrinks toward the ＋ axis */
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 48px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(calc((var(--i) + 1) * var(--m-dial-step))) scale(0.5);
+  transform-origin: var(--m-dial-origin) 50%;
+  transition: transform var(--dur-med) var(--m-dial-out), opacity var(--dur-med) var(--m-dial-out), visibility 0s linear var(--dur-med);
+}
+.mobile-speed-dial[data-placement="dock"] .mobile-speed-dial-item {
+  --m-dial-origin: 24px;
+  flex-direction: row-reverse; /* circle on the left (over the ＋), label to its right */
+  justify-content: flex-end;
+}
+.mobile-speed-dial[data-open="true"] .mobile-speed-dial-item {
+  pointer-events: auto;
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  /* type-scale-exempt: 오너 요청(2026-10-07) 텐션 있는 스프링 등장 — 오버슈트가 정착하려면 460ms 가 필요(--dur-slow 는 .22s)하고 항목 사이 45ms 시차를 둔다 */
+  transition: transform 460ms var(--m-dial-ease) calc(var(--i) * 45ms), opacity var(--dur-med) ease-out calc(var(--i) * 45ms), visibility 0s;
+}
+.mobile-speed-dial .mobile-speed-dial-item:active .mobile-speed-dial-btn { filter: brightness(0.95); }
+
+/* The circle and the ＋ are `.overlay` (opaque floating surface, tokens.css; its bg/border/radius are (0,1,0), so
+ * the rules below are scoped under .mobile-speed-dial to win on specificity, not on import order) — whose overlayIn keyframe animation MUST be
+ * off here: these are always mounted, so it would replay at every note open and its keyframe opacity beats our transition
+ * (the same flash tokens.css documents for .hovprev). The label is NOT a surface any more (below). */
+.mobile-speed-dial .overlay { animation: none; }
+.mobile-speed-dial .mobile-speed-dial-btn {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
+}
+/* Label = plain text beside the circle (owner 2026-10-10: the pill's border/background read as clutter). No surface, no
+ * padding box — legibility over whatever body text is underneath comes from a soft halo in the page colour (--bg), the same
+ * trick dashboardList.css uses for text over content. The row (.mobile-speed-dial-item) is still the 48px touch target. */
+.mobile-speed-dial .mobile-speed-dial-label {
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-shadow: 0 0 2px var(--bg), 0 0 6px var(--bg), 0 1px 4px var(--bg);
+}
+/* AI action while AI is off/unreachable — still tappable (the sheet explains why), just dimmed. Same idea as the old dock ✨'s
+ * data-muted (the ✨ moved into the dial, owner 2026-10-10). */
+.mobile-speed-dial .mobile-speed-dial-item[data-muted="true"] .mobile-speed-dial-btn,
+.mobile-speed-dial .mobile-speed-dial-item[data-muted="true"] .mobile-speed-dial-label { color: var(--faint); }
+
+/* The ＋ itself: accent-filled (primary button colours). The icon (not the button) turns 45° into × so the circle and its
+ * shadow stay put. float = 56, dock = 48 (the dock row is 48 tall, and the slot clips anything bigger). */
+.mobile-speed-dial .mobile-speed-dial-trigger {
+  position: relative;
+  z-index: var(--z-overlay); /* same z as the tap-catcher but later in the DOM → above it, so a second tap on ＋ toggles */
+  pointer-events: auto;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border-color: transparent;
+  border-radius: 50%;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  box-shadow: var(--shadow-lg);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.mobile-speed-dial .mobile-speed-dial-trigger:active { filter: brightness(0.95); }
+.mobile-speed-dial[data-placement="dock"] .mobile-speed-dial-trigger {
+  width: 48px;
+  height: 48px;
+  box-shadow: none; /* in the dock row it is a bar control, not a floating one */
+}
+.mobile-speed-dial[data-placement="dock"] .mobile-speed-dial-trigger:focus-visible {
+  outline-offset: -3px; /* the slot clips outside its 48px box */
+}
+.mobile-speed-dial-icon {
+  display: grid;
+  place-items: center;
+  /* type-scale-exempt: 오너 요청(2026-10-07) — ＋ 가 ×로 도는 것도 항목들과 같은 460ms 스프링으로 정착한다(위 열림 규칙과 같은 이유) */
+  transition: transform 460ms var(--m-dial-ease);
+}
+.mobile-speed-dial[data-open="true"] .mobile-speed-dial-icon { transform: rotate(45deg); }
+
+@media (prefers-reduced-motion: reduce) {
+  /* No travel, no scale, no rotation, no stagger — the actions simply fade in/out in place and the ＋ swaps to × instantly. */
+  .mobile-speed-dial-item,
+  .mobile-speed-dial[data-open="true"] .mobile-speed-dial-item {
+    transform: none;
+    transition: opacity var(--dur-fast) linear;
+  }
+  .mobile-speed-dial-item { transition: opacity var(--dur-fast) linear, visibility 0s linear var(--dur-fast); }
+  .mobile-speed-dial-icon { transition: none; }
+}
+
+.mobile-note-body-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  /* The dock below always exists now, so it (and the tab bar) own the bottom safe-area inset; the FAB's
+   * footprint is added back inside .mobile-note-stage above. */
+  padding: var(--space-5) var(--m-gutter) var(--space-5);
+}
+
+/* The dock (MobileNoteActionBar) — ONE 48px row at the bottom: [tool slot ..........]. (✨ moved into the ＋ speed dial
+ * and 저장하기 was dropped — typing autosaves, the title line shows the save state — owner 2026-10-10.) It sits ABOVE
+ * the shared tab bar (never replaces it, see MobileApp.tsx's showTabBar), so the tab bar (tabbar.css) owns
+ * env(safe-area-inset-bottom); this row drops its own copy to avoid double bottom padding. While the keyboard
+ * is open the tab bar is hidden and this row stays, directly under the typing-nudge chip row.
+ * `position:relative` is the containing block of the dock-placement speed dial's layer (see the speed-dial block above). */
+/* 토스트(components/Toast.tsx, 모바일 트리 밖 형제)는 기본으로 화면 아래 모서리에 뜬다 — 독이 있는 동안엔 그 위로.
+ * 2026-10-07 S22: "반영됨 · 되돌리기" 토스트가 독의 ☑ B I 를 덮었다. 독 = 버튼 48 + 위아래 여백 + 테두리 1. */
+:root:has(.mobile-capture-bar) {
+  --toast-bottom: calc(48px + var(--space-1) * 2 + 1px + var(--space-3));
+}
+.mobile-capture-bar {
+  flex: none;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--m-gutter);
+  border-top: 1px solid var(--divider);
+}
+/* The dynamic tool slot (MobileDockSlot): capture presets | checklist/bold/italic | image size | nothing. It
+ * takes the whole row and scrolls sideways if its content is wider (presets always are). No scrollbar — the
+ * clipped next pill is the hint. Height is 48px in every state — also when the slot is empty (read-only text
+ * section) now that ✨ and 저장하기 no longer give the row its height — so the dock never jumps when the slot
+ * swaps and --toast-bottom above stays true. */
+.mobile-dock-slot {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.mobile-dock-slot::-webkit-scrollbar { display: none; }
+.mobile-dock-tools {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}

@@ -1,0 +1,7 @@
+{
+  "home": "Tableau de bord",
+  "close_all": "Fermer tout",
+  "close_others": "Fermer les autres",
+  "reopen_closed": "Rouvrir l'onglet fermé",
+  "close_tab": "Fermer l’onglet {{title}}"
+}

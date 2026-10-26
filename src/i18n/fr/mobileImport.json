@@ -1,0 +1,16 @@
+{
+  "filled": "Contenu importé dans l’écran Écrire. Il sera enregistré comme note quand vous quitterez l’écran.",
+  "filled_skipped": "Contenu importé dans l’écran Écrire. {{count}} élément(s) n’ont pas pu être importés (plus de 25 Mo, etc.).",
+  "nothing": "Rien à importer. Les fichiers de plus de 25 Mo et les formats non pris en charge sont ignorés.",
+  "failed": "Import impossible. Vérifiez la connexion et réessayez.",
+  "commit_failed": "Enregistrement impossible. Le contenu importé reste à l’écran.",
+  "upload_dropped": "{{count}} photo(s) ignorées (trop volumineuses ou illisibles).",
+  "upload_failed_bg": "{{count}} photo(s) pas encore envoyée(s). Vous pouvez réessayer en haut de la note.",
+  "strip_images": "{{count}} photo(s) importées · envoyées quand vous quittez",
+  "strip_remove": "Retirer les photos importées",
+  "strip_text": "Contenu importé · devient une note quand vous quittez",
+  "strip_discard": "Abandonner",
+  "pending_bar": "{{count}} photo(s) importée(s) pas encore envoyée(s)",
+  "pending_uploading": "Envoi de {{count}} photo(s) importée(s)…",
+  "pending_retry": "Réessayer"
+}

@@ -1,0 +1,35 @@
+# 커맨드 계약: transcribe (오디오 전사) — 규약: _conventions.yaml
+# PLAN-2026-10-06-s2-input.md §5.3-3 / §5.4 · docs/AI.md "오디오 전사". 구현: commands/audio_transcribe.rs.
+# 이름이 ai_ 접두가 아니라 strip_remote_ai_overrides 에는 걸리지 않는다 — 인자에 endpoint/api_key 가 아예 없어
+# (서버가 자기 DB 에서만 읽는다) strip 은 불필요하다. 레이트리밋은 sync_server/handlers/remote_policy.rs::is_ai_command
+# 가 audio_transcribe 를 명시적으로 포함해 ai_* 토큰 버킷을 함께 탄다.
+commands:
+  audio_transcribe:
+    http: true    # 폰이 업로드한 녹음을 PC 가 받아쓴다 — 원격 호출이 본래 용도다
+    input:  { note_id: uuid, attachment_id: uuid }
+    output: { text: string }
+    errors: [NOT_FOUND, VALIDATION, CONFLICT, IO]
+    notes: |
+      녹음(audio 첨부)을 Gemini inline_data 로 받아쓴다. 결과는 **attachments.transcript 에 서버가 보관**하고
+      events::publish 로 알린다 — 서버는 노트 본문을 쓰지 않는다(D2② expected_updated_at 부재). 삽입은 클라이언트.
+      멱등: 저장된 전사가 있으면 AI 호출 없이 그대로 반환한다(AI 가 꺼져 있어도).
+      검증: 첨부가 note_id 의 audio 여야 한다(VALIDATION). 다른 노트의 첨부 금지.
+      자격(provider/endpoint/api_key/model)은 **인자로 받지 않는다** — 서버 DB 에서만 읽어 원격 호출자가 키를
+      빼돌릴 수 없다. 게이트: ai_enabled + privacy_gate_ok.
+      안정 에러 코드(메시지 접두, 프런트가 매칭 — 상수는 코드가 SSOT):
+        VALIDATION "ai_required: …"                    AI 꺼짐 → "AI 연결 필요"
+        VALIDATION "audio_unsupported_provider: …"     provider 가 Gemini 가 아님
+        VALIDATION "audio_too_large: …"                원본 14MB 초과(Gemini inline 요청 20MB 한도)
+        NOT_FOUND  "audio_file_missing: …"             파일이 디스크에 없음(참조 첨부를 옮김/삭제)
+        CONFLICT   "transcribe_in_progress: …"         같은 첨부 전사가 이미 진행 중 — 잠시 뒤 다시
+        IO         "transcribe_empty: …"               모델이 빈 텍스트를 돌려줌(저장 안 함)
+      실패는 저장하지 않으며 재시도 가능하다. 타임아웃은 작업 전체 120s(재시도 1회 포함).
+
+  attachment_transcript_mark_inserted:
+    http: true    # 폰이 본문 삽입을 마친 뒤 부른다
+    input:  { attachment_id: uuid }
+    output: { ok: boolean }
+    errors: [NOT_FOUND, VALIDATION]                # VALIDATION: 전사가 아직 없는 첨부
+    notes: >
+      같은 전사의 중복 삽입을 막는 플래그(transcript_inserted)만 올린다. 새 전사가 저장되면(audio_transcribe)
+      0 으로 되돌아간다.

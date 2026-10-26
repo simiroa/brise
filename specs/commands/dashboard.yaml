@@ -1,0 +1,208 @@
+# Dashboard commands (docs/DASHBOARD.md §4). Wave 3 backend.
+# 2026-08-02: http:false 일괄 해제. Wave 3 당시엔 "이번 웨이브는 네이티브 IPC만"이라 전부 막아
+# 뒀는데, 그 결과 동기화 웹 클라이언트를 데스크톱 폭으로 열면 대시보드가 통째로 비어 보였다
+# (오너 신고). 이 커맨드들은 전부 워크스페이스 스코프 읽기 + 체크박스 토글 하나뿐이라 원격에서
+# 막을 이유가 없다. note_cover_image 가 돌려주는 rel_path 도 소비처(BoardCard/HomeMapPane)가
+# 이미 lib/attachmentsBase.ts 의 브라우저 분기를 타므로 /api/v1/attachments 로 정상 해석된다.
+# workspace_id is required on every scoped read (concept B); structure leaves room for
+# Option later if a global scope toggle is added.
+
+commands:
+  dashboard_board:
+    input: { workspace_id: uuid }
+    output: BoardResult
+    errors: [NOT_FOUND]
+    agent:
+      kind: read
+      description: |
+        노트북의 칸반 보드 상태별 칸(columns)과 각 칸의 노트 목록 및 체크박스 할 일 항목(BoardTodoItem)을 조회한다.
+      args:
+        workspace_id: "조회할 노트북 id (workspace_list의 active_id 등)"
+    notes: |
+      Status columns (null + built-in 3 + workspace custom) × notes with year/month/day (start,
+      for the card's date-range text), end_year/end_month/end_day (Dashboard Wave 2, 2026-08-01:
+      due_at merged into the end axis), remind (Dashboard Wave 3, 2026-08-01: "알려줘" opt-in
+      flag), unchecked_count, and checkbox items. The deadline/urgency display model is retired
+      (2026-08-01) — note dates are neutral record info. Server sorts: pinned first (remind=true
+      AND end_day full precision AND end date strictly before today, done column exempt — the
+      only decision point is repo::dashboard::is_pinned), end date ascending within the pinned group,
+      then the rest by schedule (end date ascending, dateless last), tie-break updated_at desc —
+      repo::dashboard::board_note_cmp. No sort-mode input: this is always the default ("일정")
+      order; "최근"/"제목" sort modes are picked client-side (BoardColumn.tsx) and re-sort the
+      non-pinned tail only, keeping pinned notes stable at the top of each column. Checkboxes from
+      kind=text sections only (HTML taskItem or GFM "- [ ]"). line_index = 0-based checkbox
+      ordinal within the section (todo_toggle input). Cap BOARD_NOTE_CAP=1000 across all columns
+      combined (not per-column) — over cap keeps only the highest-priority notes by the same sort;
+      total_matched/cap/capped always set (no silent cap).
+
+  todo_toggle:
+    input:
+      {
+        note_id: uuid,
+        section_id: uuid,
+        line_index: integer,
+        expected_checked: boolean,
+      }
+    output: TodoToggleResult
+    errors: [NOT_FOUND, VALIDATION, CONFLICT]
+    agent:
+      kind: write
+      description: |
+        대시보드 보드 등에서 확인한 체크박스 할 일 항목의 완료 상태를 토글한다.
+        동시 편집 충돌을 방지하기 위해 현재 상태(expected_checked)가 일치해야 변경된다.
+      args:
+        note_id: "대상 노트 id (dashboard_board 의 columns[].notes[].id — 그 노트의 items 에서 항목을 고른다)"
+        section_id: "체크박스가 있는 섹션 id (dashboard_board의 BoardTodoItem.section_id)"
+        line_index: "섹션 본문 내 체크박스의 0부터 시작하는 줄 인덱스 (dashboard_board의 BoardTodoItem.line_index)"
+        expected_checked: "현재 체크 상태 (dashboard_board의 BoardTodoItem.checked)"
+    notes: |
+      Sole dashboard write. Flips body_md checkbox at line_index. expected_checked must
+      match current state (CONFLICT on concurrent edit). Reuses sections::update (FTS +
+      updated_at) and publishes remote-note-write.
+
+  dashboard_calendar:
+    input: { workspace_id: uuid, year: integer, month: "integer(1..12)" }
+    output: CalendarResult
+    errors: [NOT_FOUND, VALIDATION]
+    agent:
+      kind: read
+      description: "지정한 연도와 월에 해당하는 캘린더 일정 및 기간(스팬) 항목 목록을 조회한다."
+      args:
+        workspace_id: "조회할 노트북 id"
+        year: "조회할 연도"
+        month: "조회할 월 (1~12)"
+    notes: |
+      Event/span items intersecting the month. Spans clipped to month. Year-only notes (month
+      NULL) cover the whole year; year+month cover the whole month. Dashboard Wave 2
+      (2026-08-01): due_at is gone — a former "independent due badge" (kind="due") is now just
+      the note's end_*, so it rides the normal span item on whatever month it actually falls
+      in; kind is only ever "event"/"span". Dashboard Wave 3 (2026-08-01): the calendar renders
+      every item neutrally — no urgency/deadline coloring, no ⏰ badge (that display model is
+      retired app-wide). The remind-flag pin/red-dot treatment is board-only (dashboard_board),
+      not surfaced here.
+      W5-5 (docs/PLAN-schedule-system.md §6.3): 반복(rrule) 노트는 **서버가 그 달의 회차를 전개해서**
+      같은 note_id 를 날짜별 여러 항목으로 내려보낸다 — 프론트는 반복이라는 개념을 모른다. 회차는
+      실체화되지 않고(DB 에 행이 없다) 매 조회마다 계산된다. 각 회차는 [occ, occ+duration_days]
+      스팬이고 기존 월 클리핑이 그대로 span_start/span_end 를 자른다. start_time/end_time 은
+      하루뷰 시간축(§6.2)이 쓰고, 월 그리드 셀은 여전히 시각을 그리지 않는다.
+      2026-09-08: remind — 항목을 낳은 note_dates 행의 remind 다(대표는 notes.remind 와 같은 값,
+      투영이므로). 연간 뷰가 알림 있는 날에 폴더색 점을 찍는 근거. 중립 원칙과 무관(긴급도 아님,
+      사용자가 직접 켠 플래그를 그대로 실을 뿐).
+      2026-09-10 (PLAN-2026-09-10-calendar-reminders §D4): 관련 날짜(note_dates position≠0)도
+      대표와 **같은 경로**를 지난다 — 시각·기간·부분 정밀도·반복이 전부 대표와 똑같이 처리된다
+      (예전 "extra" 경로는 한 점만 읽고 start_time 을 NULL 로 못 박아 이 넷이 전부 빠져 있었다).
+
+  dashboard_timeline:
+    input: { workspace_id: uuid, from_year: integer, to_year: integer }
+    output: TimelineResult
+    errors: [NOT_FOUND, VALIDATION]
+    notes: |
+      Points/bars + workspace_eras in year range. Cap TIMELINE_ITEM_CAP=2000 — over cap
+      returns year_buckets instead of items; total_matched/cap/capped always set (no silent cap).
+      Dashboard swimlanes (2026-08-01): items carry folder_id (primary axis, no axis switcher in
+      v1); year_buckets is 2D (folder_id, year) → count so the capped path can still render one
+      density histogram per lane. No separate folder-meta list on this response — the client
+      already holds all workspace folders' name/color_hue (folder_list, loaded at boot); only the
+      per-folder in-range totals need to come from this query, and those are derivable from
+      items/year_buckets client-side.
+
+  dashboard_graph:
+    input: { workspace_id: uuid, limit: "integer|omit=500" }
+    output: GraphResult
+    errors: [NOT_FOUND, VALIDATION]
+    notes: |
+      Workspace-scoped knowledge graph. Deleted and archived notes are excluded. limit defaults
+      to 500 and is always clamped to GRAPH_NODE_CAP=500. Nodes are ranked by internal-link degree
+      then recency. Backlink edges come from internal attachments; related edges reuse the existing
+      note_related signals at score >= 25, exclude backlink/excluded pairs, and are capped at five
+      per node in SQL. Each returned related pair is also INSERT OR IGNORE'd into pending overlap
+      suggestions; previously dismissed/accepted pairs are never resurrected. Edge payloads have a
+      deterministic GRAPH_EDGE_CAP=2500 and edge_total/edge_cap/edges_capped expose truncation.
+
+  schedule_today:
+    input: { workspace_id: uuid }
+    output: ScheduleTodayResult
+    errors: [NOT_FOUND]
+    agent:
+      kind: read
+      description: "오늘(PC 로컬 날짜 기준) 예정된 알림 일정 및 미처리(지연) 알림 목록을 조회한다."
+      args:
+        workspace_id: "조회할 노트북 id"
+    notes: |
+      docs/PLAN-schedule-system.md §7.4 — 대시보드 헤더 벨 팝오버의 데이터 소스. 오늘(서버 로컬
+      날짜) 하루 안에 발화가 떨어지는 알림을 시각 오름차순으로. repo::schedule::due_today 를 그대로
+      감싼다: 판정(fire_at = 회차 날짜 + start_time − remind_offset_min, 종일은 종료일 +
+      settings.reminder_all_day_at)은 분 단위 틱과 **같은 한 지점**이고, 반복 노트는 그날 걸리는
+      회차만 전개돼 노트 하나가 여러 행으로 나올 수 있다.
+      **2026-09-07(GRILL-2026-09-07 D5): 미처리(지남)도 함께 반환한다.** 벨이 오늘치만 보여
+      주는 동안 어제 울린 것은 흔적 없이 사라졌고(발화 기록 테이블이 없다 — repo/schedule/mod.rs
+      주석이 유실 수용을 명시), 그래서 "쌓인 건지 아닌지 모르겠다"가 오너의 가장 큰 통증이었다.
+      미처리 판정은 **새로 만들지 않는다** — repo::dashboard::due_reminders(칸반 핀과 같은
+      판정: remind=1 · 종료일 과거 · 상태가 완료 아님 · 아카이브 제외)를 그대로 쓴다. 지금까지
+      그 질의의 유일한 소비자는 펫의 5분 폴링이었다. 출력 타입은 그대로 DueReminder[] 이고
+      kind 가 "due"(오늘 도래)와 "overdue"(미처리)를 가른다 — 새 커맨드도 새 타입도 없다.
+      정렬은 overdue 먼저(오래된 것부터), 그 뒤 due(시각 오름차순).
+
+      마스터 스위치(settings.notifications_enabled)는 보지 않는다 — "예정된 알림이 무엇인지"는
+      스위치와 무관한 정보이고, 팝오버가 "앱 알림이 꺼져 있습니다" 한 줄을 얹는 편이 빈 화면보다
+      정직하다(§5.1). 노트별 게이트(notes.remind=1)와 아카이브/휴지통 제외는 그대로 적용된다.
+      kind 는 항상 "due"(펫 5분 폴링이 쓰는 "overdue" 는 이 커맨드로 나오지 않는다),
+      fire_at 은 "YYYY-MM-DDTHH:MM"(로컬 벽시계, 초 없음).
+
+  note_cover_image:
+    input: { note_id: uuid }
+    output: CoverImageResult
+    errors: [NOT_FOUND]
+    notes: |
+      First image attachment (position ASC). rel_path is the *thumbnail* path
+      (`{original}.thumb.jpg`) for convertFileSrc / CSP asset path — never the original raster
+      (SCALABILITY.md §3: a tile-sized <img> pointed at a multi-megapixel original decodes the
+      full bitmap). SVG is the one exception (vector, no thumb is ever generated for it) and
+      passes through as-is. rel_path is null when there's no image attachment, or when one
+      exists but its thumbnail hasn't been generated yet — this command never generates one.
+
+  note_cover_images:              # 칸반: 화면에 보이는 카드의 커버를 한 번에
+    input:  { note_ids: "uuid[]" }  # 상한 NOTE_COVER_BATCH_MAX (300), 넘는 id 는 버린다
+    output: { items: "CoverImageResult[]" }
+    errors: []
+    notes: |
+      여러 노트의 커버 썸네일 경로를 한 번에 조회한다(칸반 카드용).
+      규칙은 note_cover_image 와 같다(첫 이미지 첨부의 썸네일 경로, SVG 통과, 썸네일 생성 없음). 카드마다 IPC 하나씩 나가던 것(칸반 열 때 관측 21회)을
+      없애려는 커맨드다. 없는·삭제된 노트는 실패가 아니라 결과에서 빠진다 — 일괄 조회 한 건
+      때문에 나머지 카드의 커버가 전부 사라지면 안 된다. dashboard_board 응답에 싣지 않은 이유:
+      보드는 최대 BOARD_NOTE_CAP(1000) 장을 자주 다시 읽는데, 커버는 카드마다 디스크 stat 이
+      들어 보이는 카드만 묻는다(SCALABILITY.md §0).
+
+shared_types:
+  BoardTodoItem: "{ section_id: uuid, line_index: integer, text: string, checked: boolean }"
+  BoardNote: "{ id: uuid, title: string, year: integer, month: integer|null, day: integer|null, end_year: integer|null, end_month: integer|null, end_day: integer|null, remind: boolean, updated_at: timestamp, unchecked_count: integer, items: BoardTodoItem[] }"
+  BoardColumn: "{ status: string|null, status_label: string|null, notes: BoardNote[] }"
+  BoardResult: "{ columns: BoardColumn[], total_matched: integer, cap: integer, capped: boolean }"
+  TodoToggleResult: "{ note_id: uuid, section_id: uuid, line_index: integer, checked: boolean, updated_at: timestamp }"
+  # docs/PLAN-schedule-system.md §6.3 — W5-5 가 더한 3필드는 전부 optional(§2.3 구버전 호환):
+  # start_time/end_time 은 "HH:MM"(NULL = 종일, 하루뷰 분기 기준), is_occurrence 는 rrule 에서
+  # 전개된 회차 표시. 반복 노트는 같은 note_id 가 그 달의 회차 수만큼 여러 항목으로 나온다.
+  # kind: "event"(단일 시점) | "span"(기간). 2026-09-10 (PLAN-2026-09-10-calendar-reminders §D4):
+  # "extra" 는 은퇴했다 — 관련 날짜(note_dates position≠0)도 노트 자신의 사건 축과 **같은 경로**를
+  # 지나 같은 event/span 규칙을 받는다. 관련 날짜인지는 kind 가 아니라 `position !== 0` 이 말한다.
+  # 2026-09-07: label 제거 — 관련 날짜도 다른 항목처럼 **노트 제목**으로 읽힌다.
+  # date_id/position/remind_offset_min/rrule (2026-09-10 §D4): 그 항목을 낳은 note_dates 행 —
+  # position 0 이면 노트 자신의 사건 축(notes.* 투영), 아니면 관련 날짜. date_id 는 카드에서
+  # 노트로 가지 않고 그 행을 바로 고치는 손잡이(note_date_update)이고, 항목 렌더 키이기도 하다
+  # (한 노트의 관련 날짜 둘이 같은 날에 겹칠 수 있으므로 note_id 로는 못 가른다).
+  CalendarItem: "{ note_id: uuid, folder_id: uuid, title: string, kind: string, span_start: string, span_end: string, year: integer, month: integer|null, day: integer|null, end_year: integer|null, end_month: integer|null, end_day: integer|null, start_time: string|null, end_time: string|null, is_occurrence: boolean|null, remind: boolean, date_id: uuid, position: integer, remind_offset_min: integer|null, rrule: string|null }"
+  CalendarResult: "{ year: integer, month: integer, items: CalendarItem[] }"
+  TimelineNoteItem: "{ note_id: uuid, title: string, kind: string, year: integer, month: integer|null, day: integer|null, end_year: integer|null, end_month: integer|null, end_day: integer|null, folder_id: uuid }"
+  TimelineYearBucket: "{ folder_id: uuid, year: integer, count: integer }"
+  TimelineEra: "{ id: uuid, name: string, from_year: integer, to_year: integer, position: integer }"
+  TimelineResult: "{ from_year: integer, to_year: integer, items: TimelineNoteItem[], year_buckets: TimelineYearBucket[], eras: TimelineEra[], total_matched: integer, cap: integer, capped: boolean }"
+  GraphNode: "{ id: uuid, folder_id: uuid, title: string, year: integer, snippet: string, degree: integer }"
+  GraphEdge: "{ source: uuid, target: uuid, kind: 'backlink'|'related', weight: integer }"
+  GraphResult: "{ nodes: GraphNode[], edges: GraphEdge[], total: integer, cap: integer, capped: boolean, edge_total: integer, edge_cap: integer, edges_capped: boolean }"
+  CoverImageResult: "{ note_id: uuid, rel_path: string|null, attachment_id: string|null }"
+  # docs/PLAN-schedule-system.md §1.4 — kind 는 "overdue"(지남, 펫 5분 폴링) | "due"(도래, 일정 틱).
+  # fire_at 은 due 일 때만 채워진다: "YYYY-MM-DDTHH:MM" 로컬 벽시계 분 해상도(타임존 표기 없음).
+  # related_date_id: 관련 날짜(note_dates)에서 온 알림이면 그 행 id, 노트 자신의 일정이면 null.
+  # 벨의 "완료"가 무엇을 끄는지 가른다 — 관련 날짜는 note_date_set_remind(false), 노트는 상태 done.
+  DueReminder: "{ note_id: uuid, title: string, kind: string, fire_at: string|null, related_date_id: uuid|null }"
+  ScheduleTodayResult: "{ items: DueReminder[] }"

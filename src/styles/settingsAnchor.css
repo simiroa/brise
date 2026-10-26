@@ -1,0 +1,12 @@
+/* 설정 딥링크 도착 강조 — SettingsPanel 이 대상 블록에 잠깐 붙인다. */
+.settings-anchor-flash {
+  border-radius: var(--radius-md);
+  animation: settings-anchor-flash 1.2s ease-out;
+}
+@keyframes settings-anchor-flash {
+  0%, 40% { box-shadow: 0 0 0 2px var(--accent); }
+  100% { box-shadow: 0 0 0 2px transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .settings-anchor-flash { animation: none; outline: 2px solid var(--accent); outline-offset: 2px; }
+}

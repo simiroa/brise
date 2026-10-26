@@ -1,0 +1,128 @@
+# 기능 카탈로그: 펫
+features:
+  - id: F-P01
+    name: 펫 창 · 행동 · 페르소나
+    status: shipped
+    commands: commands/pet.yaml
+    verify:
+      rust:
+        - src-tauri/src/commands/pet.rs
+        - src-tauri/src/pet_window.rs
+        - src-tauri/src/repo/pet
+      vitest:
+        - src/plugins/pet
+        - src/components/settings/PetSection.test.tsx
+        - src/components/settings/PetPersonaSection.test.tsx
+    cases:
+      - id: empty-structured-summary-not-saved-as-json
+        given:
+          summary: '{"title":"제목","summary":"   "}'
+        expect:
+          rejected: "empty structured summary must be rejected"
+          payload: '{"title":"제목","summary":"   "}'
+        covered_by: empty_structured_summary_is_not_saved_as_raw_json
+
+      - id: vision-fails-falls-back-to-text
+        given:
+          image: attached jpeg
+          vision: fail
+        expect:
+          status: "fallback_text"
+          reply: "텍스트만"
+        covered_by: send_pet_prompt_falls_back_to_text_when_vision_fails
+
+      - id: persona-custom-blank-falls-back
+        given:
+          preset: custom
+          prompt: "   "
+        expect:
+          custom: "내 맘대로"
+          unknown: "butler"
+          default: "secretary"
+        covered_by: persona_presets_and_custom_fallback
+
+      - id: parse-plain-text-as-answer
+        given:
+          model_output: "그건 잘 모르겠어요."
+        expect:
+          action: "answer"
+          text: "그건 잘 모르겠어요."
+        covered_by: parse_action_falls_back_to_plain_answer_when_the_model_ignores_the_contract
+
+      - id: unknown-action-never-executes
+        given:
+          action: "delete_everything"
+        expect:
+          leaked: "delete_everything"
+          reason: "모르는 액션은 절대 실행되지 않는다"
+        covered_by: parse_action_normalizes_an_unknown_action_name
+
+      - id: write-permission-denied-no-insert
+        given:
+          allow_write: false
+          action: create_note
+        expect:
+          body: "권한 없이 메모"
+          action: "create_section"
+        covered_by: create_note_without_write_permission_does_not_insert
+
+      - id: stored-write-gate-overrides-client
+        given:
+          allow_write: true
+          chat_write_enabled: false
+        expect:
+          blocked: "stored chat_write_enabled=false must block create_note even when the client sends allow_write=true"
+          action: "create_section"
+        covered_by: pet_chat_inner_and_write_gate_blocks_when_setting_off
+
+      - id: propose-plan-touches-nothing
+        given:
+          action: propose_plan
+          plan_kind: rename_plan
+        expect:
+          text: "이름부터 정리할까요?"
+          kind: "rename_plan"
+        covered_by: propose_plan_action_touches_nothing_and_returns_a_plan_id
+
+      - id: rag-wrapped-as-untrusted
+        given:
+          hit: { title: "여행 계획", snippet: "부산 3박 4일" }
+        expect:
+          tag: "<untrusted_data>"
+          title: "여행 계획"
+          snippet: "부산 3박 4일"
+        covered_by: system_prompt_wraps_rag_snippets_as_untrusted_data
+
+      - id: pet-window-allowlist
+        given:
+          window: pet
+        expect:
+          denied: "ai_generate_from_prompt"
+          settings: "settings_get_all"
+          allowed: "pet_chat"
+        covered_by: pet_command_allowlist_denies_destructive_commands_by_default
+
+      - id: conversation-save-audit-omits-raw
+        given:
+          conversation: weekend trip chat
+        expect:
+          action: "pet_conversation_summary"
+          title: "부산 주말 여행"
+          raw: "부산에 갈까"
+        covered_by: conversation_save_summarizes_then_persists_note_and_audit_history
+
+      - id: v1-manifest-without-sprite-version
+        given:
+          atlas: 1536x1872
+          spriteVersionNumber: omitted
+        expect:
+          dialect: "codex-v1"
+          format: "brise-pet/1"
+        covered_by: v1_manifest_without_sprite_version_installs_as_codex_v1
+
+      - id: idle-image-direct-png
+        given:
+          file: small png without pet.json
+        expect:
+          dialect: "idle-image"
+        covered_by: idle_image_png_installs_as_idle_image

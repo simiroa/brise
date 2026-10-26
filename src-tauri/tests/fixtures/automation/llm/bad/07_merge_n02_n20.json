@@ -1,0 +1,20 @@
+{
+  "_comment": "다른 주장인 n02(폰 안 가져가기)와 n20(종이책 20분)을 중복으로 병합 제안 — not_merge_with 위반. 병합 채점기가 n02·n20 을 잡아야 한다.",
+  "expect": { "scorer": "merge", "ids": ["n02", "n20"] },
+  "split": "dev",
+  "target": { "prompt": "knowledge", "topic_label": "수면과 집중" },
+  "response": {
+    "topic_notes": [{
+      "topic": "수면과 집중",
+      "title": "수면과 집중",
+      "summary": "자기 전 화면을 줄이면 잠이 빨리 든다.\n열린 질문: 주말에도 같은가?",
+      "log_append": [
+        { "date": "10-02", "quote": "잠들기 전에 폰 보면 최소 1시간은 더 깨어 있음.", "source_id": "n02" },
+        { "date": "09-30", "quote": "자기 전에 종이책 20분 읽는 게 폰 보는 것보다 훨씬 잘 잠듦.", "source_id": "n20" }
+      ],
+      "related_topics": [],
+      "links": ["n02", "n20"]
+    }],
+    "duplicates": [["n02", "n20"]]
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "src/components/editor/SelectionContextMenu.tsx": {
+    "var(--surface)": 1
+  },
+  "src/components/home/calendar/ChipSchedule.tsx": {
+    "var(--surface-base)": 1
+  },
+  "src/components/home/timeline/Brush.tsx": {
+    "var(--surface-base)": 2
+  },
+  "src/components/leftpanel/yearfilter/TimelineFilter.tsx": {
+    "var(--surface-base)": 1
+  },
+  "src/components/preview/InternalNotePreview.tsx": {
+    "var(--surface)": 1
+  },
+  "src/components/preview/LinkReaderPreview.tsx": {
+    "var(--surface)": 1
+  },
+  "src/components/preview/shared.tsx": {
+    "var(--surface)": 1
+  },
+  "src/components/SourcePanel.tsx": {
+    "var(--overlay)": 1
+  }
+}

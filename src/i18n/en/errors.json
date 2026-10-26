@@ -1,0 +1,19 @@
+{
+  "code_validation": "Check input",
+  "code_conflict": "Conflicting edit",
+  "code_not_found": "Not found",
+  "code_io": "Connection or file error",
+  "code_db": "Database error",
+  "code_generic": "Error",
+  "win_file_busy": "The file is open in another app",
+  "docx_cols_limit": "The table has too many columns (DOCX allows at most 63)",
+  "encrypted_file": "Encrypted documents cannot be opened",
+  "invalid_docx": "This is not a valid Word document",
+  "sqlite_busy": "The database is busy. Please try again in a moment",
+  "sqlite_no_such_table": "The database format does not match",
+  "net_timeout": "No response received. Please try again in a moment",
+  "net_rate_limit": "Too many requests. Please try again in a moment",
+  "net_server_error": "Server is temporarily unavailable",
+  "net_connection_failed": "Could not connect",
+  "technical_fallback": "Something went wrong · See Diagnostics tab for details"
+}

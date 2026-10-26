@@ -1,0 +1,46 @@
+# Routine commands (docs/PLAN-2026-08-16-space-widgets.md §4, §4.3). Wave 13 backend.
+
+commands:
+  routine_toggle:
+    input:
+      {
+        note_id: uuid,
+        occur_on: string,
+        done: boolean,
+      }
+    output: "RoutineToggleResult"
+    errors: [NOT_FOUND, VALIDATION, DB]
+    agent:
+      kind: write
+      description: "지정한 날짜의 루틴 완료 상태를 설정한다."
+      args:
+        note_id: "루틴 노트 id (routine_today 결과의 items[].note_id)"
+        occur_on: "루틴 수행 일자 (YYYY-MM-DD 형식)"
+        done: "설정할 완료 상태 (true: 완료, false: 미완료)"
+
+  routine_today:
+    input: { workspace_id: uuid }
+    output: "RoutineTodayResult"
+    errors: [NOT_FOUND, DB]
+    agent:
+      kind: read
+      description: "오늘 수행할 루틴 항목 목록과 각 항목의 완료 여부(done)를 조회한다."
+      args:
+        workspace_id: "조회할 노트북 id"
+
+  routine_history:
+    input:
+      {
+        workspace_id: uuid,
+        from: string,
+        to: string,
+      }
+    output: "RoutineHistoryResult"
+    errors: [NOT_FOUND, VALIDATION, DB]
+
+shared_types:
+  RoutineToggleResult: "{ note_id: uuid, occur_on: string, done: boolean }"
+  RoutineTodayItem: "{ note_id: uuid, title: string, done: boolean, time: string|null }"
+  RoutineTodayResult: "{ items: RoutineTodayItem[] }"
+  RoutineDay: "{ date: string, done: integer, due: integer }"
+  RoutineHistoryResult: "{ days: RoutineDay[], from: string, to: string }"

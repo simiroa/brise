@@ -1,0 +1,16 @@
+{
+  "title": "Trash",
+  "moved": "Moved to trash",
+  "restore": "Restore",
+  "delete_forever": "Delete permanently",
+  "delete_confirm": "Permanently delete \"{{title}}\"? This cannot be undone.",
+  "empty": "Empty trash",
+  "empty_confirm": "This permanently deletes all {{n}} notes in the trash. This cannot be undone.",
+  "empty_type_prefix": "Type",
+  "empty_type_suffix": "to confirm.",
+  "empty_state": "Trash is empty",
+  "notes_heading": "Notes",
+  "sections_heading": "Sections",
+  "section_from": "\"{{name}}\" — from {{note}}",
+  "section_restore_blocked": "Cannot restore: its note is in the trash"
+}

@@ -1,0 +1,7 @@
+{
+  "home": "Dashboard",
+  "close_all": "Close all",
+  "close_others": "Close others",
+  "reopen_closed": "Reopen closed tab",
+  "close_tab": "Close {{title}} tab"
+}

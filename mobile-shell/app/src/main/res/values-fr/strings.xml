@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Brise</string>
+    <string name="shortcut_settings">Réglages de connexion</string>
+
+    <string name="setup_title">Se connecter au PC</string>
+    <string name="setup_desc">Dans Brise sur votre PC, ouvrez Réglages &gt; Connexion, puis copiez l\'adresse de connexion et collez-la ici, ou scannez le code QR affiché.</string>
+    <string name="setup_hint">Adresse de connexion (http://100.x.x.x:port/app?token=…)</string>
+    <string name="setup_scan">Scanner le QR</string>
+    <string name="setup_test">Tester la connexion</string>
+    <string name="setup_save">Enregistrer et ouvrir</string>
+    <string name="setup_cancel">Annuler</string>
+    <string name="setup_parsed">Adresse %1$s · jeton présent</string>
+
+    <string name="err_empty">Saisissez l\'adresse de connexion.</string>
+    <string name="err_scheme">L\'adresse doit commencer par http:// ou https://.</string>
+    <string name="err_no_host">Aucun hôte trouvé dans l\'adresse.</string>
+    <string name="err_no_token">L\'adresse ne contient pas de jeton (?token=…). Collez l\'adresse de Réglages &gt; Connexion telle quelle.</string>
+
+    <string name="test_running">Vérification…</string>
+    <string name="test_ok">Connecté — Brise sur le PC a répondu.</string>
+    <string name="test_auth">Échec d\'authentification — le jeton ne correspond pas. Recopiez l\'adresse de connexion depuis le PC.</string>
+    <string name="test_unreachable">Injoignable — vérifiez que Brise est lancé sur le PC et que Tailscale est connecté sur cet appareil.</string>
+    <string name="test_other">Réponse inattendue (HTTP %1$d).</string>
+
+    <string name="warn_title">Adresse hors Tailscale</string>
+    <string name="warn_body">%1$s est en dehors des plages Tailscale (100.64.0.0/10) et localhost. Vérifiez qu\'il s\'agit bien de l\'adresse d\'un PC de confiance. Continuer ?</string>
+    <string name="warn_continue">Continuer</string>
+
+    <string name="qr_unavailable">Impossible d\'ouvrir le scanner de QR.</string>
+    <string name="qr_bad">Ce code QR n\'est pas une adresse de connexion Brise.</string>
+
+    <string name="error_title">Impossible de joindre le PC</string>
+    <string name="error_body">Vérifiez que Brise est lancé sur le PC et que Tailscale est connecté.</string>
+    <string name="error_body_vpn">Tailscale semble désactivé. Activez-le puis revenez — Brise se reconnecte automatiquement.</string>
+    <string name="error_open_tailscale">Ouvrir Tailscale</string>
+    <string name="error_retry">Réessayer</string>
+    <string name="error_settings">Réglages de connexion</string>
+    <string name="error_retrying">Reconnexion…</string>
+
+    <string name="perm_camera">Caméra</string>
+    <string name="perm_mic">Microphone</string>
+    <string name="perm_location">Localisation</string>
+    <string name="perm_blocked_title">L\'autorisation %1$s est désactivée</string>
+    <string name="perm_blocked_body">Pour utiliser cette fonction, autorisez %1$s dans les réglages Android.</string>
+    <string name="perm_open_settings">Ouvrir les réglages</string>
+    <string name="perm_not_now">Plus tard</string>
+
+    <string name="back_again">Appuyez encore pour quitter</string>
+</resources>

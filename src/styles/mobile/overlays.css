@@ -1,0 +1,197 @@
+/* mobile/overlays.css — bottom sheet + centered modal (floating, opaque `.overlay` surfaces) */
+
+/* ── AI sheet — floating role, always opaque (`.overlay`, tokens.css SURFACE PRESET CONTRACT).
+ * No inline surface fill anywhere below — background is entirely `.overlay`'s. ─────────────── */
+
+.mobile-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay);
+  z-index: var(--z-backdrop);
+}
+
+.mobile-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-modal);
+  max-height: 70vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--m-gutter);
+  padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom));
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  border-bottom: none;
+  animation: mobile-sheet-up var(--dur-slow) ease-out;
+}
+@keyframes mobile-sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mobile-sheet { animation: none; }
+}
+
+/* Sheet/modal titles carry label-caps (→ --m-meta) but must read above their options (--m-body);
+   (0,2,0) so tokens.css `.label-caps` can't win on import order. */
+.mobile-app .mobile-sheet-title, .mobile-app .mobile-modal-title { font-size: var(--m-section); }
+.mobile-sheet-title { color: var(--m-accent-text); }
+
+.mobile-ai-disabled-hint {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+
+.mobile-ai-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.mobile-ai-action {
+  min-height: 48px;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-md);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.mobile-ai-action:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.mobile-ai-proposal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.mobile-ai-proposal-text {
+  max-height: 40vh;
+  overflow-y: auto;
+  padding: var(--space-4);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-md);
+  font-family: var(--font-editor);
+  font-size: var(--text-md);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.mobile-sheet-close { align-self: center; color: var(--muted); }
+
+/* ── Centered modal (MobileModal.tsx) — the shared overlay primitive ──────────────────────────
+ *
+ * WHY NOT A BOTTOM SHEET: `.mobile-sheet` above is glued to `bottom: 0`, which is exactly where the
+ * on-screen keyboard lands — its fields and its 취소/저장하기 row end up crammed against (or behind)
+ * the keyboard. That is the owner's actual report, so anything with an input field lives here now.
+ *
+ * KEYBOARD STRATEGY: the BACKDROP is the visible-viewport box. MobileModal writes px `top`/`height`
+ * onto it from `window.visualViewport` (re-synced on that object's resize+scroll events) — the
+ * `inset: 0` here is only the fallback for engines without the API. `vh`/`dvh`/`%` cannot do this
+ * job: iOS Safari does not shrink the layout viewport when the keyboard opens, so those units keep
+ * reporting the full screen and a "centered" card centers itself behind the keyboard.
+ * Because the backdrop's height is then a real px measure of what's visible, `place-items: center`
+ * centers into the visible area and the card's `max-height: 100%` shrinks WITH the keyboard. The
+ * card splits into fixed title / scrolling body / fixed footer, so the action row can never be
+ * pushed off — no scrollIntoView, no timers, nothing to keep in sync. ───────────────────────── */
+
+.mobile-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: var(--overlay);
+}
+
+.mobile-modal {
+  width: min(92vw, 460px);
+  max-width: 100%;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  animation: mobile-modal-pop 0.16s ease-out;
+}
+@keyframes mobile-modal-pop {
+  from { transform: scale(0.97); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mobile-modal { animation: none; }
+}
+
+/* Title vs options: size alone is 1px (18 vs 17), so the title also gets its own band — caps
+ * tracking off at this size, accent colour, and a hairline separating it from the option rows. */
+.mobile-modal-title {
+  flex: none;
+  padding: var(--space-6) var(--m-gutter) var(--space-4);
+  margin-bottom: var(--space-4);
+  border-bottom: 1px solid var(--divider);
+  color: var(--m-accent-text);
+  letter-spacing: 0;
+}
+
+.mobile-modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: 0 var(--m-gutter) var(--space-6);
+}
+
+/* Always visible inside the card — `flex: none` next to a `flex: 1` scrolling body is what makes it
+ * un-pushable, which a `position: sticky` footer inside one big scroller is not. */
+.mobile-modal-footer {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--divider);
+}
+/* 삭제 / 기본값으로 되돌리기 — destructive-ish, pushed away from the confirm pair on the right. */
+.mobile-modal-footer-lead { margin-right: auto; color: var(--muted); }
+
+.mobile-modal-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.mobile-modal-options .mobile-ai-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+.mobile-modal-options .mobile-ai-action[data-selected="true"] { color: var(--m-accent-text); }
+.mobile-modal-options .mobile-ai-action svg { flex: none; color: var(--m-accent-text); }
+
+/* W4 — bottom-sheet placement (K2). The backdrop is already the visualViewport box (MobileModal),
+ * so anchoring to its bottom edge docks the sheet ABOVE the keyboard; max-height is a share of that
+ * visible box, body scrolls, title/footer stay pinned (footer = the sticky action row). */
+.mobile-modal-backdrop--bottom {
+  place-items: end center;
+  padding: 0;
+}
+.mobile-modal--bottom {
+  width: 100%;
+  max-height: 85%;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  animation: mobile-sheet-up var(--dur-slow) ease-out;
+}
+.mobile-modal--bottom .mobile-modal-footer {
+  padding-bottom: calc(var(--space-2) + env(safe-area-inset-bottom));
+}
+@media (prefers-reduced-motion: reduce) {
+  .mobile-modal--bottom { animation: none; }
+}

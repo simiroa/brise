@@ -1,0 +1,76 @@
+# SSaC: export/import 흐름 (계약: commands/export.yaml)
+flows:
+  export_note:                    # Markdown 만 (W6, 2026-10-08 — format 인자·html 제거)
+    steps:
+      - validate: |
+          note 존재(NOT_FOUND), dest_path 가 파일 이름이 있는 경로이고 폴더가 아님(VALIDATION).
+          확장자 .html/.htm 은 VALIDATION — 옛 format:"html" 호출(Tauri 가 모르는 인자를 조용히 버림)이 마크다운을 .html 에 쓰지 않게
+      - render: |
+          --- (frontmatter: title, year, tags, exported: timestamp)
+          섹션들을 '## {name}' 헤더로 연결(첫 섹션은 헤더 생략, 시트는 칸에 적힌 그대로(수식 포함)의 마크다운 표, 각주는 GFM [^n]),
+          사료가 있으면 '## Sources (Original Text)' 부록으로 원문 인용 블록
+      - files: |
+          파일 첨부가 있으면 dest_path 옆 {파일 stem}_files/ 로 복사(그 폴더가 이미 있고 바꾸는 .md 가 가리키던 폴더가 아니면
+          {stem}_files-1, -2 …), 마크다운에서 상대 링크. 폴더 이름·파일 이름은 쓰는 쪽(write_note_md)이 한 번 정해 렌더러에
+          넘긴다 — 링크와 실제 파일이 늘 같다. 원본이 없거나 첨부 루트 밖(paths::file_inside)인 첨부는 복사하지 않고 이름만 적는다.
+      - write: dest_path(저장 대화상자가 고른 .md 파일 경로)에 원자적 쓰기 (임시파일 → rename)
+      - tx: update notes.exported_at
+    decisions:
+      - 내보내기는 사본 생성일 뿐 원본과 동기화되지 않는다 (링크 공유식 동기화는 범위 외)
+      - exported_at ≠ null이 트리의 '공유됨' 아이콘 조건
+      - dest_path 는 파일 경로다 — 예전엔 폴더로 취급해 'x.md/{슬러그}.md' 를 만들었다(W6 에서 고침)
+      - 같은 파일로 다시 내보내면 그 파일이 가리키던 첨부 폴더의 같은 이름 첨부를 덮어쓴다(저장 대화상자에서 바꾸기로 한 것과
+        같은 결정 — 복사본이 ' (2)' 로 쌓이거나 링크가 옛 파일을 가리키지 않게)
+      - 그 밖의 이미 있는 폴더는 덮어쓰지 않는다(W6 검증 V1) — 대화상자가 확인하는 건 .md 한 파일뿐이라, x.md 없이 남은
+        x_files/(브라우저 "웹 페이지 전체 저장"이 만드는 이름)나 남의 x.md 옆 폴더의 파일을 조용히 덮으면 안 된다 → x_files-1
+      - 읽히는 HTML 은 export_html(아래) — 마크다운 원문을 <pre> 로 감싼 옛 html 형식은 쓸모가 없어 지웠다
+
+  export_folder:                  # 폴더 단위 — Markdown 만 (오너 결정 2026-10-08: 폴더 단위 HTML 은 쓸 일이 없다)
+    steps:
+      - out_dir: dest_path/{폴더 슬러그} (있으면 -1, -2 …)
+      - per_note: '{노트 슬러그}.md (같은 이름이면 " (2)") 파일 경로를 export_note 와 같은 본체(write_note_md)에 넘긴다 → 첨부는 {그 stem}_files/'
+    decisions:
+      - 한 노트가 실패해도 나머지는 쓴다 — 건너뛴 노트는 진단 기록(diag)에 id·오류 종류만 남기고 exported_count 에서 빠진다
+
+  export_html:                    # 내보내기 모달 "HTML" (W6) — 상세 계약: commands/export.yaml
+    steps:
+      - validate: 확장자 .html/.htm(대소문자 무관) 아니면 VALIDATION, note 존재(NOT_FOUND), html 16MB 상한
+      - fill: |
+          <img data-rel-path="폴더/파일"> 를 export_hwpx 와 같은 해석기(첨부 루트 안에서만)로 읽어 src 를 data: URI 로,
+          data-rel-path 는 지운다. 못 읽은 그림·앱 내부 주소(asset:·*.localhost)·상대/파일 경로 src 는 비운다(skipped_images).
+          src 로는 파일을 읽지 않는다. 그림 상한은 ImageStore 와 같고 출력은 64MB 를 넘기게 되는 그림부터 건너뛴다.
+      - write: dest_path 에 원자적 쓰기 (임시파일 → rename)
+    decisions:
+      - Rust 는 HTML 을 다시 렌더하지 않는다 — 프런트가 미리보기와 같은 렌더로 만든 문서를 받는다(마크다운 규칙을 두 벌 두지 않기)
+      - exported_at 은 찍지 않는다(export_hwpx 와 같다 — 섹션 하나만 내보낼 수도 있다)
+      - export_html_inline(서식 복사)은 같은 fill 을 하고 파일 대신 문자열을 돌려준다(클립보드)
+
+  export_all:
+    steps:
+      - dump: 전 노트북/폴더/노트/섹션/소스/첨부행/태그/설정 → brise-bundle.json (스키마 버전 포함)
+      - copy: attachments/ 전체
+    decisions:
+      - 번들 포맷 버전 = schema_migrations 최고 버전과 결속
+
+  import_bundle:                  # 4개 독립 모드 (repo/transfer/import/mod.rs) — replace_merge.rs,
+                                   # add_notebook.rs, hash_merge.rs로 알고리즘 분리, 외부 시그니처는
+                                   # 기존과 동일(mode: string)
+    steps:
+      - validate: bundle.json 파싱 + 버전 호환 (미래 버전이면 VALIDATION)
+      - branch:
+          - if: mode == 'replace'      → 현재 DB 백업 후 전체 재구축
+          - if: mode == 'merge'        → id 충돌 행은 skip 카운트, 나머지 insert (레거시, id 기준)
+          - if: mode == 'add_notebook' → 노트북/폴더/노트 id 전부 remap → 항상 새 노트북으로 추가
+              (충돌 불가능 — 같은 번들을 두 번 넣으면 노트북 2개)
+          - if: mode == 'hash_merge'   → target_workspace_id 기존 노트북에 콘텐츠 해시(제목+섹션
+              본문 순서)로 병합 — 동일 해시는 skip, 다르면 새 노트로 추가
+      - rebuild: 전 노트 fts_upsert
+    decisions:
+      - merge(레거시)는 id 기준 (제목 중복은 허용 — 서로 다른 노트로 취급)
+      - add_notebook/hash_merge는 "다른 사람의 내보내기를 내 노트북에 안전하게 들여오기" 용도로
+        merge/replace 이후 추가됨 — export_folder_bundle(폴더 단위 브런들 export, brise-bundle.json
+        + attachments/ 동일 포맷)과 짝을 이룬다
+
+  export_folder_bundle:            # export_folder(Markdown 사람이 읽는 파일)와 별개 — 폴더 단위로
+                                    # export_all과 동일한 브런들 포맷을 만들어 import_bundle로 재도입 가능
+    notes: "한 폴더로 필터링된 brise-bundle.json + attachments/ — 상세 계약: commands/export.yaml"

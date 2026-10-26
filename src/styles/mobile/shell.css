@@ -1,0 +1,151 @@
+/* mobile/shell.css — root element, role-ramp tokens, base resets, screen transitions */
+
+.mobile-app {
+  height: 100dvh;
+  width: 100vw;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  word-break: keep-all; /* 한글을 음절 중간에서 끊지 않는다 — 긴 영문·URL 은 overflow-wrap 이 받는다 */
+  position: relative;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: var(--m-body);
+  background-image: var(--bg);
+  background-repeat: var(--bg-repeat);
+  background-size: var(--bg-size);
+  background-position: var(--bg-position);
+  /* Mobile role ramp (docs/PLAN-2026-10-04-mobile-design-tuning.md §A.5, owner decision
+     2026-10-05 = 안 B, aligned to Apple HIG Title2/Body/Subhead/Footnote). These are CSS px; the
+     shell WebView also applies the system font scale on top (S22 measured 1.15), and the 3-step
+     "글자 크기" setting multiplies via --fs. Replaces the 2026-07-30 1.3-1.4x scale-up (905cf806).
+     The shared --text-* tokens (tokens.css) are re-pointed at these roles within this subtree only,
+     so desktop components reused here (label-caps, menu-row, DiagramControls) follow the ramp. */
+  --m-title: calc(22px*var(--fs));
+  --m-section: calc(18px*var(--fs));
+  --m-body: calc(17px*var(--fs));
+  /* sub keeps ≥2px above meta at every --fs (V15: at 작게 15→13.5 vs meta 13→12 floor collapsed). */
+  --m-sub: max(calc(15px*var(--fs)), calc(var(--m-meta) + 2px));
+  /* 12px floor so "작게"(0.9) can't push metadata below a legible minimum (HIG minimum 11). */
+  --m-meta: max(12px, calc(13px*var(--fs)));
+  /* One horizontal page gutter (M3 list / HIG margins = 16) instead of the 10/14 mix. Not on the
+     desktop --space-* ladder, hence its own token. */
+  --m-gutter: 16px;
+  /* Text-safe colours (red-team V6/V7, 2026-10-05, WCAG AA 4.5:1 measured on the S22 captures).
+     --faint is only ever a text/icon colour on the phone, so it is raised in place here (dark
+     .46 → .60 = 5.3:1); desktop keeps its value. --m-accent-text is the accent when it is used as
+     TEXT: the user's accent is a fill colour applied identically to both themes (inline on <html>),
+     which on the light paper read at 1.6:1. Fills/borders keep --accent. */
+  --faint: color-mix(in srgb, var(--text) 60%, transparent);
+  --m-accent-text: var(--accent);
+  --text-2xs: var(--m-meta);
+  --text-xs: var(--m-meta);
+  --text-sm: var(--m-sub);
+  --text-md: var(--m-body);
+  --text-lg: var(--m-section);
+  --text-xl: var(--m-title);
+  --text-2xl: var(--m-title);
+  --text-label: var(--m-meta);
+}
+
+/* Controls are not text. Without this, Android WebView's own long-press text selection fires on the
+   same touch that opens our long-press sheet/dialog (lib/longPress.ts, 400ms, finger still down):
+   the label under the finger gets selected and the system "번역·복사·모두 선택·공유" toolbar lands on
+   top of the freshly opened dialog (red-team V4, 2026-10-05). Inputs and the editor stay selectable. */
+.mobile-app button,
+.mobile-app [role="button"],
+.mobile-app [role="tab"],
+.mobile-app .mobile-attach-row {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+:root[data-theme='light'] .mobile-app {
+  --faint: color-mix(in srgb, var(--text) 76%, transparent); /* .45 → .76 = 4.9:1 on the paper */
+  --m-accent-text: color-mix(in srgb, var(--accent) 30%, var(--text)); /* 1.6 → 5.2:1 */
+}
+
+/* label-caps: uppercase + tracking only shows on Latin labels (Korean has no case) and reads as
+   shouting on a phone — keep the size/weight/colour, drop the transform. Size already follows
+   --text-label above. */
+.mobile-app .label-caps { text-transform: none; letter-spacing: 0; }
+
+/* `.ProseMirror`/`.mdbody` (tokens.css) sets a literal `calc(15px*var(--fs))`, not one of the
+   --text-* tokens above, so it needs its own override — `.mobile-app .mdbody` (0,2,0) beats
+   tokens.css's bare `.mdbody` (0,1,0) regardless of stylesheet import order. */
+.mobile-app .mdbody, .mobile-app .ProseMirror {
+  font-size: var(--m-body);
+}
+/* Desktop heading ratios (1.65/1.32/1.1em) would put H1 (~28px) above the note title (22px) —
+   cap them so title > H1 > H2 > H3 > body holds on the phone. */
+.mobile-app .mdbody h1, .mobile-app .ProseMirror h1 { font-size: 1.25em; }
+.mobile-app .mdbody h2, .mobile-app .ProseMirror h2 { font-size: 1.15em; }
+/* H3 = body size (V15: 1.05em ≈ body at 17px was indistinguishable); weight 600 (inherited from
+   tokens.css) + the heading margins carry the hierarchy, per the 400/600-only ladder. */
+.mobile-app .mdbody h3, .mobile-app .ProseMirror h3 { font-size: 1em; }
+/* One gutter only (plan §3⑧): tokens.css gives BOTH `.mdbody` and its nested `.ProseMirror`
+   `padding: 8px 24px 40px`, which stacked on `.mobile-note-body-wrap`'s --m-gutter = 64px per side
+   (text column 256px of 384). Zero the editor's own side padding → 16px per side (352px). */
+.mobile-note-body-wrap .mdbody, .mobile-note-body-wrap .ProseMirror {
+  padding: var(--space-2) 0 var(--space-6);
+}
+
+/* Screen transitions — transform-only, var(--dur-slow) ease-out. reduced-motion: instant (no animation at
+ * all), per PRODUCT.md accessibility contract.
+ *
+ * .mobile-screen-viewport owns the flex:1 slot .mobile-screen used to fill directly — needed so
+ * two .mobile-screen panes (an outgoing "ghost" + the incoming screen) can stack via
+ * position:absolute during a tab-to-tab transition (MobileApp.tsx's navigate()) without one
+ * shoving the other out of the flex column. Fixes two bugs in the original single-div/key={screen}
+ * remount: (a) tab switches always slid in "forward" even when moving left — direction is now
+ * derived from tab index order in navigate(), not hardcoded; (b) the outgoing screen vanished
+ * instantly instead of sliding out — the ghost below now animates it off-screen for the same
+ * ~var(--dur-slow) the incoming screen takes to slide in. */
+.mobile-screen-viewport {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+.mobile-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: mobile-slide-forward var(--dur-slow) ease-out;
+}
+.mobile-screen--back {
+  animation-name: mobile-slide-back;
+}
+/* Outgoing-screen ghost (tab-to-tab moves only — see navigate()) — slides fully off in the
+ * opposite direction from the incoming screen's slide-in. `forwards` holds the exited position for
+ * the ~20ms between the animation ending and MobileApp clearing the ghost from the tree. */
+.mobile-screen--exit-forward {
+  animation: mobile-slide-exit-forward var(--dur-slow) ease-out forwards;
+}
+.mobile-screen--exit-back {
+  animation: mobile-slide-exit-back var(--dur-slow) ease-out forwards;
+}
+@keyframes mobile-slide-forward {
+  from { transform: translateX(100%); }
+  to { transform: none; }
+}
+@keyframes mobile-slide-back {
+  from { transform: translateX(-100%); }
+  to { transform: none; }
+}
+@keyframes mobile-slide-exit-forward {
+  from { transform: none; }
+  to { transform: translateX(-100%); }
+}
+@keyframes mobile-slide-exit-back {
+  from { transform: none; }
+  to { transform: translateX(100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mobile-screen, .mobile-screen--exit-forward, .mobile-screen--exit-back { animation: none; }
+}

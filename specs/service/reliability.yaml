@@ -1,0 +1,46 @@
+# SSaC: 운영 신뢰성 — 리스크 레지스터와 완화책 (Wave 1 필수 구현 범위)
+risks:
+  R1-unsaved-loss:
+    risk: 자동저장 디바운스(700ms) 중 창 닫기/노트 전환/앱 종료 → 마지막 입력 유실
+    mitigation:
+      - 노트·섹션 전환 직전 pending 저장 즉시 flush (전환을 저장 완료에 후행)
+      - Tauri 창 close 이벤트 가로채기 → flush 완료 후 종료 (최대 2s 타임아웃)
+    verify: tests/invariant-reliability.yaml#flush-before-switch
+
+  R2-double-instance:
+    risk: 앱 2중 실행 → 동일 DB 동시 쓰기, 자동저장 경합
+    mitigation: tauri-plugin-single-instance — 후발 실행은 기존 창 포커스로 전환
+
+  R3-db-corruption:
+    risk: 강제 종료/디스크 오류로 DB 손상
+    mitigation:
+      - WAL 모드 + 비정상 종료 후 부팅 시 PRAGMA quick_check (정상 종료 마커 brise.clean-shutdown 이 있으면 스킵 — 전체 파일 스캔이 UI 를 막지 않게)
+      - 시작 시 자동 백업 회전 (data_dir/backups/, 최근 3개 유지, 하루 최대 1 스냅샷)
+      - open/quick_check/migrations 실패 시: 손상 DB를 quarantine 후 최신 백업 복원, 복구본은 항상 quick_check
+
+  R4-migration-failure:
+    risk: 스키마 마이그레이션 도중 실패 → 반쯤 적용된 스키마
+    mitigation: 마이그레이션 전 파일 백업, 각 버전을 단일 트랜잭션으로, 실패 시 롤백 + 이전 버전 기동 거부(명확한 에러)
+
+  R5-import-path-traversal:
+    risk: 조작된 번들의 첨부 rel_path가 "../.." 등으로 데이터 디렉토리 탈출
+    mitigation: import 시 모든 rel_path를 정규화 후 attachments/ 내부인지 검증, 위반 시 VALIDATION으로 전체 거부
+    verify: tests/invariant-export-roundtrip.yaml#traversal-rejected
+
+  R6-export-filename:
+    risk: 한글/특수문자 제목 → Windows 금지 문자(\/:*?"<>|), 예약어(CON, PRN…), 260자 경로 초과
+    mitigation: 슬러그 규칙 — 금지 문자 '_' 치환, 예약어에 '_' 접미, 유니코드 보존, 파일명 120byte 절단, 충돌 시 ' (2)' 접미
+
+  R7-large-attachment:
+    risk: 200MB급 첨부 복사가 UI 블로킹 / 중단 시 반쪽 파일
+    mitigation: Rust 비동기 스트리밍 복사(임시명 → rename 원자화), 커맨드는 완료 후 응답 — 프론트는 진행 스피너
+
+  R8-korean-fts-recall:
+    risk: >-
+      (수정됨, Wave 16) FTS5 unicode61은 공백 구분 CJK 어절을 통짜 토큰으로 취급해 부분 문자열
+      미매치였다 ('종대' ↛ '세종대왕' 본문 중간). trigram 토크나이저(migrations.rs V10)로 전환해
+      3글자 시퀀스 단위 인덱싱 — 어절 중간/끝 부분 문자열 매치를 정공법으로 지원한다.
+    mitigation: >-
+      trigram MATCH가 원리상 불가능한 3글자 미만 쿼리만 남은 폴백 대상 — FTS 결과에
+      title/body/source_body/tag LIKE '%q%' 결과를 UNION (쿼리 1~2자 또는 FTS 0건일 때,
+      본문/출처까지 커버). 상세: service/search.yaml, db/schemas/fts.sql

@@ -1,0 +1,8 @@
+{
+  "empty_state": "Aucune sauvegarde pour l'instant — une capture est prise chaque minute tant que la note est ouverte.",
+  "n_sections": "{{n}} sections",
+  "section_empty": "(vide)",
+  "restore_action": "Restaurer cette version",
+  "restore_confirm_title": "Restaurer cette version ?",
+  "restore_confirm_desc": "Cela remplace le texte actuel par cette sauvegarde. La version actuelle est d'abord enregistrée, cette action reste donc réversible."
+}

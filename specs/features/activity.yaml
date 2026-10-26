@@ -1,0 +1,70 @@
+# 기능 카탈로그: 활동 창
+features:
+  - id: F-A01
+    name: 활동 피드 창
+    status: shipped
+    commands: commands/activity.yaml
+    verify:
+      rust: src-tauri/src/repo/activity.rs
+      vitest: src/App.activityButton.test.tsx
+    cases:
+      - id: delete-event-survives-note-purge
+        given:
+          note_title: "Doomed"
+          after: [delete, purge]
+        expect:
+          summary: "Doomed"
+          reason: "delete event must survive note purge (no FK on note_id)"
+        covered_by: delete_note_leaves_delete_event_row_no_fk
+
+      - id: retention-prunes-older-than-7-days
+        given:
+          rows: [{ age_days: 8, id: old1 }, { age_days: 1, id: recent1 }]
+        expect:
+          pruned: "8-day-old row must be pruned"
+          survived: "1-day-old row must survive"
+        covered_by: retention_prunes_rows_older_than_7_days
+
+      - id: workspace-delete-cascades-log
+        given:
+          event: { kind: import, summary: "Imported 3 notes" }
+        expect:
+          summary: "Imported 3 notes"
+          reason: "workspace delete must CASCADE activity_log rows"
+        covered_by: workspace_delete_cascades_activity_log
+
+      - id: create-records-create-event
+        given:
+          title: "Fresh"
+        expect:
+          title: "Fresh"
+          reason: "create must record an activity event"
+        covered_by: create_wire_records_create_event
+
+      - id: ui-failed-danger-hint
+        given:
+          hasActiveNote: true
+          savedState: failed
+        expect:
+          color: "var(--danger)"
+          failed: "note.save_failed"
+          hint: "note.save_failed_hint"
+        covered_by: "failed with an active note: danger color + actionable hint in the tooltip"
+
+      - id: ui-saving-accent
+        given:
+          hasActiveNote: true
+          savedState: saving
+        expect:
+          color: "var(--accent)"
+          state: "note.saving"
+        covered_by: "saving with an active note: accent color"
+
+      - id: ui-saved-no-color-state-in-tooltip
+        given:
+          hasActiveNote: true
+          savedState: [saved, ai_organized]
+        expect:
+          saved: "note.saved_dot_just_now"
+          ai: "note.ai_organized"
+        covered_by: "saved/ai_organized with an active note: normal look (no color), state still in tooltip"

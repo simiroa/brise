@@ -1,0 +1,23 @@
+{
+  "group": "Input",
+  "photo_label": "Apply photo metadata",
+  "voice_label": "Voice transcription",
+  "cleanup_label": "Clean up transcribed text",
+  "loc_label": "Attach current location",
+  "mode_auto": "Auto",
+  "mode_ask": "Ask",
+  "mode_off": "Off",
+  "photo_auto": "Automatically adds a photo's capture time and location to the note's date and region.",
+  "photo_ask": "Asks before adding a photo's capture time and location.",
+  "photo_off": "Does not read a photo's capture time or location.",
+  "voice_auto": "Transcribes automatically when a recording ends. The audio is sent to the AI service.",
+  "voice_ask": "Asks whether to transcribe when a recording ends. The audio is sent to the AI service.",
+  "voice_off": "Recordings are not transcribed. The audio is only saved as an attachment.",
+  "voice_needs_ai": "Unavailable because the AI connection is off. Turn AI on from the desktop.",
+  "cleanup_auto": "Automatically tidies up filler in transcribed text.",
+  "cleanup_ask": "Asks whether to tidy up transcribed text.",
+  "cleanup_off": "Inserts transcribed text as is.",
+  "loc_auto": "Fills in your current location when saving if the region is empty.",
+  "loc_ask": "Asks whether to add your current location when saving if the region is empty.",
+  "loc_off": "Does not fetch your current location."
+}

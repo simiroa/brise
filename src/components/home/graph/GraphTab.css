@@ -1,0 +1,938 @@
+@import "../../../styles/dashboardList.css";
+
+.graph-tab {
+  --graph-focus-duration: 0.35s;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.graph-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  position: relative;
+  border-top: 1px solid color-mix(in srgb, var(--divider) 60%, transparent);
+}
+
+.graph-canvas {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  background-color: transparent;
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--divider) 45%, transparent) 0.75px, transparent 0.95px);
+  background-size: 36px 36px;
+}
+
+.graph-state {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--faint);
+  font-size: var(--text-sm);
+}
+
+.graph-state button {
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  padding: var(--space-2) var(--space-6);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: background var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+
+.graph-state button:hover {
+  background: var(--hover);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ==========================================================================
+   Floating Rail Overlays & Controls
+   ========================================================================== */
+
+.graph-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  color: var(--faint);
+  font-size: var(--text-xs);
+}
+
+.graph-overlay > * {
+  pointer-events: auto;
+}
+
+.graph-overlay span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  height: 26px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  border: 1px solid var(--divider);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  box-shadow: var(--shadow-sm);
+}
+
+.graph-suggestion-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 26px;
+  height: 26px;
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--divider));
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: var(--accent);
+  padding: 0 var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: background var(--dur-fast) ease, border-color var(--dur-fast) ease, transform var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
+}
+
+.graph-suggestion-chip:hover {
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.graph-suggestion-chip:active {
+  transform: translateY(0);
+}
+
+/* Floating Zoom Controls: 사각형 캡슐 박스 대신 투명 배경으로 기능 아이콘 라인글로우 표시 */
+.graph-canvas .dashboard-zoom-controls,
+.dashboard-rail-left .dashboard-zoom-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.graph-canvas .dashboard-zoom-controls button,
+.dashboard-rail-left .dashboard-zoom-controls button {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  opacity: 0.7;
+  filter: none;
+  cursor: pointer;
+  padding: 0;
+  transition: color var(--dur-fast) ease, filter var(--dur-fast) ease, opacity var(--dur-fast) ease;
+}
+
+.graph-canvas .dashboard-zoom-controls button:hover,
+.dashboard-rail-left .dashboard-zoom-controls button:hover {
+  background: transparent;
+  box-shadow: none;
+  color: var(--text);
+  opacity: 1;
+  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--accent) 45%, transparent));
+}
+
+.graph-canvas .dashboard-zoom-controls button:active,
+.dashboard-rail-left .dashboard-zoom-controls button:active {
+  background: transparent;
+  box-shadow: none;
+  color: var(--accent);
+  opacity: 1;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 60%, transparent));
+}
+
+/* Legacy filter chip classes kept for contract compatibility */
+.graph-filters {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-bottom: 1px solid color-mix(in srgb, var(--divider) 60%, transparent);
+}
+
+.graph-filter-chip {
+  align-self: flex-start;
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  min-height: 26px;
+  height: 26px;
+  padding: 0 var(--space-3);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.graph-filter-chip[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--divider));
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+}
+
+.graph-folder-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.graph-folder-filters button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  min-height: 26px;
+  height: 26px;
+  padding: 0 var(--space-3);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.graph-folder-filters button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--divider));
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+}
+
+.graph-folder-filters i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+
+/* ==========================================================================
+   Node & Edge Styling
+   ========================================================================== */
+
+.graph-note-node {
+  width: 24px;
+  height: 24px;
+  position: relative;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text);
+}
+
+.graph-note-node::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--graph-node-size);
+  height: var(--graph-node-size);
+  transform: translate(-50%, -50%);
+  border: 1px solid color-mix(in srgb, var(--graph-folder) 72%, white);
+  border-radius: 50%;
+  background: var(--graph-folder);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--graph-folder) 22%, transparent);
+  transition: box-shadow var(--graph-focus-duration) ease, transform var(--dur-fast) ease;
+}
+
+.graph-note-node:hover::before {
+  box-shadow: 0 0 12px color-mix(in srgb, var(--graph-folder) 50%, transparent);
+  transform: translate(-50%, -50%) scale(1.15);
+}
+
+.graph-note-node[data-selected]::before {
+  box-shadow: 0 0 14px color-mix(in srgb, var(--graph-folder) 65%, transparent), 0 0 0 2px var(--surface), 0 0 0 3.5px var(--accent);
+  animation: graph-node-focus var(--graph-focus-duration) ease-out;
+}
+
+.graph-note-node[data-search-hit]::before {
+  box-shadow: 0 0 10px color-mix(in srgb, var(--search-hit) 45%, transparent);
+  border-color: color-mix(in srgb, var(--search-hit) 60%, var(--graph-folder));
+}
+
+.graph-note-node[data-search-hit][data-selected]::before {
+  box-shadow: 0 0 14px color-mix(in srgb, var(--search-hit) 55%, var(--graph-folder)), 0 0 0 2px var(--surface), 0 0 0 3.5px var(--accent);
+}
+
+.graph-note-node[data-isolated]::before {
+  border-style: dashed;
+  opacity: 0.85;
+}
+
+.graph-note-node[data-isolated]:hover::before,
+.graph-note-node[data-isolated][data-selected]::before,
+.graph-note-node[data-isolated][data-search-hit]::before {
+  border-style: solid;
+  opacity: 1;
+}
+
+.graph-note-node__title {
+  position: absolute;
+  z-index: 2;
+  left: calc(50% + 15px);
+  top: 50%;
+  max-width: 150px;
+  overflow: hidden;
+  transform: translateY(-50%);
+  color: color-mix(in srgb, var(--text) 82%, transparent);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  line-height: 1.2;
+  opacity: 0;
+  pointer-events: none;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 4px var(--bg), 0 0 8px var(--bg);
+  transition: opacity var(--graph-focus-duration) ease, color var(--dur-fast) ease;
+  white-space: nowrap;
+}
+
+.graph-note-node[data-labelled] .graph-note-node__title,
+.graph-note-node:hover .graph-note-node__title,
+.graph-note-node[data-selected] .graph-note-node__title {
+  opacity: 1;
+}
+
+.graph-note-node:hover .graph-note-node__title,
+.graph-note-node[data-selected] .graph-note-node__title {
+  color: var(--text);
+}
+
+.graph-note-node .react-flow__handle {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  transform: none;
+  border: 0;
+  border-radius: 50%;
+  opacity: 0;
+}
+
+.graph-canvas .react-flow__node {
+  /* type-scale-exempt: graph physics layout transition */
+  transition: transform 0.65s cubic-bezier(0.16, 1, 0.3, 1), opacity var(--graph-focus-duration) ease;
+}
+
+.graph-canvas .react-flow__node.selected,
+.graph-canvas .react-flow__node:focus,
+.graph-canvas .react-flow__node:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.graph-canvas .react-flow__node.graph-flow-node--dimmed {
+  opacity: var(--dim-faint);
+}
+
+.graph-canvas .react-flow__edgelabel-renderer > div {
+  /* type-scale-exempt: graph physics layout transition */
+  transition: transform 0.65s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.graph-edge .react-flow__edge-path {
+  opacity: var(--dim-faint);
+  stroke-opacity: var(--dim-ghost);
+  /* type-scale-exempt: graph physics layout transition */
+  transition: d 0.65s cubic-bezier(0.16, 1, 0.3, 1), stroke var(--dur-slow) ease, opacity var(--graph-focus-duration) ease-out, stroke-opacity var(--graph-focus-duration) ease-out;
+}
+
+.graph-edge--related .react-flow__edge-path {
+  opacity: var(--dim-disabled);
+  stroke-dasharray: 4 3;
+}
+
+.graph-edge--dimmed .react-flow__edge-path {
+  opacity: 0.08;
+}
+
+.graph-edge--active .react-flow__edge-path {
+  opacity: 0.95;
+  stroke-opacity: 1;
+  animation: graph-fiber-breath 3.2s ease-in-out var(--graph-focus-duration) 1 both;
+}
+
+.react-flow__edge-interaction {
+  stroke: transparent !important;
+  opacity: 0 !important;
+  fill: none !important;
+  filter: none !important;
+}
+
+.graph-canvas .react-flow__connection-path {
+  stroke: var(--accent);
+  stroke-width: 1.5px;
+  stroke-dasharray: 4 3;
+  animation: graph-fiber-breath 2s ease-in-out infinite;
+}
+
+.graph-edge--just-created .react-flow__edge-path {
+  animation: graph-edge-draw-on 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* 정규화된 0→1 진행 pathLength */
+@keyframes graph-edge-draw-on {
+  from {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    opacity: 0.1;
+  }
+  to {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+.graph-canvas .react-flow__node.graph-node--just-connected .graph-note-node::before {
+  animation: graph-node-focus 0.5s ease-out both;
+}
+
+.graph-edge-cut-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--divider);
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  padding: 0;
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease, border-color var(--dur-fast) ease, transform var(--dur-fast) ease;
+  animation: graph-cut-btn-pop var(--dur-fast) cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes graph-cut-btn-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.graph-edge-cut-btn:hover {
+  background: color-mix(in srgb, var(--danger) 14%, var(--surface));
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 60%, var(--divider));
+  transform: scale(1.1);
+  box-shadow: var(--shadow-md);
+}
+
+.graph-edge-related-hint {
+  font-size: var(--text-2xs);
+  font-weight: 400;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-pill);
+  padding: var(--space-1) var(--space-3);
+  white-space: nowrap;
+  box-shadow: var(--shadow-sm);
+  pointer-events: none;
+  animation: graph-cut-btn-pop var(--dur-fast) ease-out;
+}
+
+@keyframes graph-fiber-breath {
+  0%, 100% { stroke-opacity: 0.45; }
+  50% { stroke-opacity: 1; }
+}
+
+@keyframes graph-node-focus {
+  0% { transform: translate(-50%, -50%) scale(0.88); }
+  55% { transform: translate(-50%, -50%) scale(1.12); }
+  100% { transform: translate(-50%, -50%) scale(1); }
+}
+
+/* ==========================================================================
+   Right rail: connection suggestions (nothing selected) — GRILL-2026-10-19 R9
+   예전 제안 모달을 대신한다. 레일 목록 행처럼 칠 없는 헤어라인 카드(표면 계약 2항), 굵기 400/600.
+   ========================================================================== */
+
+.graph-suggest {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+}
+
+.graph-suggest__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.graph-suggest__head h3 {
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--font-heading);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.graph-suggest__count {
+  color: var(--faint);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.graph-suggest__list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.graph-suggest-card {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  transition: border-color var(--dur-fast) ease, background var(--dur-fast) ease;
+}
+
+.graph-suggest-card:hover,
+.graph-suggest-card:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+  background: var(--hover);
+}
+
+/* 두 제목을 위아래로 — 280px 레일에서 나란히 두면 둘 다 잘린다. 사이의 링크 표식은 점 열에 맞춘다. */
+.graph-suggest-card__pair {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.graph-suggest-card__note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  color: var(--text);
+  font-size: var(--text-md);
+  line-height: var(--lh-ui);
+}
+
+.graph-suggest-card__note i {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.graph-suggest-card__note span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.graph-suggest-card__link {
+  display: flex;
+  justify-content: center;
+  width: 7px;
+  color: var(--faint);
+}
+
+.graph-suggest-card__reason {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: var(--lh-ui);
+}
+
+.graph-suggest-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.graph-suggest-card__score {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--faint);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.graph-suggest-card__actions {
+  display: flex;
+  flex: none;
+  gap: var(--space-1);
+}
+
+.graph-suggest-btn {
+  height: 24px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: 400;
+  cursor: pointer;
+  transition: background var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+
+.graph-suggest-btn:hover {
+  background: var(--hover);
+  border-color: var(--divider);
+  color: var(--text);
+}
+
+.graph-suggest-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.graph-suggest-btn--accept {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.graph-suggest-btn--accept:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.graph-suggest__empty,
+.graph-suggest__hint {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--lh-ui);
+}
+
+.graph-suggest__empty {
+  color: var(--muted);
+}
+
+.graph-suggest__hint {
+  color: var(--faint);
+}
+
+/* 선택 노트 패널의 AI 인사이트 버튼(예전 제안 모달 바닥에서 옮김) — 발췌 바로 아래. */
+.graph-insight-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  margin: 0 0 var(--space-6);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--accent);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-fast) ease, border-color var(--dur-fast) ease;
+}
+
+.graph-insight-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: var(--accent);
+}
+
+.graph-insight-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.graph-insight-button:disabled {
+  opacity: var(--dim-disabled);
+  cursor: not-allowed;
+}
+
+/* ==========================================================================
+   Multi-selection Action Bar
+   ========================================================================== */
+
+.graph-multi-action-bar {
+  position: absolute;
+  bottom: var(--space-6);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-lg);
+  z-index: var(--z-dropdown);
+  animation: graph-action-bar-in var(--dur-slow) cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes graph-action-bar-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+.graph-multi-count {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text);
+  padding: 0 var(--space-2);
+  border-right: 1px solid var(--divider);
+}
+
+.graph-multi-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-4);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--divider);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, transform var(--dur-fast) ease;
+}
+
+.graph-multi-btn:hover {
+  background: var(--hover);
+  transform: translateY(-1px);
+}
+
+.graph-multi-btn:active {
+  transform: translateY(0);
+}
+
+.graph-multi-btn--primary {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--divider));
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.graph-multi-btn--primary:hover {
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+  border-color: var(--accent);
+}
+
+/* ==========================================================================
+   Laser Cut Knife Overlay & Mode
+   ========================================================================== */
+
+.graph-canvas--knife-mode,
+.graph-canvas--knife-mode * {
+  cursor: crosshair !important;
+}
+
+.graph-laser-cut-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: var(--z-overlay);
+}
+
+.graph-laser-path {
+  stroke: var(--danger);
+  stroke-width: 2.5px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 5 3;
+  fill: none;
+  filter: drop-shadow(0 0 6px rgba(239, 68, 68, 0.85));
+  animation: graph-laser-glow 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes graph-laser-glow {
+  from {
+    stroke-opacity: 0.85;
+    filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.6));
+  }
+  to {
+    stroke-opacity: 1;
+    filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.95));
+  }
+}
+
+/* Multi-selection Numbered Badge */
+.graph-node-selection-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 6px var(--accent);
+  z-index: 2;
+  pointer-events: none;
+  animation: graph-badge-pop var(--dur-slow) cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes graph-badge-pop {
+  0% { transform: scale(0.3); opacity: 0; }
+  70% { transform: scale(1.25); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Multi-wire Connecting Drag Overlay */
+.graph-multi-drag-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: var(--z-overlay);
+}
+
+.graph-multi-drag-wire {
+  stroke: var(--accent);
+  stroke-width: 1.8px;
+  stroke-dasharray: 4 3;
+  fill: none;
+  opacity: 0.88;
+  filter: drop-shadow(0 0 5px var(--accent));
+  animation: graph-fiber-breath 1.2s ease-in-out infinite;
+}
+
+/* Edge Highlighting on Node Hover */
+.graph-edge--node-hovered .react-flow__edge-path {
+  opacity: 0.8 !important;
+  stroke-opacity: 0.95 !important;
+  stroke: var(--accent) !important;
+}
+
+/* Cut Shockwave & Spark Particles */
+.graph-cut-bursts-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: var(--z-sidebar);
+}
+
+.graph-cut-burst {
+  pointer-events: none;
+}
+
+.graph-cut-shockwave {
+  fill: none;
+  stroke: var(--danger);
+  stroke-width: 2px;
+  animation: graph-cut-shockwave 0.5s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+}
+
+.graph-cut-core {
+  fill: #ffffff;
+  animation: graph-cut-core 0.35s ease-out forwards;
+}
+
+.graph-cut-spark-line {
+  stroke: var(--danger);
+  stroke-width: 2px;
+  stroke-linecap: round;
+  animation: graph-cut-sparks 0.5s ease-out forwards;
+}
+
+.graph-cut-spark-line.l1 { transform-origin: center; transform: rotate(15deg); }
+.graph-cut-spark-line.l2 { transform-origin: center; transform: rotate(-15deg); }
+.graph-cut-spark-line.l3 { transform-origin: center; transform: rotate(45deg); }
+
+@keyframes graph-cut-shockwave {
+  0% { r: 2; opacity: 1; stroke-width: 3px; }
+  100% { r: 26; opacity: 0; stroke-width: 0.5px; }
+}
+
+@keyframes graph-cut-core {
+  0% { transform: scale(1.5); opacity: 1; }
+  100% { transform: scale(0.2); opacity: 0; }
+}
+
+@keyframes graph-cut-sparks {
+  0% { stroke-dasharray: 4 0; stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dasharray: 0 10; stroke-dashoffset: -12; opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .graph-note-node::before,
+  .graph-note-node__title,
+  .graph-canvas .react-flow__node,
+  .graph-canvas .react-flow__edgelabel-renderer > div,
+  .graph-edge .react-flow__edge-path {
+    transition-duration: 1ms !important;
+  }
+  .graph-edge--active .react-flow__edge-path,
+  .graph-edge--just-created .react-flow__edge-path,
+  .graph-edge--node-hovered .react-flow__edge-path,
+  .graph-multi-drag-wire,
+  .graph-cut-shockwave,
+  .graph-cut-core,
+  .graph-cut-spark-line,
+  .graph-node-selection-badge,
+  .graph-canvas .react-flow__connection-path,
+  .graph-canvas .react-flow__node.graph-node--just-connected .graph-note-node::before,
+  .graph-note-node[data-selected]::before,
+  .graph-edge-cut-btn,
+  .graph-multi-action-bar,
+  .graph-suggestion-chip {
+    animation: none !important;
+  }
+}

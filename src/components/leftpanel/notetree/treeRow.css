@@ -1,0 +1,69 @@
+/* 폴더 행 길게 누르기 = 폴더 설정 모달(우클릭 메뉴와 같은 자리로 가는 두 번째 문).
+   누르는 동안 왼쪽에서 차오르는 틴트가 "계속 누르면 열린다"를 말한다 — 손을 떼면 클래스가
+   빠지면서 즉시 사라지므로 취소가 취소로 보인다. 채우는 시간은 TreeListRow.tsx 의
+   FOLDER_LONG_PRESS_MS 와 같아야 한다(막대가 끝까지 차는 순간 모달이 뜬다).
+   --dur-* 사다리(.12~.22s)는 길게 누르기에 쓰기엔 너무 짧아 여기선 리터럴을 쓴다.
+   tokens.css 가 아니라 이 파일에 두는 이유: 이 규칙은 트리 폴더 행 하나만의 것이고,
+   tokens.css 는 여러 작업자가 동시에 만지는 공유 파일이다. */
+.folder-longpress::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: var(--sel);
+  transform-origin: left;
+  animation: folder-longpress-fill 300ms linear forwards;
+}
+@keyframes folder-longpress-fill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .folder-longpress::after { animation: none; transform: scaleX(1); opacity: var(--dim-faint); }
+}
+
+/* 노트 행 우측 배지(TreeRowBadges) — 상태 점은 항상 보이고, 내보내기/즐겨찾기는 좁은
+   사이드바에서 제목을 갉아먹지 않도록 행 hover 시에만 드러난다.
+   `.treeact` 는 tokens.css 의 `.treerow:hover .treeact{opacity:1}` 규칙을 그대로 물려쓴다 —
+   그 규칙은 지금까지 짝이 되는 기본 은닉(opacity:0)이 없어 죽어 있었다(초기값이 이미 1이라
+   hover 가 아무것도 바꾸지 않았다). 여기서 기본값만 보태 실제로 hover 전환에 쓰이게 한다.
+   너비는 TreeRowBadges.tsx 의 인라인 style 이 고정한다(상태 점 6 + gap 4 + 내보내기 아이콘
+   12 + gap 4 + 즐겨찾기 별 12 = 38, 여유 포함 40px) — hover 로 항목이 나타나거나 사라져도
+   슬롯 폭이 바뀌지 않아야 제목이 리플로우하지 않는다. */
+.treeact {
+  opacity: 0;
+  transition: opacity var(--dur-fast);
+}
+.treeact svg {
+  transition: transform var(--dur-fast) ease, filter var(--dur-fast) ease;
+}
+.treeact svg:hover {
+  transform: scale(1.15);
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 70%, transparent));
+}
+@media (prefers-reduced-motion: reduce) {
+  .treeact { transition: none; }
+  .treeact svg { transition: none; transform: none; filter: none; }
+}
+
+/* 폴더 행 카운트/"+"(새 노트) — 원래 소유자는 tokens.css 806~808줄: 한 grid 셀을 공유해서
+   hover 시 카운트가 숨고 "+"만 보였다("+"를 누르려는 순간 카운트가 사라지는 게 의도였지만,
+   결과적으로 카운트가 hover 중엔 아예 안 보이는 부작용이 됐다). 여기서는 "+"를 카운트 왼쪽의
+   별도 셀로 분리해 카운트를 항상 보이게 하므로, 그 스왑의 절반
+   (`.menu-row.menu-item:hover .folder-count{display:none}`)만 무효화한다.
+   tokens.css 는 여러 에이전트가 웨이브마다 같이 만지는 공유 파일이라(CLAUDE.md 공유 파일 규율)
+   손대지 않는다 — 대신 폴더 행에 `.treerow` 클래스를 더해(4-class 선택자) tokens.css 원본(3-class, `.menu-row
+   .menu-item:hover .folder-count`)보다 특이도를 확실히 높인다. 이러면 이 파일이 tokens.css
+   보다 먼저 로드되든 나중에 로드되든 결과가 같다 — 로드 순서에 기대지 않는다.
+   `.menu-row.menu-item .folder-add-btn{display:none}` / `:hover{display:inline-flex}` (기본
+   숨김 → hover 시 노출)은 그대로 살아 있다 — "+" 는 여전히 hover 에서만 나타난다. */
+.treerow.menu-row.menu-item:hover .folder-count { display: inline; }
+
+/* "+" 는 hover 에서만 보이되 **자리는 늘 잡고 있어야** 한다. tokens.css 의 display:none↔
+   inline-flex 스왑을 그대로 두면, 카운트를 별도 셀로 뺀 지금은 hover 할 때마다 "+"가 새로
+   끼어들며 카운트와 폴더 이름이 22px 씩 밀린다 — 배지 슬롯에서 피한 것과 똑같은 리플로우다.
+   visibility 로 바꾸면 레이아웃은 유지되면서 탭 순서와 히트테스트에서는 빠진다(opacity:0 은
+   포커스 가능한 투명 버튼이 남아 접근성이 나빠진다). */
+.treerow.menu-row.menu-item .folder-add-btn { display: inline-flex; visibility: hidden; }
+.treerow.menu-row.menu-item:hover .folder-add-btn { visibility: visible; }

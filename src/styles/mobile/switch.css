@@ -1,0 +1,36 @@
+/* mobile/switch.css — toggle switch control */
+
+/* Switch (K4) — native checkbox with role="switch", so state/keyboard/a11y are the platform's. The
+ * visible track is 52×32; ::after extends the hit zone to 68×48 without changing the layout. */
+.mobile-switch {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 32px;
+  margin: 0;
+  border-radius: var(--radius-pill);
+  background: var(--divider);
+  cursor: pointer;
+  transition: background var(--dur-med);
+}
+.mobile-switch::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-pill);
+  background: var(--on-solid);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--dur-med) ease;
+}
+.mobile-switch::after { content: ""; position: absolute; inset: -8px -8px; }
+.mobile-switch:checked { background: var(--accent); }
+.mobile-switch:checked::before { transform: translateX(20px); }
+.mobile-switch:disabled { opacity: 0.45; cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) {
+  .mobile-switch, .mobile-switch::before { transition: none; }
+}

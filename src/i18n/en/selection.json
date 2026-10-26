@@ -1,0 +1,17 @@
+{
+  "bar_label": "Selection actions",
+  "n_selected": "{{n}} selected",
+  "progress": "{{done}} / {{total}} processed…",
+  "clear": "Clear selection",
+  "add_tags": "Add tags",
+  "add_tags_hint": "Separate several with commas. Existing tags are kept.",
+  "add_tags_placeholder": "travel, 2024",
+  "delete": "Delete",
+  "ai_organize": "AI organize",
+  "delete_confirm_title": "Delete {{n}} notes?",
+  "delete_confirm_body": "They move to the trash and can be restored from there.",
+  "delete_attachments_title": "Delete {{n}} attachments?",
+  "delete_attachments_body": "They are removed from disk and cannot be recovered.",
+  "batch_done": "{{n}} done",
+  "batch_partial": "{{ok}} done, {{failed}} failed — the failed ones stay selected"
+}

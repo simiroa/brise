@@ -1,0 +1,8 @@
+{
+  "empty_state": "No autosaves yet — they're captured every minute while this note is open.",
+  "n_sections": "{{n}} sections",
+  "section_empty": "(empty)",
+  "restore_action": "Restore this version",
+  "restore_confirm_title": "Restore this version?",
+  "restore_confirm_desc": "This replaces the current text with this autosave. The current version is saved first, so this can be undone."
+}

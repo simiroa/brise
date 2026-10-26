@@ -1,0 +1,47 @@
+# SSaC: 문서 추출 (Wave 4) — 사료(sources)에 PDF/DOCX 를 드롭하면 텍스트를 추출해 저장한다.
+# 사후 문서화 주의: 이 스펙은 P20 구현(커밋 42547b4) 검수 후 코드 현실을 SSOT 로 승격한 것.
+#
+# ─ 기술 결정 (2026-07-19) ─
+# 1) 추출기: 순수 Rust 조합 — pdf-extract(PDF 텍스트) + zip+quick-xml 자체 DOCX 파서(w:t 수집).
+#    리서치 1순위였던 pdf_oxide/office_oxide 는 신생 크레이트 빌드 이슈로 미채택 (재평가 대상, R18).
+#    markitdown 은 Python 전용(사이드카 150~300MB + 콜드스타트) → 기각 (docs/reviews 참조).
+# 2) 지원 확장자: pdf, docx, txt, md, hwpx, pptx. xlsx/odt 와 hwp(바이너리 5.0)는 미지원.
+#    hwpx(2026-09-06 추가): OWPML zip — Contents/section{N}.xml 을 번호 순으로 이어 hp:t 텍스트를
+#    수집한다(extract_docx 와 같은 zip+quick-xml 조합, 새 크레이트 없음). hwp 바이너리는 포맷
+#    복잡도 대비 가치가 낮아 기각(오너 확인 2026-09-06 — hwpx 만 지원하면 된다).
+#    서식(굵게·정렬·표 병합·그림 …)을 살린 가져오기는 이 평문 추출기가 아니라 doc_import_html(W1,
+#    repo/doc_import/, PLAN-2026-10-07-doc-import-export) 이다 — 그쪽이 실패하면 이 추출로 물러난다.
+#    xlsx(2026-09-06 추가): 텍스트 추출기가 아니라 시트 섹션 경로다 — calamine 으로 워크시트당
+#    섹션 하나를 만들고, 시트 JSON 조립은 csv_import 와 같은 함수를 쓴다. extract_markdown 은
+#    xlsx 를 모른다(여긴 평문 추출 전용).
+#    pptx(2026-09-10 추가): OOXML zip — ppt/slides/slide{N}.xml 을 번호 순으로 이어 a:t 텍스트를
+#    수집한다(extract_docx/extract_hwpx 와 같은 zip+quick-xml 조합, 새 크레이트 없음). 슬라이드
+#    경계는 `## Slide {N}` 마크다운 헤딩으로 남긴다 — AI 정리·미리보기가 슬라이드 단위를 알아야
+#    하기 때문. 화자 노트(notesSlides)와 도형 위치·이미지는 버린다(사료 용도로 허용, R19 와 같은
+#    성격). pptx 편집 섹션 종류는 기각 — 남의 포맷을 소유하는 일이라 IR·렌더러·역변환이 전부
+#    필요하고, 첨부 경로가 오너 요구("슬라이드 보기 + 내용 정리 AI")를 이미 만족한다.
+# 3) OCR 없음: 스캔본 PDF 는 텍스트 0 → VALIDATION("no extractable text — scanned document?").
+# 4) 원본 보관 정책 (사용자 요구: 용량 절약 옵션):
+#    settings.source_original_policy = 'ask' | 'keep' | 'discard' (기본 'ask')
+#    - keep: 추출 후 원본 파일을 attachments 로 복사 보관 (source 와 첨부는 독립 수명)
+#    - discard: 텍스트만 저장 — 사용자 디스크의 원본은 절대 삭제하지 않음(복사만 생략)
+#    - ask: 프론트가 드롭 시 모달로 keep/discard 선택 (커맨드에는 항상 확정값 도착)
+
+flows:
+  source_add_file(original_policy?):
+    steps:
+      - validate: note 존재(NOT_FOUND), 확장자 지원(VALIDATION), 원문 ≤ 10MB(VALIDATION)
+      - extract: extraction::extract_markdown — 추출 텍스트 1MB cap (UTF-8 char 경계 안전 절단).
+                 잘리면 (text, truncated=true) 로 알리고 sources.truncated 에 저장 — 프리뷰가 한 줄로 말한다.
+      - policy: original_policy omit 시 settings.source_original_policy 적용
+      - persist: sources INSERT + FTS upsert (단일 tx). keep 이면 attachments::add_file 로 원본 복사.
+      - failure: 추출 실패 시 DB 무변경 (sources/attachments 모두 생성 안 됨)
+  folder_files(id):
+    노트별 첨부 집계 { notes: [{note_id, title, attachments[]}], total_bytes } — 폴더 단위 원본 관리 뷰.
+  export_folder(id, dest_path):
+    dest/{folder-slug}/ 에 노트마다 Markdown {slug}.md (첨부 {slug}_files/ 포함, export_note 와 같은 본체) → { exported_count, written_dir }.
+    (W6 2026-10-08: html 형식 제거 — 폴더 단위 HTML 은 쓰지 않는다.)
+
+risks_additional:
+  R18-young-crates: pdf-extract 품질 한계(스캔본·복잡 레이아웃) — 실패는 명확한 에러로, 후속 재평가
+  R19-extraction-fidelity: DOCX 자체 파서는 w:t 텍스트만 수집(표/각주 서식 손실) — 사료 용도로 허용

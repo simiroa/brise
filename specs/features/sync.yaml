@@ -1,0 +1,87 @@
+# 기능 카탈로그: 동기화 (위성 클라이언트 HTTP)
+features:
+  - id: F-SY01
+    name: 동기화 서버 · 토큰 · 모바일 뷰어
+    status: shipped
+    commands: commands/sync.yaml
+    verify:
+      rust:
+        - src-tauri/tests/invariant_ipc.rs
+        - src-tauri/src/sync_server/handlers.rs
+        - src-tauri/src/sync_server/tests.rs
+        - src-tauri/src/repo/transfer/export.rs
+      vitest: src/components/settings/SyncSection.test.tsx
+    cases:
+      - id: query-token-must-match
+        given:
+          stored: secret123
+          query: wrong
+        expect:
+          token: "secret123"
+        covered_by: query_param_token_must_match_exactly
+
+      - id: token-redacted-in-logs
+        given:
+          log: "GET /api/v1/notes?token=super-secret-uuid&limit=10"
+        expect:
+          redacted: "token=REDACTED"
+          secret: "super-secret-uuid"
+        covered_by: redact_token_in_text_masks_query_values
+
+      - id: secrets-stripped-from-settings-get-all
+        given:
+          cmd: settings_get_all
+          settings: { sync_token: leak-me-not, ai_api_key: sk-leak-me-not, theme: dark }
+        expect:
+          leaked: "leak-me-not"
+          secret: "ai_api_key"
+          kept: "openai"
+        covered_by: strip_secret_settings_removes_only_secret_keys_from_settings_get_all_response
+
+      - id: remote-blocks-sync-and-ai-keys
+        given:
+          cmd: settings_set
+          keys: [sync_enabled, sync_token, ai_api_key, ai_enabled]
+        expect:
+          blocked: "sync_enabled"
+          secret: "ai_api_key"
+        covered_by: remote_blocked_settings_keys_cover_sync_prefix_and_ai_provider_keys
+
+      - id: ping-rejects-wrong-token
+        given:
+          path: /api/v1/ping
+          token: wrong
+        expect:
+          ok_token: "tok123"
+          denied: "/api/v1/ping?token=wrong"
+        covered_by: ping_roundtrip_with_token_over_a_real_bound_port
+
+      - id: invoke-blocks-sync-keys
+        given:
+          cmd: settings_set
+          entries: { sync_enabled: true }
+        expect:
+          blocked: "sync_enabled"
+        covered_by: invoke_blocks_settings_set_of_sync_keys_before_dispatch
+
+      - id: dump-excludes-sync-from-export
+        given:
+          settings: { sync_enabled: true, sync_port: 7332, sync_token: super-secret-token }
+        expect:
+          secret: "super-secret-token"
+          reason: "must never travel inside an export bundle"
+        covered_by: dump_excludes_sync_settings_from_the_exported_bundle
+
+      - id: ui-toggle-calls-sync-set-enabled
+        given:
+          enabled: false
+        expect:
+          command: sync_set_enabled
+        covered_by: "toggling calls sync_set_enabled with the flipped value"
+
+      - id: ui-regenerate-token
+        given:
+          action: Regenerate
+        expect:
+          command: sync_regenerate_token
+        covered_by: "regenerate token button calls sync_regenerate_token"

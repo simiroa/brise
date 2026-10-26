@@ -1,0 +1,40 @@
+# 커맨드 계약: capture (결제문자 ingest 리스너)
+# 규약: _conventions.yaml. 전체 http:false — sync 서버와 마찬가지로 "서버 lifecycle 제어"이고
+# (원격 클라이언트가 이 기기의 loopback 리스너를 켜고 끌 수 있으면 안 된다), capture_status/
+# capture_set_ledger_enabled 는 State<AppState> 와 State<IngestState> 를 함께 받아 dispatch.gen.rs
+# 가 표현할 수 없는 시그니처이기도 하다(sync_status 와 같은 두 가지 이유).
+#
+# 리스너 자체의 HTTP API(GET /ping, POST /ledger)는 이 계약 밖 — 유일한 명세는
+# src-tauri/src/sync_server/ingest.rs 다(Tauri invoke 가 아니라 실제 HTTP, 폰 자동화 앱이 부른다).
+#
+# 2026-09-09 크롬 익스텐션 철수: capture_set_clip_enabled · capture_set_visits_enabled ·
+# capture_pair_resolve · capture_open_extension_dir 와 라우트 /clip · /visit · /config · /pair 가
+# 사라졌다. 방문 기록은 익스텐션 대신 크롬 History 파일을 직접 읽는 collect_detect_local /
+# browser_history 어댑터가 맡는다(specs/commands/collect.yaml).
+commands:
+  capture_status:
+    http: false
+    input:  {}
+    output: CaptureStatus
+    notes: |
+      ledger_enabled/port/token 은 설정 테이블(재부팅 후에도 유지), running 은 현재 리스너 상태
+      (진실원천: sync_server::ingest::IngestState).
+
+  capture_set_ledger_enabled:
+    http: false
+    input:  { enabled: boolean }
+    output: CaptureStatus
+    errors: [IO]                                # 바인딩 실패(포트 사용중 등)
+    notes: |
+      가계부 캡처(결제문자/알림, Tasker/단축어 연동) 채널 토글 — 이 리스너의 유일한 채널이다.
+      on: 토큰이 비어있으면(첫 활성화) new_id()로 생성해 영속하고 127.0.0.1:<port> 에 리스너를
+      기동. off: 리스너를 abort 하고 capture_ledger_enabled="0" 을 저장. 바인딩 실패 시 방금 저장한
+      값을 "0" 으로 롤백한다(sync_set_enabled 와 같은 규칙). 포트 변경은 settings_set
+      (capture_ingest_port) 이 담당하고 다음 토글 사이클에 반영된다. POST /ledger 는 폰의 자동화
+      앱이 친다 — AI 파싱은 게이트/실패 시 원문 그대로 저장(sync_server::ingest::
+      format_ledger_line). 문턱·모델 오버라이드 설정은 없다(SMS 볼륨이 자연히 낮음, ponytail).
+
+shared_types:
+  # 채널이 켜져 있으면 리스너가 뜬다 — 그래도 게이트 자체는 요청마다 DB 를 다시 읽어 강제한다
+  # (Q7, ingest.rs::ledger_enabled). running=false + 채널 켜짐은 포트 충돌 등으로 기동 실패.
+  CaptureStatus: "{ ledger_enabled: boolean, running: boolean, port: integer, token: string }"

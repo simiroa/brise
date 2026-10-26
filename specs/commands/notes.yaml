@@ -1,0 +1,759 @@
+# 커맨드 계약: notes (규약·공용 타입: _conventions.yaml)
+commands:
+  note_create:
+    input:
+      folder_id: uuid
+      title: "string|omit=Untitled Note"
+      year: "integer|omit=오늘(로컬) 연도"
+      month: "integer(1..12)?|omit=오늘(로컬) 월"
+      day: "integer(1..31)?|omit=오늘(로컬) 일"
+    output: NoteDetail            # 기본 Overview 섹션 1개 + 빈 소스 목록으로 생성
+    errors: [NOT_FOUND, VALIDATION]   # folder_id 미존재 / year 범위·month·day 범위 위반, day가 month 없이 옴
+    agent:
+      kind: write
+      description: |
+        새 노트를 만든다. folder_id 는 folder_list_meta 로 먼저 얻는다.
+        제목과 날짜를 생략하면 "Untitled Note" 및 오늘 날짜로 생성된다.
+      args:
+        folder_id: "노트를 넣을 폴더 id (folder_list_meta 결과의 folders[].id)"
+        title: "노트 제목"
+        year: "사건 연도"
+        month: "사건 월 (1~12)"
+        day: "사건 일 (1~31)"
+    notes: |
+      life-recording 피벗(앱 컨셉이 "역사 노트 전용"에서 "인생 기록 중심, 역사는 부차"로 전환) —
+      year/month/day 는 각각 독립적으로 미지정 시 오늘(로컬 타임존, 일 단위 정밀도)로 채워진다.
+      명시값이 있으면 그대로 존중(예: 노트 복제/발췌는 원본 노트의 연도를 넘긴다). repo::notes::
+      create_today_default 가 이 기본값 해석을 맡고, 저수준 create_with_timestamp/migrate 경로의
+      "연도 없으면 1900(모름을 정직하게 인코딩)" 계약은 그대로 유지된다(가져오기 전용, 이
+      커맨드와 무관). 생성 직후 FTS 행 upsert (동일 트랜잭션)
+
+      **실험적(오너 결정 2026-09-20, "넣어봐 보고 이상하면 지울게")** — 노트북별 설정 두 개가 이
+      커맨드(정확히는 create_today_default)에서만 기본값을 바꾼다:
+        - `new_note_date_precision`("day"(기본)|"month"|"year"): year/month/day 를 **셋 다
+          생략했을 때만**(순수 "오늘" 기본값 경로) 적용된다 — 하나라도 명시하면(예: 위 노트 복제)
+          이 설정과 무관하게 "필드별 독립 오늘 폴백"이 그대로다(부분 입력 재해석 없음). "month" 면
+          오늘의 연+월만 채우고 day 는 NULL, "year" 면 연도만 채운다.
+        - `new_note_section_name`(문자열, ≤40자, 개행 없음, trim 후 빈 문자열이면 해제): 이 노트의
+          첫 섹션 이름. 날짜 기본값과 독립적으로 항상 적용된다(생략/무효/미등록 값이면 내장 이름
+          "Overview"). 값은 repo::notes::DEFAULT_SECTION_NAME.
+      두 설정 모두 **노트가 속한 폴더의 노트북**(folders.workspace_id) 기준으로 읽는다 — 활성
+      노트북이 아니다(AI 디스패치/가져오기/동기화 HTTP 핸들러가 비활성 노트북의 폴더에 쓸 수
+      있으므로). 키 자체는 아직 settings_schema::NOTEBOOK_KEYS 미등록 상태여도(또는 손상된 값이어도)
+      항상 안전한 기본값으로 떨어진다 — repo::settings::notebook_setting_raw 가 원시 JSON만 읽고
+      shape 검증은 repo::notes 쪽에서 자체적으로 한다. create_with_timestamp(migrate/가져오기/
+      board·calendar·timeline/pet/schedule 가 직접 호출하는 저수준 경로)는 이 두 설정을 전혀 보지
+      않는다 — 영향 범위는 이 커맨드(및 그 유일한 경유지 create_today_default) 하나뿐이다.
+
+  note_get:
+    input:  { id: uuid }
+    output: NoteDetail
+    errors: [NOT_FOUND]
+    agent:
+      kind: read
+      description: "노트의 전체 상세 정보(모든 섹션 본문, 출처, 첨부 목록)를 조회한다."
+      args:
+        id: "조회할 노트 id"
+
+  note_get_many:                  # 배치 note_get — 대시보드 달력 날짜 패널의 노트당 N+1 대체
+    input:  { ids: "uuid[]" }
+    output: { notes: "NoteDetail[]" }
+    errors: [VALIDATION]              # ids 가 500개(repo::notes::NOTE_GET_MANY_MAX)를 넘음
+    notes: |
+      여러 노트의 NoteDetail(note_get 과 같은 조립)을 한 연결에서 읽어 ids 입력 순서대로 돌려준다.
+      존재하지 않거나 soft-delete(휴지통) 된 id 는 결과에서 생략(에러 아님) — 단수형 note_get 은
+      휴지통 노트도 돌려주지만(휴지통 화면이 열어야 하므로) 배치는 목록 경로라 note_summaries_map 과
+      같은 규칙을 따른다. 아카이브 노트는 note_get 처럼 거르지 않는다. 같은 id 가 여러 번 오면 첫
+      자리에 한 번만. 빈 ids → 빈 배열. 응답 크기(노트마다 섹션 본문 전체)를 묶으려고 ids 는 500개
+      까지 — 넘으면 VALIDATION, 호출부가 청크로 나눠 보낸다(useDayDetailData.ts NOTE_GET_MANY_MAX).
+      2026-10-23: 달력이 그날 노트마다 note_get 을 불러 합성 1만 노트에서 첫 열기마다 IPC ~420회였다
+      (docs/PLAN-2026-10-23-perf-baselines.md). async + 읽기 연결(with_read) — search_notes 와 같은 형태.
+
+  note_update:                    # 부분 업데이트 — 제공된 필드만 반영
+    input:  { id: uuid, title: "string?", year: "integer?", folder_id: "uuid?", remind: "boolean?" }
+    output: NoteSummary
+    errors: [NOT_FOUND, VALIDATION]   # year 범위(-9999..9999) 위반 등
+    notes: |
+      updated_at 갱신 + FTS upsert. remind(Dashboard Wave 3, 2026-08-01 "알려줘" opt-in 플래그)는
+      다른 필드와 달리 생략=미변경이 값 자체(bool)로 이미 명확해 region/status 같은 전용 커맨드가
+      필요 없다 — Some(true)/Some(false) 모두 명시적 새 값, None만 미변경.
+
+  note_delete:                      # Trash: 소프트 삭제(기본 삭제 경로) — 완전 삭제는 note_purge
+    input:  { id: uuid }
+    output: { deleted: boolean }
+    errors: [NOT_FOUND]
+    notes: |
+      deleted_at 를 세팅하고 FTS 행만 제거한다. 자식 콘텐츠(sections/sources/attachments/
+      note_tags)와 이 노트를 가리키는 다른 노트의 internal 링크 첨부는 그대로 둔다(복구 시
+      원상복구되어야 하므로) — 첨부 파일도 지우지 않는다. 소프트 삭제된 노트는 folder_list/
+      search_notes/note_related/note_summaries 배치 로더/워크스페이스 note_count 등 모든 목록·
+      검색 경로에서 제외되지만, note_get(단일 조회)과 note_trash_list 에는 여전히 나타난다.
+
+  note_restore:                     # Trash: 휴지통에서 복구
+    input:  { id: uuid }
+    output: { ok: boolean }
+    errors: [NOT_FOUND]
+    notes: deleted_at 해제 + FTS 재색인(fts_upsert). id 미존재 시 NOT_FOUND(휴지통 여부 무관).
+
+  note_purge:                       # Trash: 완전 삭제(휴지통 비우기) — 구 note_delete 의 하드 삭제
+    input:  { id: uuid }
+    output: { deleted: boolean }
+    errors: [NOT_FOUND]
+    notes: CASCADE로 하위 콘텐츠 삭제, FTS 행 삭제, internal 링크 정리, 첨부 파일은 커밋 후 정리
+
+  note_trash_list:                  # Trash: 휴지통 화면 데이터 소스
+    input:  { workspace_id: "uuid|omit=active" }
+    output: "NoteSummary[]"
+    notes: 워크스페이스 소속 소프트 삭제 노트를 deleted_at desc 로 반환.
+
+  note_trash_count:                 # Trash: 사이드바 배지용 COUNT (목록 조립 없음)
+    input:  { workspace_id: "uuid|omit=active" }
+    output: { count: integer }
+    notes: |
+      note_trash_list 는 행을 조립하므로 배지 갱신에는 과하다. v19 idx_notes_deleted 로
+      deleted_at IS NOT NULL 카운트가 폴더-조인 풀스캔을 피한다. 부팅 창 밖(첫 페인트 후)에서 호출.
+
+  note_archive:                     # W7-f 아카이브: 트리/대시보드에서 숨기되 FTS는 유지
+    input:  { id: uuid }
+    output: { ok: boolean }
+    errors: [NOT_FOUND]
+    notes: |
+      archived_at 를 세팅한다. delete()와 달리 FTS 행을 지우지 않는다(fts_delete 미호출) —
+      "보이지 않지만 찾으면 나온다"가 휴지통과의 핵심 차이. 트리/folder_list/note_query(기본)/
+      대시보드 보드·달력·타임라인/태그 집계/갤러리에서 제외되지만 search_notes 결과에는 계속
+      나온다. note_get(단일 조회)도 필터하지 않는다(아카이브 화면의 "노트로 이동"이 열 수 있어야
+      하므로).
+
+  note_unarchive:                   # W7-f 아카이브 해제
+    input:  { id: uuid }
+    output: { ok: boolean }
+    errors: [NOT_FOUND]
+    notes: archived_at 해제. FTS는 애초에 건드린 적이 없으므로 재색인도 불필요.
+
+  note_archived_list:               # W7-f 아카이브 화면 데이터 소스
+    input:  { workspace_id: "uuid|omit=active" }
+    output: "NoteSummary[]"
+    notes: |
+      워크스페이스 소속 아카이브 노트를 archived_at desc 로 반환. deleted_at IS NOT NULL 인
+      노트(아카이브 후 휴지통으로 간 극단 케이스)는 제외 — 그 노트는 휴지통 화면에만 나와야 한다.
+
+  note_archived_count:              # W7-f 아카이브 배지용 COUNT (목록 조립 없음)
+    input:  { workspace_id: "uuid|omit=active" }
+    output: { count: integer }
+    notes: note_trash_count 와 동일한 이유 — v36 idx_notes_archived 로 풀스캔을 피한다.
+
+  note_query:                       # Scale: 사이드바가 노트를 얻는 단일 read 엔드포인트
+    input:
+      workspace_id: "uuid|omit=active"
+      folder_ids: "uuid[]?"         # omit=전 폴더, []=빈 결과, 그 외=해당 폴더만(열린 폴더 창)
+      year_from: "integer?"         # 포함 하한. omit=하한 없음
+      year_to: "integer?"           # 포함 상한. omit=상한 없음. from>to → VALIDATION
+      # 기록 축(updated_at) 범위 — year_from/year_to(사건 축, notes.year)와는 다른 축이니 혼동
+      # 금지(§2.1/§2.8 HANDOFF-calendar-onboarding.md). ISO 날짜(YYYY-MM-DD), 양끝 포함.
+      # 상한은 raw updated_at 컬럼과 비교하기 위해 내부적으로 to+1일 미만으로 변환된다
+      # (note_record_histogram과 동일한 기법) — idx_notes_updated_alive가 sargable하게 유지된다.
+      updated_from: "string?"       # 포함 하한. omit=하한 없음. 형식 오류 → VALIDATION
+      updated_to: "string?"         # 포함 상한. omit=상한 없음. from>to 또는 형식 오류 → VALIDATION
+      # 기록 축(created_at) 범위 — updated_from/updated_to와 독립된 축(동시 지정 가능, 둘 다 AND).
+      # 달력 날짜-클릭 리스트가 "이날 작성" 그룹에 쓴다. 검증/포맷/양끝 포함 규칙은 updated_from/
+      # updated_to와 동일.
+      created_from: "string?"       # 포함 하한. omit=하한 없음. 형식 오류 → VALIDATION
+      created_to: "string?"         # 포함 상한. omit=상한 없음. from>to 또는 형식 오류 → VALIDATION
+      favorites_only: "boolean|omit=false"
+      # W7-f: 아카이브 opt-in — 기본(false)은 archived_at IS NULL 을 추가로 걸어 아카이브 노트를
+      # 숨긴다(트리/필터 주 경로). true 면 그 술어를 걸지 않는다(아카이브 노트도 섞여 나옴).
+      # 휴지통(deleted_at)에는 영향 없음 — 그건 이 플래그와 무관하게 항상 제외된다.
+      include_archived: "boolean|omit=false"
+      tags: "string[]?"             # 태그 (tag_mode 로 OR/AND 선택, createMatchesTagRegion 과 동일). 빈 배열/omit=축 비활성
+      tag_mode: "'or'|'and'|omit=or"
+      # omit=필터 없음. JSON: {kind:"none"} | {kind:"region", name:string}
+      # (codegen cannot express the tagged union cleanly — see commands.gen.ts NoteQueryRegion)
+      region: "json?"
+      statuses: "string[]?"         # 상태 OR — 내장 키 또는 workspace_statuses.id
+      # omit=필터 없음. JSON: {kind:"has"} | {kind:"none"} |
+      # {kind:"bbox", min_lat, max_lat, min_lng, max_lng}
+      coords: "json?"
+      query: "string?"              # 자유 텍스트 검색 — 예약(비어 있지 않으면 VALIDATION)
+      sort: "'year_asc'|'year_desc'|'updated_desc'|'created_desc'|'title_asc'|omit=year_asc"
+      offset: "integer|omit=0"
+      limit: "integer|omit=200"     # 하드 상한 1000 (NOTE_QUERY_MAX_LIMIT); 지도는 2000 권장 상한
+    output: { notes: "NoteSummary[]", total: integer }
+    errors: [VALIDATION]
+    agent:
+      kind: read
+      description: |
+        폴더, 연도 범위, 기록 수정일/생성일, 즐겨찾기, 태그, 상태 등의 필터로 노트를 검색/조회한다.
+        본문 텍스트 전문 검색은 search_notes를 사용한다. 경량 요약 목록을 반환한다.
+      args:
+        workspace_id: "조회할 노트북 id"
+        folder_ids: "조회할 폴더 id 목록"
+        year_from: "사건 연도 하한 (포함)"
+        year_to: "사건 연도 상한 (포함)"
+        updated_from: "수정일 하한 (YYYY-MM-DD, 포함)"
+        updated_to: "수정일 상한 (YYYY-MM-DD, 포함)"
+        created_from: "생성일 하한 (YYYY-MM-DD, 포함)"
+        created_to: "생성일 상한 (YYYY-MM-DD, 포함)"
+        favorites_only: "즐겨찾기된 노트만 조회 여부"
+        include_archived: "아카이브된 노트 포함 여부"
+        tags: "필터링할 태그 목록"
+        tag_mode: "태그 결합 모드 ('or' 또는 'and')"
+        statuses: "상태 필터 목록 (내장 키 'in_progress'|'exported'|'done' 또는 사용자 정의 상태 id)"
+        sort: "정렬 순서"
+        offset: "건너뛸 개수"
+        limit: "가져올 최대 개수. 결과 크기를 줄이기 위해 필요한 만큼 작은 값을 넘기십시오 (최대 1000)"
+      hide: [query, region, coords]
+    notes: |
+      사이드바 뷰 상태 전체를 받아 해당 창(offset/limit)과 total 만 반환한다.
+      구현된 축: folder / year / updated(기록 축 범위) / created(기록 축 범위) / favourites /
+      tags(OR/AND) / region(단일) / statuses(OR) / coords(has|none|bbox). 축 간 AND. 지도
+      마커는 bbox 로 뷰포트만 요청(전역 마커 금지). query(텍스트 검색)만 아직 예약. 경량 요약
+      (tag_names=[], has_image=false). soft-delete 제외. 검색 결과 캡·trigram·tag_counts
+      집계는 건드리지 않는다.
+
+  note_year_histogram:              # Timeline 밀도 스트립 — 노트 전량 끌어오지 않는 연도 집계
+    input:
+      workspace_id: "uuid|omit=active"
+    # counts shape is hand-written in commands.gen.ts (codegen does not expand inline objects in arrays)
+    output: { counts: "json" }
+    notes: |
+      yearCounts 클라 평탄화의 서버 대응. soft-delete 제외, 태그/지역/상태 필터 없음
+      (TimelineFilter 밀도와 동일). idx_notes_year_alive 로 ~5ms/100k.
+      Output counts: { year: number, count: number }[].
+
+  note_record_histogram:            # 달력 그리드: 기록 축(updated_at/created_at/합집합) 일별 집계
+    input:
+      workspace_id: "uuid|omit=active"
+      # 집계 축. 허용목록 검증 후 리터럴 컬럼명(또는 union 전용 SQL)으로만 매핑(SQL 미보간).
+      # 'union' = 그날 created_at 또는 updated_at 둘 중 하나라도 있으면 그 노트를 1회 카운트
+      # (노트별 UNION dedupe — created_at/updated_at 히스토그램을 그냥 더하면 그날 작성되고
+      # 아직 수정 안 된 모든 노트가 2중 계산된다). 달력 그리드는 이 축을 쓴다.
+      axis: "'updated'|'created'|'union'|omit=updated"
+      from: string                    # 포함 하한, ISO 날짜(YYYY-MM-DD)
+      to: string                      # 포함 상한, ISO 날짜(YYYY-MM-DD). from>to → VALIDATION. 생략 불가(무한 시리즈 방지)
+    # codegen emits counts as `unknown` (does not expand inline objects in arrays) — see notes: below for the real shape
+    output: { counts: "json" }
+    errors: [VALIDATION]
+    notes: |
+      note_year_histogram(사건 축, year 집계)과 같은 모양이지만 기록 축(updated_at/created_at)을
+      집계한다는 점이 다르다 — 인덱스도 별개(migration v22, idx_notes_updated_alive /
+      idx_notes_created_alive). soft-delete 제외, 태그/지역/상태 필터 없음(year_histogram과 동일한
+      posture). year_histogram과 달리 무제한이 아니다 — from/to 필수(생략 불가): 날짜 하루당 버킷
+      하나이므로 노트 전체 이력에 걸친 무제한 호출을 막는다.
+
+      **집계는 UTC 기준이다, 로컬 시간이 아니다.** 저장된 타임스탬프는 ISO8601 UTC
+      (specs/db/schemas/notes.sql:2)이고, 이 커맨드는 `substr(ts, 1, 10)`로 UTC 달력일에
+      귀속시킨다. 달력 UI는 사용자의 로컬 시간대로 렌더링하므로, UTC-로컬 오프셋에 따라 로컬
+      기준 자정 근처의 노트가 UI가 기대하는 날과 다른 날 버킷에 잡힐 수 있다 — 호출하는 쪽
+      (CalendarExpanded)이 from/to를 UTC로 변환하거나, 필요하면 결과를 클라에서 로컬일로
+      재집계해야 한다.
+      Output counts: { day: string(YYYY-MM-DD), count: number }[].
+
+  note_toggle_favorite:
+    input:  { id: uuid }
+    output: { is_favorite: boolean }
+    errors: [NOT_FOUND]
+
+  note_toggle_content_lock:        # 더보기 메뉴 "내용잠금" — note_toggle_favorite와 동일한 구조.
+    input:  { id: uuid }
+    output: { content_locked: boolean }
+    errors: [NOT_FOUND]
+    notes: |
+      "content_lock"이라는 이름은 App.tsx의 완전히 별개인 "UI 잠금"(uiLock, IconLock)과 개념·이름
+      모두 겹치지 않도록 의도적으로 고른 것. ON이면 프런트가 섹션 추가/삭제 + 본문 편집(TipTap
+      read-only)을 막는다 — 이 커맨드 자체는 플래그만 뒤집을 뿐 그 강제는 프런트 책임이다.
+      메타데이터(제목/태그/상태/지역/날짜)·첨부는 범위 밖 — 잠가도 계속 바뀔 수 있다.
+
+  note_set_tags:                  # 태그 전체 교체 (없는 태그명은 자동 생성, 고아 태그는 정리)
+    input:  { id: uuid, tag_names: "string[]" }
+    output: { tag_names: "string[]" }
+    errors: [NOT_FOUND, VALIDATION]   # 공백/중복 태그명 정규화 후 검증
+    notes: FTS upsert
+
+  note_set_region:                # Wave 12: 노트 지역(region) — 전용 커맨드로 분리(note_update 미포함)
+    input:  { id: uuid, region: "string|null" }   # null = 해제. 빈 문자열/공백만 있는 값도 해제로 정규화
+    output: NoteSummary
+    errors: [NOT_FOUND]
+    notes: |
+      note_update처럼 "필드 생략 = 변경 없음" 관례를 따르면 region을 명시적으로 지울(NULL로
+      되돌릴) 방법이 없어진다(Option<String>가 이미 "생략" 의미로 쓰이고 있으므로). folder_set_color
+      와 동일하게 전용 커맨드로 분리해 null을 "해제"로 명확히 쓸 수 있게 한다.
+
+  note_set_status:                # Wave 15: 노트 진행 상태(status) — 전용 커맨드로 분리(note_update 미포함)
+    input:  { id: uuid, status: "string|null" }   # null = 해제. 내장 키("in_progress"|"exported"|"done")
+                                                    # 또는 workspace_statuses.id
+    output: NoteSummary
+    errors: [NOT_FOUND, VALIDATION]   # VALIDATION: 내장 키도 아니고 이 노트 워크스페이스의
+                                        # workspace_statuses.id 도 아닌 값
+    agent:
+      kind: write
+      description: |
+        노트의 진행 상태(status)를 설정하거나 해제한다.
+        상태 값은 dashboard_board의 columns[].status 등에서 얻을 수 있다.
+      args:
+        id: "대상 노트 id"
+        status: "설정할 상태. 내장 키('in_progress'|'exported'|'done') 또는 노트북 사용자 정의 상태 uuid. 생략하거나 null 이면 상태를 해제한다"
+    notes: |
+      note_set_region 과 동일한 이유로 전용 커맨드(note_update의 "필드 생략 = 변경 없음" 관례로는
+      명시적 해제를 표현할 수 없다). repo::taxonomy::validate_status_for_workspace 로 검증.
+
+  note_set_icon:                  # 노트 아이콘(icon key) — 트리 행 아이콘을 큐레이션 팔레트에서 변경(우클릭 메뉴)
+    input:  { id: uuid, icon: "string|null" }   # null = 해제(기본 note 아이콘). 빈/공백도 해제로 정규화
+    output: NoteSummary
+    errors: [NOT_FOUND]
+    notes: |
+      note_set_region 과 동일한 이유로 전용 커맨드(생략 관례로는 명시적 해제를 표현할 수 없다).
+      키 유효성은 프론트 팔레트(src/lib/noteIcons.ts)가 보장 — 서버는 자유 문자열로 저장한다.
+
+  note_set_location:              # Wave 6a: 노트 좌표(lat/lng) 설정/해제 — 전용 커맨드
+    input:  { id: uuid, lat: "integer|null", lng: "integer|null" } # null = 해제.
+    output: NoteSummary
+    errors: [NOT_FOUND, VALIDATION]   # lat in -90..90, lng in -180..180, 둘 다 설정되거나 둘 다 null
+    notes: |
+      note_set_region 과 동일한 이유로 전용 커맨드.
+      lat은 -90.0..90.0, lng은 -180.0..180.0 범위 검증 및 반좌표(하나만 null) 금지.
+
+  # PLAN-2026-09-08-dates-rebuild.md W3: note_set_event_precision / note_set_event_end /
+  # note_set_schedule 커맨드는 삭제됐다 — note_date_update(행 하나의 정밀도·기간·시각·알림·반복을
+  # 한 번에)가 이 세 커맨드가 하던 일을 흡수한다(§note_date_update 아래). 밑에 남은
+  # repo::notes::set_event_precision/set_event_end/set_schedule Rust 함수 자체는 여전히 존재한다 —
+  # 이 세 커맨드 말고도 여러 테스트 픽스처가 대표 행을 세팅하는 내부 헬퍼로 계속 호출한다.
+
+  note_related:                   # Wave 7 (P30) + 신호 확장: 에디터 하단 "관련 노트" 스트립 데이터 소스
+    input:  { id: uuid, limit: "integer|omit=5" }
+    output: { notes: "NoteSummary[]" }
+    errors: [NOT_FOUND]
+    agent:
+      kind: read
+      description: "지정한 노트와 관련된 연관 노트 목록을 점수 순으로 조회한다."
+      args:
+        id: "기준 노트 id"
+        limit: "가져올 최대 개수. 결과 크기를 줄이기 위해 필요한 만큼 작은 값을 넘기십시오"
+    notes: |
+      같은 워크스페이스 내에서만 후보를 찾고 자기 자신은 제외. 단일 SQL로 4개 신호를 합산한
+      score desc, 동점 시 updated_at desc 로 정렬 — repo/notes.rs::related 참조. 신호는 교체가
+      아니라 가산(기존 태그/연도 신호는 그대로 유지)이며 가중치 서열대로 상위 신호가 하위 신호를
+      압도하도록 설계됐다:
+        score = backlink_count*100                     # 최상위: 다른 노트가 나를 internal
+                                                         # 첨부(kind='internal', url=대상 note id)로
+                                                         # 언급(백링크)
+              + (event_date_match ? 30 : 0)             # 중간: 사건 날짜(year/month/day 배지)
+                                                         # 완전 일치 — 정밀도가 둘 다 day 면 y/m/d
+                                                         # 전부, 아니면 공유된 정밀도까지만 비교
+              + shared_attachment_count*15              # 중간: attachments.content_hash(V24)가
+                                                         # 같은 첨부 공유 (hash NULL 인 첨부는 제외)
+              + shared_tag_count*10                     # 하위(기존): 공유 태그 수
+              + max(0, 10 - abs(year_diff)/10)          # 하위(기존): 연도 근접
+      컷오프(HAVING score > 0): 4개 신호 전부 0(백링크 없음, 사건 날짜 불일치, 공유 첨부 없음,
+      공유 태그 0개이고 연도차 100년 이상)이면 score는 정확히 0이 되어 결과에서 제외된다 —
+      "채워 넣기용"으로 무관한 노트를 반환하지 않는다. limit보다 적게, 혹은 0개 반환되는 것은
+      정상 동작이며 UI는 빈 목록을 처리한다. 응답 셰이프는 바뀌지 않는다(NoteSummary[] 그대로,
+      점수 자체는 노출하지 않고 정렬 순서로만 반영).
+      (Wave 4) note_related_exclusions 테이블에 있는 제외 쌍은 계산에서 배제한다.
+
+  note_related_exclude:
+    input: { id_1: uuid, id_2: uuid }
+    output: { ok: boolean }
+    notes: |
+      Wave 4: 양방향 연관 해제. id_1과 id_2는 순서 무관하게 정렬되어 저장된다 (A, B) = (B, A).
+
+  note_related_restore:
+    input: { id: uuid }
+    output: { count: integer }
+    notes: |
+      Wave 4: 해당 노트와 관련된 모든 제외(숨김) 목록을 복원(삭제)한다.
+
+  note_related_hidden_count:
+    input: { id: uuid }
+    output: { count: integer }
+    notes: |
+      Wave 4: 해당 노트가 현재 숨김 처리한 연관 노트의 개수를 반환한다.
+
+  note_summaries_map:             # Wave A-4: by-id 배치 조회 (상주 코퍼스 제거 후 lookup 경로)
+    input:  { ids: "uuid[]" }
+    output: { notes: "map<uuid, NoteSummary>" }
+    notes: |
+      존재하지 않거나 soft-delete 된 id 는 맵에서 생략. 빈 ids → 빈 맵.
+      tag_names / has_image 포함(배치 헬퍼 notes::note_summaries_map 그대로).
+      탭·첨부·컨텍스트 메뉴 등 id 는 알지만 트리 캐시에 없는 노트 해석용.
+
+  folder_list_meta:               # 기동 첫 페인트: 폴더 + 노트 개수만 (노트 행은 미포함)
+    # 10만 실측 9.5ms(커버링 인덱스) vs folder_list 727ms + 직렬화 324ms — 비용이 반환 행 수에
+    # 정비례하므로 첫 페인트를 코퍼스에서 떼려면 노트를 아예 안 보내야 한다.
+    input:  { workspace_id: "uuid|omit=active" }
+    output: { folders: "Folder[]", notes_by_folder: "map<uuid, NoteSummary[]>" }   # 값은 항상 빈 배열
+    agent:
+      kind: read
+      description: |
+        노트북 내의 폴더 목록과 폴더별 노트 개수 메타데이터를 조회한다.
+        새 노트를 생성할 때 넣을 폴더 id(folders[].id)를 얻는 데 사용한다.
+      args:
+        workspace_id: "조회할 노트북 id"
+
+  folder_list:                    # 트리 데이터: 폴더 + 각 폴더의 경량 NoteSummary 목록
+    # Phase 1 B안(docs/SCALABILITY.md): tag_names=[] · has_image=false 로 고정.
+    # 태그 칩/필터는 note_tags_index, 검색/related 배치는 note_summaries_map 사용.
+    input:  { workspace_id: "uuid|omit=active" }
+    output: { folders: "Folder[]", notes_by_folder: "map<uuid, NoteSummary[]>" }
+
+  note_tags_index:                # 워크스페이스 노트→태그 맵 (folder_list 경량 로드 후 온디맨드)
+    input:  { workspace_id: "uuid|omit=active" }
+    output: { tags_by_note: "map<uuid, string[]>" }
+
+  tag_counts:                     # Scale Phase 1: 워크스페이스 태그별 노트 수 (사이드바 칩)
+    # soft-delete 제외. 클라 notesByFolder O(N) 평탄화 대체 — repo/notes.rs::tag_counts.
+    input:  { workspace_id: "uuid|omit=active" }
+    output: { counts: "map<string, integer>" }
+    agent:
+      kind: read
+      description: "노트북 내에 사용된 모든 태그와 각 태그별 노트 개수를 조회한다."
+      args:
+        workspace_id: "조회할 노트북 id"
+
+  tag_set_color:                  # Wave 5a: 태그 색상(자유 hue 슬라이더)
+    input:  { name: string, color_hue: "integer|null" }   # null = 리셋
+    output: { ok: boolean }
+    errors: [NOT_FOUND, VALIDATION]
+
+  tag_rename:                     # W23-e1: 태그명 전역 교체 (대상이 이미 있으면 merge)
+    input:  { from: string, to: string }
+    output: { ok: boolean, affected: integer }
+    errors: [NOT_FOUND, VALIDATION]
+    notes: |
+      Replace tag name across all notes. If `to` already exists (NOCASE), treat as merge
+      (same as tag_merge with from=[from], to=to). Trim both names; empty → VALIDATION.
+      Case-only rename of the same tag is allowed (UPDATE name). FTS upsert every
+      affected note in the same transaction. Tombstone deleted tags/note_tags pairs.
+      `affected` = notes whose tag list actually changed.
+
+  tag_merge:                      # W23-e1: 여러 태그를 하나로 합치기
+    input:  { from: "string[]", to: string }
+    output: { ok: boolean, affected: integer }
+    errors: [NOT_FOUND, VALIDATION]
+    notes: |
+      Merge multiple tags into `to`. Create `to` if missing. Skip from entries equal to
+      `to` (NOCASE). Empty from or empty to → VALIDATION. Missing `from` tag → NOT_FOUND.
+      Reassign note_tags (INSERT OR IGNORE new pairs, delete old), delete from-tags,
+      tombstone, FTS upsert affected notes. One transaction.
+      `affected` = notes whose tag list actually changed.
+
+  tag_delete:                     # W23-e1: 태그를 모든 노트에서 제거
+    input:  { name: string }
+    output: { ok: boolean, affected: integer }
+    errors: [NOT_FOUND, VALIDATION]
+    notes: |
+      Remove the tag from every note. Empty name → VALIDATION. Missing tag → NOT_FOUND.
+      Delete note_tags pairs (tombstone each `{note_id}:{tag_id}`), delete tag (tombstone),
+      FTS upsert affected notes. One transaction.
+      `affected` = notes whose tag list actually changed.
+
+  tag_colors:                     # Wave 5a: 태그별 hue 맵 (name -> hue)
+    input:  { workspace_id: "uuid|omit=active" }
+    output: { colors: "map<string, integer>" }
+
+  folder_files:                   # Wave 4: 폴더 단위 원본(첨부) 집계 뷰 — service/extraction.yaml
+    input:  { id: uuid }
+    output: { notes: "NoteFiles[]", total_bytes: integer }
+    errors: [NOT_FOUND, DB]
+
+  folder_create:
+    input:  { name: string, workspace_id: "uuid|omit=active", color_hue: "integer|null|omit", icon: "string|null|omit", rules: "string|null|omit" }
+    output: Folder
+    errors: [VALIDATION]
+
+  folder_rename:
+    input:  { id: uuid, name: string }
+    output: Folder
+    errors: [NOT_FOUND, VALIDATION]
+
+  folder_set_open:
+    input:  { id: uuid, is_open: boolean }
+    output: { ok: boolean }
+    errors: [NOT_FOUND]
+
+  folder_set_color:               # Wave 11: 폴더 아이콘 색상(자유 hue 슬라이더)
+    input:  { id: uuid, color_hue: "integer|null" }   # null = 리셋(커스텀 색상 제거)
+    output: Folder
+    errors: [NOT_FOUND, VALIDATION]  # color_hue가 0..359 범위를 벗어나면 VALIDATION
+
+  folder_set_icon:
+    input:  { id: uuid, icon: "string|null" }   # null = 기본 폴더 글리프. 빈/공백도 해제로 정규화
+    output: Folder
+    errors: [NOT_FOUND]
+
+  folder_set_rules:
+    input:  { id: uuid, rules: "string|null" }  # null/빈 문자열 = 폴더 규칙 없음. 노트 AI 정리가 상속
+    output: Folder
+    errors: [NOT_FOUND, VALIDATION]  # 4096자 초과면 VALIDATION
+
+  folder_set_exclusions:            # 폴더 단위 일괄 제외 — search_excluded: 전역 검색(search_notes)
+    input:  { id: uuid, search_excluded: boolean, ai_excluded: boolean }  # 노출 차단(트리/그래프는 그대로 보임).
+    output: Folder                  # ai_excluded: AI 정리(ai_organize_note)와 에이전트 스캔(폴더/노트북)의
+    errors: [NOT_FOUND]             # 입력 후보에서 이 폴더의 노트를 제외.
+
+  note_region_add:
+    input: { note_id: uuid, name: string, lat: "number", lng: "number", position: integer }
+    output: { id: uuid }
+    notes: |
+      Wave 4 / D4: 경유지 삽입. notes.region+lat/lng 는 대표 지역으로 유지하고, 여기 행은
+      순서 있는 경유지(waypoints)다. lat/lng 는 f64/number(i64 금지 — 위경도 소수부 절단).
+
+  note_region_remove:
+    input: { id: uuid }
+    output: { ok: boolean }
+    notes: |
+      Wave 4 / D4: 경유지 삭제. repo 가 같은 트랜잭션에서 record_tombstone("note_regions", id)
+      를 남긴다(docs/SYNC.md §8.1).
+
+  note_regions_list:
+    input: { note_id: uuid }
+    output: { regions: "NoteRegion[]" }
+    notes: |
+      Wave 4 / D4: 경유지 목록. position ASC, created_at ASC.
+
+  region_registry:
+    input: { workspace_id: "uuid|omit=active" }
+    output: { entries: "RegionRegistryEntry[]" }
+    errors: [DB]
+    notes: |
+      PLAN-2026-09-19-date-region-ui.md §P3 Phase A (D7/D8) — "이 워크스페이스에 이미 등록된
+      지역명" 전체 목록. 지역 사전 매칭 넛지(§P3)의 후보 소스. workspace_regions(사용자가 추가한
+      프리셋 제안 목록, repo::taxonomy)와는 다른 것 — 그건 실제 notes.region/note_regions.name
+      값과 연결돼 있지 않다. 여기는 notes.region+lat+lng(대표, region IS NOT NULL AND
+      deleted_at IS NULL, folder→workspace 조인)와 note_regions.name+lat+lng(경유지, notes 조인
+      으로 동일 스코프)의 합집합에서 이름별 좌표 하나씩을 뽑는다. archived_at 은 보지 않는다 —
+      아카이브된 노트의 지역도 후보에 남는다(그 노트가 숨었을 뿐 지역명 자체는 여전히 "이
+      워크스페이스에 쓰인 이름"이므로).
+
+      좌표는 상관 서브쿼리/ROW_NUMBER() OVER (PARTITION BY name ORDER BY updated_at DESC) 로 "같은
+      행에서" 고른다 — MIN(lat), MIN(lng) 을 각각 집계하면 서로 다른 행의 위도·경도가 섞여 실재한
+      적 없는 좌표쌍이 나온다(D8, 회귀 금지). note_regions 자체엔 updated_at 이 없으므로(G1
+      미확장) 경유지는 소속 노트의 updated_at 을 대리자로 쓴다 — region_add/region_move 가 그
+      시각에 노트를 같이 bump 하므로 "이 경유지가 최근에 손댄 시각"의 정확한 대리자다. 이름이
+      완전히 같은 대표/경유지 행이 같은 updated_at 을 가지면(동률) 순위가 실행마다 흔들리지
+      않도록 좌표를 2차 정렬키로 더한다 — 흔들려도 반환되는 좌표쌍 자체는 (동률인) 두 행 중
+      하나에서 그대로 온 것이라 D8이 막는 "존재하지 않는 좌표쌍"은 아니다.
+
+      매칭 시 이름 정규화(trim/대소문자)는 여기서 하지 않는다 — 이름별 그룹핑은 원문 문자열
+      그대로다. 이 노트에 이미 붙은 이름을 제외하는 것(D9)과 강도 매칭(D12)은 프런트가
+      regionDisplay.ts::sameRegionName/정규화로 처리한다.
+
+  # ── 날짜 행 (note_dates) — PLAN-2026-09-08-dates-rebuild.md W3: 행 하나를 다루는 커맨드 한 벌 ──
+  # note_regions 의 형제다. W1/W2 이후 **모든 행이 같은 컬럼을 갖는다** — 대표(position 0)와
+  # 관련 날짜(position != 0) 사이에 능력 차이가 없다: 정밀도 사다리(연→월→일)·기간·시각·알림·
+  # 반복 전부가 어느 행에나 붙는다. 옛 D3(추가 날짜는 날짜만, 시각·알림·반복 없음)은 W2/W3 가
+  # 순차로 철회했다(관련 날짜 알림은 D3 철회, 시각·오프셋은 V75, 반복은 이 웨이브 W3).
+  #
+  # 옛 커맨드 다섯 개(note_date_set_remind/note_date_set_schedule/note_set_schedule/
+  # note_set_event_precision/note_set_event_end)를 note_date_update 하나로 흡수했다 — 행 CRUD가
+  # 이제 add/update/remove/reorder/list 다섯 동사 한 벌이다. note_date_make_primary 는 별도로
+  # 남는다(아래 문서).
+  note_date_add:
+    input:
+      note_id: uuid
+      year: integer
+      month: "integer?"
+      day: "integer?"
+      end_year: "integer?"
+      end_month: "integer?"
+      end_day: "integer?"
+      start_time: "string?"
+      end_time: "string?"
+      remind: "boolean|omit=false"
+      remind_offset_min: "integer?"
+      rrule: "string?"
+      label: "string?"
+    output: { id: uuid }
+    errors: [NOT_FOUND, VALIDATION]
+    notes: |
+      노트에 새 행 추가 — 정밀도 사다리 전체를 받는다(year 필수, 나머지는 전부 선택).
+      position 은 서버가 이 노트의 관련 날짜 중 MAX+1 로 정한다(next_position, 항상 맨 뒤에
+      append — 재정렬은 note_date_reorder 의 몫).
+
+      검증은 **새 함수를 만들지 않고** 대표 축이 쓰는 관문을 그대로 재사용한다
+      (repo::notes::{validate_month_day, validate_end_triple, assert_start_not_after_end},
+      repo::schedule::parse_hhmm_min, repo::schedule::rrule::parse_for_seed):
+        - month 1..12, day 1..31, day 는 month 를 요구(정밀도는 연/연월/연월일 3단계만).
+        - end_day⇒end_month⇒end_year, start ≤ end(정밀도 부족분은 start=earliest/end=latest 비교).
+        - I1 start_time ⇒ 시작일 month/day 풀 정밀도. I2 end_time ⇒ start_time. I3 시작일==종료일
+          (또는 end_* 없음)일 때만 start_time<=end_time. I4 rrule ⇒ 시작일 month/day 풀 정밀도.
+          I5 rrule 문법·seed 검증(parse_for_seed). remind_offset_min 은 0..40320(28일).
+      **달력상 실재 여부(2월 30일 등)는 검증하지 않는다** — 대표 축과 동일 자세(range 검증에
+      그친다, 옛 date_add 의 "YYYY-MM-DD" 문자열 관문이 하던 real-calendar-date 검사보다
+      느슨해진 것은 의도된 변화다: 모든 행이 대표와 같은 검증을 받는다는 원칙의 결과).
+
+      **D3 폐지(V85, PLAN-2026-09-18-nl-dates.md): 관련 날짜끼리 (year,month,day) 중복 금지 규칙을
+      없앴다.** 옛 동작은 같은 노트의 다른 관련 날짜(position != 0)와 트리플이 겹치면 VALIDATION
+      이었다 — 여행 일정에서 "체크인 10:00 경복궁 / 체크아웃 14:00 경복궁"처럼 같은 날 행이 둘
+      이상 필요한 게 정상 용도라 이 규칙이 핵심 용도를 막았다(라벨·시각·rrule까지 섞은 좁은 키도
+      검토했으나 이름 없는 종일 행 둘이 겹치는 경우를 여전히 막지 못해 보호 가치가 거의 없었다).
+      대표(position=0)는 원래도 비교 대상이 아니었으니, 이제 "행끼리 유일해야 한다"는 불변식
+      자체가 없다.
+
+      **D1 부활(V85): label을 되살렸다.** 2026-09-07(V74)에 "그냥 노트 이름으로 다른 데서
+      출력되는 게 더 직관적"이라는 오너 판단으로 드롭했던 필드다 — 그 이유는 한 노트=한 사건을
+      가정했을 때는 옳았고 **폴백으로 유지**한다(라벨 없는 행은 지금처럼 노트 제목으로 보인다).
+      되살린 이유는 그때와 다르다: 한 노트 안에 관련 날짜가 여러 개 붙는 용도(여행 일정의 날짜별
+      행선지, 서류 일정의 접수/발급/만료)에서는 행마다 구분할 이름이 필요해졌다. 표시는
+      `label ?? 노트 제목`. **대표(position=0)는 라벨을 받지 않는다**(D2, note_date_update 쪽
+      — insert_primary_row 는 애초에 label 파라미터가 없다).
+
+  note_date_update:                # 행 하나의 모든 것을 한 번에 고친다
+    input:
+      id: uuid
+      year: integer
+      month: "integer|null"
+      day: "integer|null"
+      end_year: "integer|null"
+      end_month: "integer|null"
+      end_day: "integer|null"
+      start_time: "string|null"
+      end_time: "string|null"
+      remind: boolean
+      remind_offset_min: "integer|null"
+      rrule: "string|null"
+      label: "string|null"
+    output: NoteDate
+    errors: [NOT_FOUND, VALIDATION]
+    notes: |
+      옛 note_date_set_remind(관련 날짜 알림 토글) · note_date_set_schedule(관련 날짜 시각·
+      오프셋) · note_set_schedule(대표 시각·오프셋·반복) · note_set_event_precision(대표 정밀도) ·
+      note_set_event_end(대표 기간 종료) 다섯 커맨드가 하던 일을 이 한 커맨드가 흡수한다.
+      **대표(position 0)든 관련 날짜든 같은 커맨드로 고친다** — 능력 차이가 없다, **단 label은
+      예외다(D2)**: position=0 행에 대해서는 들어온 label을 repo 계층이 무시하고 항상 NULL로
+      쓴다(대표는 라벨을 받지 않는다 — 표시 규칙 `label ?? 노트 제목`이 대표에도 라벨을 태우면
+      뜻이 어긋난다). 프런트도 대표 편집 폼에서는 라벨 입력을 숨기거나 비활성화하는 편이
+      자연스럽지만, 그 값을 보내더라도 서버가 무시하므로 강제는 아니다.
+
+      **전량 교체 계약(부분 갱신 아님)** — 호출자가 매번 이 행의 필드를 전부 보낸다(id
+      제외). "안 보낸 필드는 그대로"가 아니라 **모든 필드를 항상 보내고, null 이 그 필드의
+      해제**다. `note_set_schedule`("네 필드 모두 매번 전달, null=해제")의 관례를 행 전체로
+      넓힌 것 — 이 코드베이스의 커맨드 코드젠(scripts/gen-commands.mjs::parseRustField)은
+      `"T?"`(생략 가능)와 `"T|null"`(명시적 null)을 입력 쪽에서 **둘 다 `Option<T>`로 접어버려서**
+      "생략=미변경"과 "명시 null=해제"를 같은 타입으로 구분할 수 없다 — 그래서 "일부만 부분
+      갱신"을 시도하면 조용한 데이터 손실이 나거나(안 보낸 필드가 NULL 로 덮인다), 반대로
+      "생략=미변경"을 고르면 명시적 해제를 표현할 방법이 없다(note_set_region 류 전용 커맨드가
+      생기는 이유와 같은 딜레마). 이 행은 정밀도·기간·시각·알림·반복이 서로 교차 검증되는 값
+      뭉치라(I1~I5), 부분 갱신은 "새 month는 왔는데 옛 start_time과 조합하면 invariant 위반"
+      같은 중간 상태를 만들 위험이 있다 — 전량 교체는 그 조합을 원천적으로 없앤다. 프런트는
+      폼을 열 때 note_dates_list/note_get 으로 현재 값을 채우고, 저장 시 전체를 다시 보낸다.
+
+      검증은 note_date_add 와 완전히 같은 관문(validate_month_day/validate_end_triple/
+      assert_start_not_after_end/parse_hhmm_min/parse_for_seed) — 새 검증 함수를 만들지 않는다.
+      **D3 폐지(V85)**: 같은 노트의 다른 관련 날짜와 (year,month,day)가 겹쳐도 더 이상 VALIDATION이
+      아니다 — note_date_add 쪽 notes(위)의 D3 근거와 동일. 자기 자신 제외 로직 자체가 사라졌다
+      (겹칠 대상을 아예 비교하지 않는다).
+
+      대표(position 0)에 대해 호출하면 project_primary 가 notes.* 투영을 갱신한다(§1.2 그대로).
+      출력은 저장 직후 이 행을 다시 읽은 `NoteDate` — 프런트가 왕복 없이 반영한다.
+
+  note_date_remove:
+    input:  { id: uuid }
+    output: { ok: boolean }
+    errors: [VALIDATION]              # VALIDATION: position=0(대표)은 삭제 금지
+    notes: |
+      note_region_remove 와 동일하게 repo 가 같은 트랜잭션에서
+      record_tombstone("note_dates", id) 를 남긴다(docs/SYNC.md §8.1). id 가 없어도 { ok: true } —
+      삭제는 멱등이 자연스럽다(region_remove 와 동일 자세, repo::date_remove 는 Option<String> 을
+      돌려주지만 커맨드 계층은 그 값과 무관하게 항상 ok:true 다). position=0(대표)은 삭제할 수 없다 —
+      사건 축은 NOT NULL 이고, "초기화"는 정밀도를 연도로 되돌리는 것(note_date_update)이지 행
+      삭제가 아니다.
+
+      **삭제 후 남은 행의 position 을 다시 매기지 않는다**(note_regions 와 동일 판단 — region_remove
+      도 재정렬하지 않고, 재정렬은 오직 명시적 reorder 호출에서만 일어난다). 이유: (1) position=0
+      은 항상 대표로 예약돼야 하므로 재정렬 로직이 그 경계를 매번 피해가야 하는데 얻는 이득이
+      없다, (2) dates_list 는 position ASC 로만 정렬해 보여주므로 사이 값이 비어도(gap) 화면에
+      영향이 없다, (3) next_position 은 항상 현재 MAX(position)+1 을 다시 계산하므로 gap 이 있어도
+      다음 삽입과 충돌하지 않는다.
+
+  note_date_reorder:               # 관련 날짜(position != 0) 순서 재배치
+    input:  { note_id: uuid, ordered_ids: "uuid[]" }
+    output: { ok: boolean }
+    errors: [NOT_FOUND, VALIDATION]  # ordered_ids가 이 노트의 관련 날짜 집합과 불일치
+    notes: |
+      note_region_reorder 와 동일 계약이되, **대표(position=0)는 대상에서 제외된다** —
+      ordered_ids 는 이 노트의 관련 날짜(position != 0) 집합과 정확히 일치해야 하며 position 을
+      1..n 으로 다시 쓴다(0 은 항상 대표 예약이라 재사용하지 않는다).
+
+      **대표 승격(note_date_make_primary)을 이 커맨드의 특수한 경우(0번으로 옮기기)로 흡수하지
+      않는다.** 승격은 "지금 대표든 대상이든 트리플이 유효한가"를 재검증하는 순수 2행 스왑이고,
+      이 커맨드는 검증 없는 n행 재배치다(ordered_ids 집합 일치만 확인). 만약 reorder 가
+      position=0 자리를 쓸 수 있게 허용하면, 승격이 하는 방어적 재검증을 우회하는 두 번째 경로가
+      열린다 — 그래서 두 커맨드의 범위를 아예 겹치지 않게 나눴다.
+
+  note_dates_list:
+    input:  { note_id: uuid }
+    output: { dates: "NoteDate[]" }
+    notes: |
+      position ASC — **첫 항목이 대표(position=0)** 이고 나머지가 관련 날짜다
+      (PLAN-2026-09-08-dates-rebuild.md §2 "목록이 있고 첫 항목이 대표").
+      `date`/`end_date` 파생 문자열은 제거했다(W1이 ponytail 로 임시 남겼던 것) — 프런트가
+      year/month/day 트리플을 직접 받는다.
+
+      **대표를 빼지 않는 이유(W4b)**: 대표만 `notes.*` 투영으로 노출하면 프런트가 그 행을
+      **id 로 지목할 수 없다** — 정밀도·기간·시각·반복을 고치는 `note_date_update` 가 id 를
+      요구하므로, 대표 편집이 "새 행 추가 → 승격 → 옛 대표 삭제" 같은 다단 우회로가 된다.
+      그 우회로는 대표의 id 를 편집마다 바꾸고, 이미 관련 날짜로 존재하는 날로 대표를 옮길 때
+      (당시엔) 중복 검사에 걸렸다(그 중복 검사 자체가 D3/V85로 사라졌지만, 우회로의 다른 문제
+      — id 가 편집마다 바뀌는 것, 중간에 죽으면 유령 행이 남는 것 — 는 여전히 유효한 이유다).
+      목록이 대표를 포함하면 그 전부가 한 번의 update 로 끝난다.
+
+  note_date_make_primary:         # 목록의 대표를 이 행으로 교체 (note_region 의 "대표로" 와 같은 역할)
+    input:  { id: uuid }
+    output: { ok: boolean }
+    errors: [NOT_FOUND, VALIDATION]   # VALIDATION: 대표로 올릴 수 없는 상태(아래 불변식)
+    notes: |
+      **대표는 자동으로 바뀌지 않는다.** "가장 이른 날짜가 대표"로 하면 관련 날짜를 하나 넣는
+      것만으로 notes.year(사건 축)가 조용히 바뀌고, 그 축은 연대 필터·타임라인·그래프가 전부
+      본다(D4). 되돌릴 근거도 남지 않는다. 그래서 명시적 행동으로만 바꾼다 — 지역의 경유지
+      목록이 이미 같은 규율이다.
+
+      **W1 이후: 모든 행이 같은 컬럼을 갖는다 — 승격은 순수 position 교환이다.** 옮길 값이
+      없고(각 행이 자기 트리플·시각·알림·반복을 이미 갖고 있다) 따라서 흘릴 값도 없다. 옛
+      4단계(내리기/올리기/삭제/remind 이관) 모델의 수동 이관은 전부 사라졌다 — position 두 UPDATE
+      로 끝난다. start_time/end_time/remind/remind_offset_min/rrule 은 그 행이 원래 갖고 있던 값
+      그대로 어느 position 에 있든 따라간다.
+
+      **W3: "지금 대표가 month/day 를 안 갖고 있으면(연도만) 거부한다"는 옛 게이트를 없앴다** —
+      그 규칙은 "note_dates 가 풀 정밀도만 담을 수 있던" 시절의 유물이다. 이제 관련 날짜도 임의
+      정밀도를 담을 수 있으므로(note_date_add/note_date_update), 연도만 있는 행도 자유롭게
+      대표/관련 사이를 오갈 수 있다. 대상 행의 트리플은 여전히 방어적으로 재검증한다(손상
+      가능성 — 수동 DB 편집 등, 기존 불변식 재사용: validate_month_day/validate_end_triple/
+      assert_start_not_after_end). 이 검사는 트랜잭션을 열기 전에 끝나므로 실패 시 DB 에 쓰기는
+      단 한 줄도 일어나지 않는다.
+
+      notes.updated_at bump. related_date_id(벨 판정, repo::schedule)의 의미: position 0 이면
+      None, 그 외 행이면 그 행 id — 승격/강등은 이 매핑도 함께 바꾼다(project_primary 경유).
+
+  note_region_reorder:
+    input:  { note_id: uuid, ordered_ids: "uuid[]" }
+    output: { ok: boolean }
+    errors: [NOT_FOUND, VALIDATION]  # ordered_ids가 해당 노트 경유지 집합과 불일치
+    notes: |
+      D4: section_reorder 와 동일 계약. ordered_ids 가 그 노트의 note_regions 집합과 정확히
+      일치해야 하며 position 을 0..n-1 로 다시 쓴다.
+
+  note_region_move:
+    input:  { id: uuid, lat: "number", lng: "number" }
+    output: { ok: boolean }
+    errors: [NOT_FOUND, VALIDATION]  # id 가 없으면 NOT_FOUND, lat/lng 범위를 벗어나면 VALIDATION
+    notes: |
+      드래그로 경유지 위치 이동. note_regions 는 원래 INSERT+DELETE 전용이었으나(note_region_remove
+      주석) 이동만은 예외 — 삭제+재생성은 id 가 바뀌어 프론트 낙관적 갱신/드래그 참조가 끊긴다.
+      note_region_reorder 와 동일하게 소속 노트의 updated_at 도 같은 트랜잭션에서 올린다.
+
+shared_types:
+  # folder_files 전용 뷰 셰이프 — repo/folders.rs::NoteFiles 1:1 (gen-commands.mjs는 인라인
+  # "[{...}]" 배열 리터럴을 튜플 타입으로 오해석하므로 반드시 이름 있는 shared_type을 거친다).
+  NoteFiles: "{ note_id: uuid, title: string, attachments: Attachment[] }"
+  NoteRegion: "{ id: uuid, note_id: uuid, name: string, lat: number, lng: number, position: integer }"
+  # §P3 Phase A (D7) — region_registry 출력 행. id/position 이 없다: 특정 note_regions 행이 아니라
+  # "이 워크스페이스에서 이 이름이 최종적으로 어디를 가리키는가" 하나의 결론이라 원본 행을
+  # 지목할 필요가 없다(여러 원본 행이 병합돼 나온 결과일 수 있음).
+  RegionRegistryEntry: "{ name: string, lat: number, lng: number }"
+  # note_regions 의 형제. PLAN-2026-09-08-dates-rebuild.md W3: 모든 행이 같은 컬럼을 갖는다 — 대표/
+  # 관련의 능력 차이가 사라졌으므로 반복(rrule)도 어느 행에나 붙는다(옛 "대표 전용" 제약 삭제).
+  # `date`/`end_date` 파생 문자열은 W1이 ponytail 로 임시 남겼던 것을 W3에서 제거했다 — 프런트가
+  # year/month/day 트리플을 직접 받는다(W4). 모든 필드를 Rust 가 항상 채워 보내므로 옵셔널
+  # 마커(`?`)를 걷어냈다 — 이 타입을 쓰는 프런트 리터럴은 W4가 함께 갱신한다.
+  NoteDate: "{ id: uuid, note_id: uuid, position: integer, year: integer, month: integer|null, day: integer|null, end_year: integer|null, end_month: integer|null, end_day: integer|null, remind: boolean, created_at: timestamp, start_time: string|null, end_time: string|null, remind_offset_min: integer|null, rrule: string|null, label: string|null }"
+

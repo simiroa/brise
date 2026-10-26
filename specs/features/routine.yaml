@@ -1,0 +1,42 @@
+# 기능 카탈로그: 반복 · 루틴
+features:
+  - id: F-R01
+    name: 루틴 완료 · 반복 규칙
+    status: shipped
+    commands: commands/routine.yaml
+    db: db/schemas/routine_completions.sql
+    verify:
+      rust: src-tauri/src/repo/routine.rs
+    cases:
+      - id: toggle-idempotent-same-day
+        given:
+          occur_on: "2026-08-16"
+          sequence: [true, true, false, false]
+        expect:
+          occur_on: "2026-08-16"
+        covered_by: test_routine_toggle_idempotent
+
+      - id: today-lists-daily-rrule-note
+        given:
+          note: { title: "Daily Exercise", rrule: "FREQ=DAILY" }
+        expect:
+          title: "Daily Exercise"
+          rrule: "FREQ=DAILY"
+        covered_by: test_routine_today
+
+      - id: history-fills-gap-days
+        given:
+          completed: ["2026-08-10", "2026-08-12"]
+          range: { from: "2026-08-10", to: "2026-08-12" }
+        expect:
+          start: "2026-08-10"
+          gap: "2026-08-11"
+          end: "2026-08-12"
+        covered_by: test_routine_history
+
+      - id: history-rejects-over-max-days
+        given:
+          range: { from: "2024-01-01", to: "2026-08-16" }
+        expect:
+          reason: "expected Validation error for exceeding max days"
+        covered_by: test_routine_history_max_days_validation

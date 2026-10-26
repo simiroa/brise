@@ -1,0 +1,9 @@
+{
+  "current_location": "현재 위치",
+  "locating": "위치 확인 중…",
+  "err_no_permission": "위치 권한이 꺼져 있습니다. 설정에서 허용해 주세요.",
+  "err_no_provider": "이 기기에서 위치를 가져올 수 없습니다.",
+  "err_timeout": "위치를 확인하지 못했습니다. 잠시 뒤 다시 시도해 주세요.",
+  "err_security": "위치 접근이 차단되었습니다.",
+  "err_unavailable": "위치를 확인하지 못했습니다."
+}

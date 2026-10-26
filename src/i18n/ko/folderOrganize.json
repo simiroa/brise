@@ -1,0 +1,21 @@
+{
+  "name": "이름",
+  "color": "색",
+  "color_reset": "기본 색",
+  "rules": "폴더 규칙",
+  "rules_hint": "이 폴더 노트를 AI로 정리할 때 상속됩니다. 전역 메타데이터 지침보다 우선합니다.",
+  "rules_locked": "AI 읽기 금지가 켜져 있어 잠겼습니다. 내용은 그대로 보관됩니다.",
+  "search_excluded": "검색에서 제외",
+  "search_excluded_hint": "이 폴더의 노트를 전체 검색 결과에서 숨깁니다. 트리·그래프·타임라인에서는 계속 보입니다.",
+  "ai_excluded": "AI 읽기 금지",
+  "ai_excluded_hint": "이 폴더의 노트를 AI가 읽지 않습니다. 스캔·정리·일괄 정리에서 모두 빠집니다.",
+  "ai_excluded_disabled_tooltip": "이 폴더는 AI 읽기 금지입니다",
+  "notes": "노트",
+  "select_all": "전체 선택",
+  "select_none": "선택 해제",
+  "batch_organize": "선택 AI 정리",
+  "batch_plan": "정리·병합 제안",
+  "empty": "이 폴더에 노트가 없습니다",
+  "load_failed": "폴더를 불러오지 못했습니다: {{msg}}",
+  "save_failed": "저장하지 못했습니다: {{msg}}"
+}

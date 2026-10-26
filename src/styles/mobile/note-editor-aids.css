@@ -1,0 +1,187 @@
+/* mobile/note-editor-aids.css — in-note aids: remote-change banner, typing-nudge chip row (MobileInputChips.tsx), date/region bubble above the sentence (MobileNudgeBubble.tsx) */
+
+/* === 원격 변경 배너 === */
+/* K1 — 다른 기기의 편집이 도착했는데 이 기기가 편집 중이라 자동 반영을 건너뛴 경우의 안내.
+ * 인플로우 요소라 .overlay(플로팅용) 대신 .card(테두리만, 배경 없음)를 재사용한다 — 표면 계약
+ * ⓐ(인라인 background 금지)와 §5.4 SINGLE-SHEET ACRYLIC CONTRACT 그대로. */
+.mobile-remote-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-3) var(--space-4) 0;
+  padding: var(--space-3);
+  font-size: var(--text-sm);
+}
+.mobile-remote-banner-text {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+}
+.mobile-remote-banner-action {
+  flex: none;
+  min-height: 48px;
+  padding: 0 var(--space-3);
+  border: none;
+  background: transparent;
+  color: var(--m-accent-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* === 입력 감지 칩 줄 (docs/PLAN-2026-10-07-mobile-typing-nudges.md §3.5) — 링크·#태그만 ===
+ * (날짜·지역 제안은 아래 .mobile-nudge-bubble — 감지된 문장 위에 뜬다.)
+ * 본문(.mobile-note-stage) 바로 아래·독(.mobile-capture-bar) 위의 in-flow 줄이라, 키보드가 열려도
+ * (`data-kbd="open"` 은 하단 탭·뱃지·스트립·S2 카드만 걷는다) 키보드 위에 그대로 남는다. 한 줄 고정 + 가로 스크롤 —
+ * 칩이 늘고 줄어도 높이가 출렁이지 않는다. 배경은 두지 않는다(반투명은 .app 한 곳, 테두리만). */
+.mobile-nudge-row {
+  flex: none;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding: 0 var(--m-gutter);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  border-top: 1px solid var(--divider);
+}
+.mobile-nudge-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-pill);
+  max-width: 100%;
+}
+.mobile-nudge-chip-main,
+.mobile-nudge-chip-x {
+  min-height: 40px;
+  border: none;
+  background: transparent;
+  color: var(--m-accent-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.mobile-nudge-chip-main { padding: 0 var(--space-3); }
+.mobile-nudge-chip-x { padding: 0 var(--space-3) 0 0; color: var(--muted); }
+
+/* === 날짜·지역 제안 말풍선 (오너 2026-10-07) ===
+ * 감지된 문장(문단) 첫 줄 위에 뜨는 작은 알약. 위치 기준은 .mobile-note-stage(position:relative)이고 좌표는
+ * useNudgeBubblePlacement 가 transform 으로 준다 — `left` 로 밀면 absolute 의 shrink-to-fit 너비가 줄어 글이 접힌다.
+ * 문서 안 요소가 아니다(Decoration 아님) — IME 조합과 무관하다. 레이아웃 높이 0, 눌러도 에디터 포커스를 뺏지 않는다.
+ *
+ * 알약 자체는 한 줄 높이 38 이지만 누르는 영역은 ::after 로 48 까지 넓힌다(.mobile-badge 의 히트존 패턴). 그래서 알약 면은
+ * `.overlay`(overflow:hidden)의 clip 을 풀어 둔다 — 안 풀면 바깥으로 넓힌 히트존이 눌리지 않는다.
+ * 숨김(`hidden`)·모름(`unmeasured`)은 DOM 에 남기고 visibility 로만 감춘다: 스크롤로 첫 줄이 돌아오면 같은 노드가 복귀한다. */
+.mobile-nudge-bubble {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: var(--z-overlay);
+  width: max-content;
+  max-width: calc(100% - 2 * var(--m-gutter));
+}
+.mobile-nudge-bubble[data-placement="hidden"],
+.mobile-nudge-bubble[data-placement="unmeasured"] {
+  visibility: hidden;
+  pointer-events: none;
+}
+.mobile-nudge-bubble .mobile-nudge-bubble-surface {
+  display: flex;
+  /* 한 줄(2026-10-07 S22) — 날짜를 짧게 줄여 두 동작이 한 줄에 든다(두 줄이면 윗글 두 줄을 덮었다). overflow 는
+   * visible 그대로 — 버튼의 48px 히트 영역이 알약 밖으로 나간다. */
+  flex-wrap: nowrap;
+  align-items: center;
+  align-content: center;
+  min-height: 38px;
+  padding: var(--space-2xs) var(--space-1);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-lg);
+  overflow: visible;
+}
+/* 꼬리 — 글자 쪽을 가리킨다. .overlay 가 clip 하지 않도록 알약 밖(루트)의 ::after 로 그린다. */
+.mobile-nudge-bubble::after {
+  content: "";
+  position: absolute;
+  left: var(--space-8);
+  bottom: -5px;
+  width: 9px;
+  height: 9px;
+  background: var(--app-sheet-base);
+  border-right: 1px solid var(--divider);
+  border-bottom: 1px solid var(--divider);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+.mobile-nudge-bubble[data-placement="below"]::after {
+  bottom: auto;
+  top: -5px;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 1px solid var(--divider);
+  border-top: 1px solid var(--divider);
+}
+/* 날짜 + 지역이 한 줄에 안 들어가면(좁은 폰·긴 지역 이름) 둘째 동작이 둘째 줄로 내려간다 — 글을 잘라 가리지 않는다.
+ * 높이가 38 → 한 줄 더만큼 늘 뿐이고, 자리 계산(useNudgeBubblePlacement)은 잰 높이를 쓰므로 그대로 맞는다.
+ * 동작 하나가 혼자서 너비보다 길면 그때만 글줄임(…). */
+.mobile-nudge-bubble-action {
+  display: flex;
+  align-items: center;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+.mobile-nudge-bubble-action + .mobile-nudge-bubble-action { margin-left: var(--space-1); }
+.mobile-nudge-bubble-main,
+.mobile-nudge-bubble-x {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.mobile-nudge-bubble-main {
+  gap: var(--space-2);
+  min-width: 0;
+  padding: 0 var(--space-2) 0 var(--space-4);
+  color: var(--m-accent-text);
+  font-weight: 600;
+}
+.mobile-nudge-bubble-main:disabled { opacity: 0.5; }
+.mobile-nudge-bubble-main svg { flex: none; }
+.mobile-nudge-bubble-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mobile-nudge-bubble-x {
+  flex: none;
+  justify-content: center;
+  width: 24px;
+  margin-right: var(--space-1);
+  padding: 0;
+  color: var(--muted);
+  font-weight: 400;
+}
+/* 48px 히트존: 세로 32 → 48(위아래 8), × 는 가로 24 → 48(좌우 12). × 가 DOM 뒤라 겹치는 12px 는 × 가 이긴다. */
+.mobile-nudge-bubble-main::after,
+.mobile-nudge-bubble-x::after {
+  content: "";
+  position: absolute;
+  top: -8px;
+  bottom: -8px;
+  left: 0;
+  right: 0;
+}
+.mobile-nudge-bubble-x::after { left: -12px; right: -12px; }

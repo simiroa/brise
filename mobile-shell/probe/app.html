@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>fake /app</title>
+<style>body{font:15px sans-serif;margin:10px;background:#fff;color:#111}button{font-size:16px;margin:4px;padding:10px}pre{white-space:pre-wrap;word-break:break-all;background:#eee;padding:6px}</style>
+</head><body>
+<h3 id="screen">list</h3>
+<div id="list"><button id="openNote" onclick="openNote()">open note</button></div>
+<div id="note" style="display:none">NOTE SCREEN <button id="backBtn" onclick="history.back()">back (history.back)</button></div>
+<hr>
+<button id="micBtn" onclick="mic()">mic</button>
+<button id="camBtn" onclick="cam()">cam</button>
+<button id="geoBtn" onclick="geo()">web geo</button>
+<button id="natBtn" onclick="nat()">native loc</button>
+<pre id="log"></pre>
+<script>
+// ---- Brise env.ts::initBrowserToken 흉내: ?token= -> sessionStorage, 주소창에서 지움 ----
+var KEY = "brise_sync_token";
+(function(){
+  var u = new URL(location.href), t = u.searchParams.get("token");
+  if (t) { sessionStorage.setItem(KEY, t); u.searchParams.delete("token"); history.replaceState(history.state, "", u.pathname + u.search + u.hash); }
+})();
+var token = sessionStorage.getItem(KEY);
+function log(k, v) { var line = "APPTEST " + k + ": " + v; console.log(line); document.getElementById("log").textContent += line + "\n"; }
+log("origin", location.origin + " secure=" + window.isSecureContext + " url=" + location.pathname + location.search);
+log("token-in-sessionStorage", token ? "yes(len=" + token.length + ")" : "NO");
+log("BriseNative", typeof window.BriseNative);
+
+function hdr() { return token ? { Authorization: "Bearer " + token } : {}; }
+fetch("/api/v1/ping", { headers: hdr() }).then(function(r){ log("ping", r.status); return r.text(); }).then(function(t){ log("ping-body", t.slice(0, 60)); }).catch(function(e){ log("ping", "ERR " + e); });
+fetch("/api/v1/headers").then(function(r){ return r.json(); }).then(function(h){ log("upstream-saw-cookie", JSON.stringify(h.Cookie || h.cookie || null)); }).catch(function(e){ log("headers", "ERR " + e); });
+try {
+  var es = new EventSource("/api/v1/events?token=" + encodeURIComponent(token || ""));
+  var n = 0; es.onmessage = function(){ n++; if (n === 3) log("EventSource", "OK 3 events"); if (n >= 3) es.close(); };
+  es.onerror = function(){ log("EventSource", "error (readyState=" + es.readyState + ", n=" + n + ")"); es.close(); };
+} catch (e) { log("EventSource", "ERR " + e); }
+
+// ---- MobileApp.tsx 흉내: pushState 로 화면 전환, 뒤로가기는 history.back() ----
+function show(s) { document.getElementById("screen").textContent = s; document.getElementById("list").style.display = s === "list" ? "" : "none"; document.getElementById("note").style.display = s === "note" ? "" : "none"; log("screen", s); }
+function openNote() { history.pushState({ screen: "note" }, ""); show("note"); }
+window.addEventListener("popstate", function(e){ show(e.state && e.state.screen ? e.state.screen : "list"); });
+
+function gum(name, c) {
+  if (!navigator.mediaDevices) { log(name, "N/A no mediaDevices"); return; }
+  navigator.mediaDevices.getUserMedia(c).then(function(s){ s.getTracks().forEach(function(t){ t.stop(); }); log(name, "OK"); }, function(e){ log(name, "ERR " + e.name); });
+}
+function mic() { gum("mic", { audio: true }); }
+function cam() { gum("cam", { video: true }); }
+function geo() { navigator.geolocation.getCurrentPosition(function(p){ log("webgeo", "OK acc=" + p.coords.accuracy); }, function(e){ log("webgeo", "ERR code=" + e.code); }, { timeout: 15000 }); }
+// ---- 네이티브 브리지(addWebMessageListener): postMessage / onmessage ----
+var seq = 0;
+function nat() {
+  if (!window.BriseNative) { log("native", "N/A (no BriseNative)"); return; }
+  window.BriseNative.onmessage = function(e){ var m = JSON.parse(e.data); log("native", m.ok ? "OK acc=" + m.accuracy + " id=" + m.id : "ERR " + m.error + " id=" + m.id); };
+  window.BriseNative.postMessage(JSON.stringify({ id: ++seq, type: "getLocation" }));
+}
+</script></body></html>

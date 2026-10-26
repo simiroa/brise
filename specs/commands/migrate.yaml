@@ -1,0 +1,77 @@
+# 커맨드 계약: migrate — 다른 앱 → Brise 마이그레이션 (규약: _conventions.yaml)
+# §2.5 HANDOFF-calendar-onboarding.md 구현 순서: 1) Markdown+frontmatter 2) Notion zip 3) ENEX.
+# AI 자동 분류는 별도 액션("임포트한 N개를 AI로 정리")으로, 이 커맨드 밖 — 임포트는 AI 없이 먼저 끝낸다.
+# note_ids 는 정확히 그 후속 액션의 진입점이다: 프론트가 이 배열을 그대로 ai_organize_note에 순회해
+# 돌린다 (commands/ai.yaml). 그 외 용도로 쓰지 말 것 — 배치 커밋 순서 이상의 의미는 없다.
+commands:
+  migration_import_markdown:          # 1번째 슬라이스: Markdown 폴더 + YAML 프론트매터 재귀 임포트
+    http: false   # source_dir는 데스크톱 폴더 피커가 고른 로컬 경로
+    input:  { folder_id: uuid, source_dir: string }   # source_dir 는 프론트 폴더 피커에서
+    output: { imported: integer, skipped: integer, note_ids: "uuid[]" }
+    errors: [NOT_FOUND, VALIDATION]     # NOT_FOUND: folder_id 미존재. VALIDATION: source_dir 미존재/디렉토리 아님
+    notes: |
+      *.md 재귀 탐색(하위 디렉토리 포함). `---\n`로 시작하면 그 다음 닫는 `---` 줄까지를 YAML
+      프론트매터로 취급(hand-parsed — serde_yaml 미사용, flat key:value + 1단계 블록/인라인
+      리스트만). 앱별 키 차이는 별칭으로 흡수: title=[title](없으면 파일명), 날짜=[created,date,
+      created_at,ctime,date_created], 태그=[tags,tag].
+      원본 시각 보존(필수 요구사항): 프론트매터 날짜(파싱 가능 시) → 파일 mtime → 임포트 시각
+      순으로 폴백해 created_at/updated_at 둘 다에 심는다(타임존 마커 없는 프론트매터 날짜는 UTC로
+      간주). year 는 프론트매터에서 유도하지 않고 note_create 와 동일한 기본값(1900)을 그대로
+      쓴다 — notes.year 는 사건 축(노트가 무엇에 관한 것인지)이고 기록 시각은 그 축의 부정확한
+      대리값이라, 유도하면 확신에 찬 오답을 심게 된다.
+      파일 단위로 읽기/파싱 실패하면 skipped 증가, 배치 전체는 중단하지 않는다(부분 실패 허용).
+      각 노트 생성은 노트별로 개별 커밋(repo::notes::create_with_timestamp) — 배치 전체를 감싸는
+      단일 트랜잭션은 없음(노트 #50 실패가 #1~49 를 롤백시키지 않기 위함).
+
+  migration_import_notion:            # 2번째 슬라이스: Notion "Export as Markdown & CSV" zip
+    http: false   # zip_path는 데스크톱 파일 피커가 고른 로컬 경로
+    input:  { folder_id: uuid, zip_path: string }
+    output: { imported: integer, skipped: integer, note_ids: "uuid[]" }
+    errors: [NOT_FOUND, VALIDATION]     # NOT_FOUND: folder_id 미존재. VALIDATION: zip_path 미존재/유효한 zip 아님
+    notes: |
+      zip 파일을 파일시스템에 풀지 않고 `zip` 크레이트의 ZipArchive/ZipFile(Read 트레잇)로 각
+      엔트리 바이트를 메모리에서만 직접 읽는다 — 별도 압축 해제 경로가 없으므로 zip-slip 경로
+      탐색 취약점 자체가 성립하지 않는다. by_index 로 전체 엔트리를 순회(중첩 폴더도 포함, 별도
+      재귀 없음).
+      `.md` 파일만 노트로 변환. `.csv`(Notion 데이터베이스 뷰 export)는 의도적 범위 제외 —
+      행(row) 단위로 노트를 만들려면 컬럼→필드 매핑이 별도 범위라 이번 슬라이스에서는 시도하지
+      않고 skipped 로만 센다. md/csv 가 아닌 엔트리(이미지 등 첨부)는 노트에 대응되지 않으므로
+      조용히 무시(집계 없음).
+      파일명은 Notion 이 붙이는 " " + 32자리 hex id 접미사를 제거해 제목으로 쓴다(중첩 경로는
+      마지막 세그먼트만 사용).
+      원본 시각 보존: Notion md export 에는 프론트매터/본문 날짜 신호가 없어(버전 불문)
+      zip 엔트리 자체의 mtime(`ZipFile::last_modified()`, DOS 타임스탬프 → UTC ISO8601 변환) →
+      임포트 시각(now_iso) 순으로 폴백한다. mtime 은 export 시각이지 작성 시각이 아니므로
+      markdown.rs 의 frontmatter 신호보다 약하다는 점을 명시. year 는 유도하지 않음(사건 축 대리
+      불가, markdown.rs 와 동일 근거) — 태그도 이 포맷엔 신호가 없어 항상 빈 배열.
+      엔트리 단위로 읽기/파싱 실패(잘못된 UTF-8 등)하면 skipped 증가, 배치 전체는 중단하지 않는다.
+
+  migration_import_enex:              # 3번째(마지막) 슬라이스: Evernote ENEX export (XML)
+    http: false   # enex_path는 데스크톱 파일 피커가 고른 로컬 경로
+    input:  { folder_id: uuid, enex_path: string }
+    output: { imported: integer, skipped: integer, note_ids: "uuid[]" }
+    errors: [NOT_FOUND, VALIDATION]     # NOT_FOUND: folder_id 미존재. VALIDATION: enex_path 미존재/유효한 ENEX 아님
+    notes: |
+      .enex 는 <en-export> 루트 아래 <note> 원소가 여러 개(보통 다수) 들어있는 XML — 전부 파싱한다.
+      quick-xml(streaming pull parser)로 각 <note> 를 순회: title(plain text), content(CDATA로 감싼
+      ENML — Evernote 의 제한된 XHTML 계열, 자체 <en-note> 루트를 가짐), created/updated
+      (`YYYYMMDDTHHMMSSZ`, 항상 UTC), tag*(0개 이상), resource*(0개 이상, 첨부파일 base64) 를 추출.
+      quick-xml 은 DOCTYPE/외부 엔티티를 아예 해석하지 않는 저수준 파서라 XXE(billion-laughs, 외부
+      엔티티로 로컬 파일/URL 유출) 자체가 성립하지 않는다 — 그래도 외부 DTD/스키마 참조는 따라가지
+      않고 콘텐츠만 파싱한다.
+      최상위 문서 자체가 손상/잘린 경우(예: <en-export> 루트 없음, <note> 열고닫힘 개수 불일치)는
+      전체 커맨드에 대한 VALIDATION 에러 — notion.rs 의 "유효한 zip 아님" 과 같은 등급(하나의 나쁜
+      항목이 아니라 입력 전체가 쓰레기). 반면 개별 note 하나의 내부 XML 만 깨진 경우는 그 노트만
+      skipped 로 세고 배치 전체는 계속 진행(부분 실패 허용, 다른 두 슬라이스와 동일 계약).
+      리소스(첨부파일)는 이 슬라이스에서 완전히 범위 밖 — base64 디코딩과 Brise 자체 attachments
+      테이블 배선은 별도 스코프. resource 를 만나도 skipped 로 세지 않는다(실패가 아니므로) — 그냥
+      추출을 시도하지 않고 건너뛴다. 노트의 텍스트 본문은 첨부 없이도 정상 임포트된다.
+      ENML→Markdown 변환은 scraper(html5ever, repo::web_reader.rs 와 같은 크레이트/패턴)로 흔한
+      태그(div/p/br/b·strong/i·em/ul·ol·li/a[href]/en-media/en-todo)만 합리적으로 변환하고, 그 외
+      (표, 중첩된 특이 구조, 미지의 태그)는 텍스트만 뽑아내는 폴백으로 처리한다 — 완전한 HTML→
+      Markdown 변환은 이 슬라이스의 범위가 아니다.
+      태그는 tag_names 로 직접 매핑(다른 두 슬라이스는 태그 신호가 아예 없었음). year 는 유도하지
+      않음(사건 축 대리 불가, 다른 두 슬라이스와 동일 근거).
+      원본 시각 보존: created(파싱 성공 시) → updated → 임포트 시각 순으로 폴백. ENEX 의 타임스탬프
+      포맷은 항상 UTC 라 프론트매터/mtime 처럼 타임존을 추정할 필요가 없다 — 다른 두 슬라이스보다
+      강한 신호.

@@ -1,0 +1,8 @@
+{
+  "empty_state": "아직 자동저장 기록이 없습니다 — 노트가 열려 있는 동안 1분마다 저장됩니다.",
+  "n_sections": "섹션 {{n}}개",
+  "section_empty": "(비어 있음)",
+  "restore_action": "이 시점으로 복원",
+  "restore_confirm_title": "이 시점으로 복원할까요?",
+  "restore_confirm_desc": "현재 내용을 이 자동저장 시점으로 되돌립니다. 지금 상태는 먼저 저장되므로 다시 되돌릴 수 있습니다."
+}

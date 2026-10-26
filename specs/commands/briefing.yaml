@@ -1,0 +1,71 @@
+# 커맨드 계약: briefing (규약·공용 타입: _conventions.yaml)
+#
+# PLAN-2026-09-30-briefing.md W7 — 브리핑 창 전용 조회. 수집 출처는 notes.origin_source_id/collected_at (migration v90).
+commands:
+  briefing_recent_collected:
+    http: false   # 로컬 UI 성격 — habit_* 과 같은 판단.
+    input:
+      workspace_id: "uuid|omit=active"
+      since: "string|omit"   # RFC3339. 이 시각 이후 수집된 것이 new_count. 없으면 지금-24h.
+      limit: "integer|omit"  # 기본 4, 1..50 로 클램프.
+    output:
+      items: "CollectedNote[]"   # collected_at 내림차순. 삭제된 노트·다른 노트북 제외.
+      new_count: integer         # collected_at > since (배타). items 개수와 무관한 전체 수.
+    errors: [VALIDATION]         # since 가 RFC3339 가 아님
+    notes: repo::briefing::recent_collected. NoteSummary 는 늘리지 않는다.
+
+  # PLAN-2026-10-19-briefing-rewrite.md §4.1 — 브리핑 시간축에서 끌어 만든 일정 하나 = 받은편지함 노트 하나.
+  briefing_block_create:
+    http: false   # 브리핑 창(데스크톱 전용) 쓰기. 폰은 달력 일정 축에서 결과만 읽는다(§10).
+    input:
+      workspace_id: "uuid|omit=active"
+      day: string          # "YYYY-MM-DD" — 대표 날짜(연·월·일 풀 정밀도).
+      start_time: string   # "HH:MM" 00:00..23:59
+      end_time: string     # "HH:MM" 00:00..23:59, start_time 보다 엄격히 뒤. 자정까지는 23:59 로(프런트 clampStoredEndMin).
+      title: string        # trim 후 비면 VALIDATION — 제목 없는 노트를 만들지 않는다.
+    output:
+      note_id: uuid
+      date_id: uuid        # 대표(position 0) note_dates 행 — 옮기기·늘리기는 이 행을 note_date_update 로.
+    errors: [VALIDATION]   # 빈 제목(trim) · day 형식/실재하지 않는 날 · 시각 형식 · end_time <= start_time
+    notes: >
+      repo::briefing::block_create. ① 검증을 전부 먼저 — 실패면 쓰기 0(받은편지함도 만들지 않는다).
+      ② 받은편지함은 서버측 folders::ensure_inbox_folder_id(멱등, 노트북당 하나 — 수집·펫·모바일과 같은 규약).
+      ③ notes::create_today_default_with_hook — note_create 와 같은 길이라 첫 섹션 이름(new_note_section_name,
+      없으면 ui_lang 별 '개요'/'Overview'/'Aperçu')을 그대로 따른다. hook 안(같은 트랜잭션)에서 대표 행
+      start_time/end_time 을 쓰고 project_primary — 노트·섹션·FTS·시각이 한 트랜잭션이라 반쪽 상태(시각 없는 노트)가 없다.
+      ④ 활동 기록 create 1행(커밋 뒤 best-effort, note_create 와 같은 자리) · remote-note-write(created=true).
+
+  # PLAN-2026-10-19-briefing-rewrite.md §6 — 문구 팩 '내 노트 인용'. 프런트 noteIndex 의 snippet 은 늘 비어 있어
+  # 대시보드에서도 한 번도 동작하지 않았다(§2.4 ③) — 서버가 직접 고른다.
+  briefing_note_quote:
+    http: false
+    input:
+      workspace_id: "uuid|omit=active"
+      exclude_note_id: "uuid|omit"   # 새로고침 때 같은 노트를 피한다. 인용할 수 있는 노트가 그것뿐이면 그대로 준다.
+    output:
+      quote: "BriefingNoteQuote|null"   # null = 인용할 노트가 없다(호출부가 빈 상태 + reportFallback, 지식 팩으로 바꾸지 않는다).
+    notes: >
+      repo::briefing::note_quote. 후보 = 그 노트북의 살아 있는 노트(삭제·보관 제외, search_excluded 폴더 제외) 중
+      최근 수정 2000개(ponytail: 10만 노트 전체 무작위 정렬 회피 — 천장·업그레이드는 코드 주석). 그 안에서 무작위 순서로
+      첫 text 섹션(kind='text'|NULL)의 읽을 수 있는 첫 문단(마크다운 표식·HTML·코드·표·그림·제목 줄 제외)이 6자 이상인 첫 노트.
+      text 는 200자 상한(넘으면 …).
+
+  # PLAN-2026-10-19-briefing-rewrite — 브리핑 오른쪽 열 "최근 작업 노트" 카드.
+  briefing_recent_notes:
+    http: false
+    input:
+      workspace_id: "uuid|omit=active"
+      limit: "integer|omit"   # 기본 5, 1..20 로 클램프.
+    output:
+      items: "RecentWorkNote[]"   # last_at 내림차순(동률은 note_id). 노트당 한 줄.
+    notes: >
+      repo::briefing::recent_notes. activity_log 의 kind IN ('create','edit') · note_id NOT NULL 행을 노트별로 묶어
+      MAX(created_at)=last_at. 삭제(deleted_at)·보관(archived_at) 노트, 지금 다른 노트북에 있는 노트, 제목·본문이 모두 빈
+      노트(activity::EMPTY_NOTE_SQL — activity_list 와 같은 판정)는 뺀다. notes.updated_at 을 쓰지 않는 이유: 최종 수정
+      시각은 브리핑 축 끌기·수집·AI 쓰기로도 바뀌어 "내가 작업한 노트"가 아니다. 활동 기록은 생성과 실제 본문 변경만
+      남고 7일(ACTIVITY_RETENTION_DAYS) 보관 — 그보다 오래 손대지 않은 노트는 카드에서 빠진다.
+
+shared_types:
+  CollectedNote: "{ note_id: uuid, title: string, excerpt: string|null, source_id: string|null, source_name: string|null, source_kind: string|null, collected_at: timestamp, tags: string[] }"
+  BriefingNoteQuote: "{ note_id: uuid, title: string, text: string }"
+  RecentWorkNote: "{ note_id: uuid, title: string, folder_name: string|null, last_at: timestamp }"

@@ -1,0 +1,17 @@
+{
+  "bar_label": "선택 항목 작업",
+  "n_selected": "{{n}}개 선택됨",
+  "progress": "{{done}} / {{total}} 처리 중…",
+  "clear": "선택 해제",
+  "add_tags": "태그 추가",
+  "add_tags_hint": "쉼표로 여러 개를 구분합니다. 기존 태그는 유지됩니다.",
+  "add_tags_placeholder": "여행, 2024",
+  "delete": "삭제",
+  "ai_organize": "AI 정리",
+  "delete_confirm_title": "노트 {{n}}개를 삭제할까요?",
+  "delete_confirm_body": "휴지통으로 옮겨집니다. 휴지통에서 복원할 수 있습니다.",
+  "delete_attachments_title": "첨부 {{n}}개를 삭제할까요?",
+  "delete_attachments_body": "디스크에서도 지워지며 복구할 수 없습니다.",
+  "batch_done": "{{n}}개 완료",
+  "batch_partial": "{{ok}}개 완료, {{failed}}개 실패 — 실패한 항목은 선택된 채로 남아 있습니다"
+}

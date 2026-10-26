@@ -1,0 +1,23 @@
+# 커맨드 계약: activity_log — 기기 로컬 활동 이력 (규약: _conventions.yaml)
+# QA8 Wave 4A: note create/delete/edit/restore/import events. Device-local audit trail —
+# deliberately separate from note_snapshots (which CASCADE-delete with the note and cannot
+# hold delete events) and from "reopen closed tab" (settings kv recent_closed_tabs).
+# All http:false: per-device convenience, never round-tripped through sync HTTP. Retention
+# (7 days OR 2000 rows/workspace) is enforced on insert in repo/activity.rs — no list-side
+# pruning. Export never walks this table (see repo/transfer/export.rs comment).
+
+commands:
+  activity_list:
+    http: false
+    input:
+      workspace_id: "uuid?"
+      limit: "integer?"
+    output: "ActivityItem[]"
+    notes: |
+      Newest first. workspace_id defaults to the active workspace when omitted. limit
+      defaults to 200, hard-capped at 500. Empty array when nothing recorded (no NOT_FOUND).
+      note_alive is true only when note_id still points at a non-soft-deleted note; for
+      deleted/purged notes the UI uses summary (name-at-event-time) and does not offer open.
+
+shared_types:
+  ActivityItem: "{ id: uuid, workspace_id: uuid, note_id: uuid|null, kind: string, summary: string, payload: string|null, created_at: timestamp, note_title: string|null, note_alive: boolean }"

@@ -1,0 +1,4 @@
+{
+  "_comment": "check-command-contract.mjs 스냅샷 — (A) required_drift 만 담는다(TS-optional인데 Rust가 Option이 아닌 필드). --update 로 재생성. 정보용 (B) reverse 카테고리는 여기 없다(항상 전량 출력, 게이트를 막지 않음).",
+  "violations": []
+}

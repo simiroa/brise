@@ -1,0 +1,84 @@
+/* mobile/modal-contents.css — controls inside MobileModal: single text input, danger text button, filter sheet */
+
+/* MobileModal 안 단일 텍스트 입력 — .mobile-preset-ai-input과 같은 필드 언어(48px, 같은 테두리/
+ * 반경/폰트), 프리셋 sheet 전용 이름을 새 용도에 그대로 쓰지 않기 위해 이름만 새로 둔다. */
+.mobile-modal-input {
+  width: 100%;
+  min-height: 48px;
+  box-sizing: border-box;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-md);
+}
+
+.mobile-text-btn--danger { color: var(--danger); }
+
+/* === 필터 시트 === */
+
+/* MobileFilterSheet — 상태(OR)/태그(AND, 세로 목록)/기간(단일) 3축을 한 MobileModal 안에.
+ * `.mobile-filter-pill` 은 mobile/ 스타일 안 세 화면(필터 시트의 상태·기간 칩, 타임라인 연도 칩,
+ * 갤러리 종류 탭)이 공유하는 하나의 칩 모양 — 48px 히트존, 가로 스크롤 행에 넣어도 눌리지 않게
+ * flex:none. */
+.mobile-filter-section { margin-bottom: var(--space-5); }
+.mobile-filter-section-label { color: var(--faint); margin-bottom: var(--space-2); }
+.mobile-filter-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.mobile-filter-pill {
+  flex: none;
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 400;
+  cursor: pointer;
+}
+.mobile-filter-pill[data-active='true'] {
+  border-color: var(--accent);
+  color: var(--m-accent-text);
+  font-weight: 600;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.mobile-filter-pill-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+.mobile-filter-tag-list { display: flex; flex-direction: column; }
+.mobile-filter-tag-row {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  cursor: pointer;
+}
+.mobile-filter-tag-row input[type="checkbox"] { width: 20px; height: 20px; flex: none; accent-color: var(--accent); }
+.mobile-filter-tag-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: var(--text-md);
+}
+.mobile-filter-tag-count {
+  flex: none;
+  color: var(--faint);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}

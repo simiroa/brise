@@ -1,0 +1,8 @@
+{
+  "minimize": "Minimize",
+  "maximize": "Maximize / Restore",
+  "close": "Close",
+  "always_on_top": "Always on top",
+  "always_on_top_failed": "Could not change always-on-top: {{msg}}",
+  "always_on_top_not_applied": "The window manager did not apply the requested state"
+}

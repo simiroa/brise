@@ -1,0 +1,77 @@
+/* mobile/postsave-search.css — post-save AI interstitial + search screen */
+
+/* ── Post-save AI interstitial ───────────────────────────────────────────────────────────── */
+
+.mobile-postsave {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-8) var(--m-gutter) calc(var(--space-6) + env(safe-area-inset-bottom));
+  text-align: center;
+}
+.mobile-postsave-check { color: var(--m-accent-text); }
+.mobile-postsave-title { font-size: var(--text-lg); font-weight: 600; color: var(--text); }
+.mobile-postsave-card { width: 100%; padding: var(--space-4); text-align: left; }
+.mobile-postsave-suggest { color: var(--muted); margin-top: var(--space-2); }
+.mobile-postsave-ai-actions { display: flex; gap: var(--space-2); width: 100%; }
+.mobile-postsave-ai-btn {
+  flex: 1;
+  min-height: 48px;
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--m-accent-text);
+  font: inherit;
+  font-weight: 600;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.mobile-postsave-ai-btn--muted { color: var(--faint); }
+.mobile-postsave-next { margin-top: var(--space-4); }
+.mobile-postsave-feed-link { color: var(--muted); }
+
+/* ── Search screen ───────────────────────────────────────────────────────────────────────── */
+
+.mobile-search-bar { gap: var(--space-3); }
+
+.mobile-search-field {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 48px;
+  padding: 0 var(--space-4);
+}
+
+.mobile-search-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-lg);
+}
+.mobile-search-input::placeholder { color: var(--faint); }
+
+.mobile-text-btn {
+  flex: none;
+  min-height: 48px;
+  min-width: 48px;
+  padding: 0 var(--space-4);
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  font-size: var(--text-md);
+  cursor: pointer;
+}
+.mobile-text-btn--accent { color: var(--m-accent-text); }

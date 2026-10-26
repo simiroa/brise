@@ -1,0 +1,434 @@
+# 기능 카탈로그: 설정
+features:
+  - id: F-ST01
+    name: 설정 창 · 키 allowlist
+    status: shipped
+    commands: commands/settings.yaml
+    db: db/schemas/settings.sql
+    verify:
+      rust: src-tauri/src/repo/settings_schema.rs
+      vitest:
+        - src/components/settings/GeneralSection.test.tsx
+        - src/components/settings/AppearanceSection.test.tsx
+        - src/components/settings/AiChatSection.test.tsx
+        - src/components/settings/SettingsNavFooter.test.tsx
+        - src/components/settings/LicenseSection.test.tsx
+        - src/components/SettingsPanel.test.tsx
+    notes: 키 저장 거부는 scripts/check-settings-keys.mjs 가 정적으로도 본다.
+    cases:
+      - id: unknown-dashboard-tab-rejected
+        given:
+          key: dashboard_tabs
+          value: [{ id: unknown_tab, enabled: true }]
+        expect:
+          rejected: "unknown_tab"
+        covered_by: test_dashboard_tabs_validation_and_round_trip
+
+      - id: unknown-hidden-builtin-rejected
+        given:
+          key: note_presets_hidden_builtins
+          value: ["not_a_builtin"]
+        expect:
+          rejected: "not_a_builtin"
+        covered_by: test_validate_setting_note_presets_hidden_builtins
+
+      - id: ai-post-process-boolean-and-defaults-on
+        given:
+          key: ai_post_process
+        expect:
+          key: "ai_post_process"
+        covered_by: ai_post_process_is_boolean_and_defaults_on
+
+      - id: ai-model-fallback-roundtrip
+        given:
+          key: ai_model_fallback
+          value: gemma-4-31b
+        expect:
+          model: "gemma-4-31b"
+        covered_by: test_ai_model_fallback_persists_through_repo_settings_round_trip
+
+      - id: user-name-validate-and-roundtrip
+        given:
+          key: user_name
+          value: Alice
+        expect:
+          name: "Alice"
+        covered_by: test_user_name_validate_and_roundtrip
+
+      - id: font-family-validate-and-roundtrip
+        given:
+          key: font_family
+          value: Pretendard
+        expect:
+          family: "Pretendard"
+        covered_by: test_font_family_validate_and_roundtrip
+
+      # PLAN-2026-09-12 §5/D6: 본문 틴트. 부호 있는 오프셋이라 범위가 0 을 가로지른다 —
+      # -31/41 이 거부되고 -30/40 이 통과하는 것이 이 키의 계약이다.
+      - id: content-tint-signed-range-and-roundtrip
+        given:
+          key: content_tint
+          value: 24
+        expect:
+          key: "content_tint"
+        covered_by: test_content_tint_validate_and_roundtrip
+
+      # PLAN-2026-09-01 W0: 사용자 이름 입력이 일반 탭 → "AI 채팅" 페이지로 이사했다.
+      - id: ui-user-name-input
+        given:
+          input: 홍길동
+        expect:
+          field: user_name
+        covered_by: "사용자 이름을 입력하고 블러하면 스토어에 반영된다 (입력 중에는 IPC 안 쏨)"
+
+      - id: ui-theme-switch-persists
+        given:
+          theme: light
+        expect:
+          command: settings_set
+          theme: "light"
+        covered_by: "switches theme between system, dark, and light"
+
+      - id: ui-settings-nav-shows-one-page
+        given:
+          open: settings
+        expect:
+          page: "mock-general"
+        covered_by: "기본으로 일반(general) 페이지가 보이고 레일에서 항목을 고르면 그 페이지만 보인다"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  - id: F-ST02
+    name: 설정 창 IA — 5그룹 16페이지
+    status: shipped
+    verify:
+      vitest:
+        - src/components/SettingsPanel.test.tsx
+        - src/components/settings/AiPermissionsSection.test.tsx
+        - src/components/settings/GeneralSection.test.tsx
+        - src/components/settings/DataManagementSection.test.tsx
+        - src/components/settings/StorageBackupCard.test.tsx
+        - src/components/settings/AiProviderSection.test.tsx
+        - src/components/settings/ViewSection.test.tsx
+        - src/components/settings/EditorSection.test.tsx
+        - src/components/editor/SpellcheckToggle.test.tsx
+    notes: |
+      PLAN-2026-09-12 §1(D1·D7~D10). 레일은 일반·기능·AI·시스템·플러그인 **5그룹 16페이지**(2026-09-15 R5 알림 및 일정 추가,
+      2026-09-20 에디터 추가)이고 고아 항목이 없다. **페이지 id 는 바뀌지 않았다** — 딥링크와 AiCapabilityCatalog 의 link
+      대상이라 라벨만 바뀐다(`view` → 라벨 "지역", `ai` → "연결", `ai_features` → "기능").
+      신설 id 는 `ai_permissions`·`notifications`·`editor` 셋. 브라우저(태블릿) 모드의 7페이지
+      필터는 mobile.yaml F-MO09 가 들고 있다.
+
+      2026-09-20 — 오너 요청("일반-에디터 페이지 신설해서, 날짜 자동등록, 지역 제한, 드롭 정책
+      등 관련 내용을 모으는 게 좋아 보임")으로 일반 바로 뒤에 `editor` 페이지가 신설됐다.
+      GeneralSection 의 세 행(date_nudge_auto·region_nudge_strict·source_original_policy)이
+      옮겨 갔고, 예전엔 에디터 툴바에서만 바꿀 수 있던 두 행(editor_full_width·
+      spellcheck_enabled)이 처음으로 설정 창에 노출됐다 — `spellcheck_enabled` 는 이번에 로컬
+      state 에서 스토어 simplePref 로 승격됐다(stores/settings.ts).
+
+      같은 날 후속 웨이브(오너: "1, 2, 3번 넣어줘") — 카드가 셋에서 넷으로 늘었다. 자동 제안의
+      날짜·지역 행이 토글 2개에서 3단 세그먼트(`SegGroup`, 끄기/제안만/자동 등록 ·
+      끄기/엄격/느슨)로 바뀌어 `date_nudge_enabled`·`region_nudge_enabled`(신설 enabled 불리언)
+      까지 함께 표시·저장한다. 붙여넣기·드롭에 토글 3종(`paste_link_nudge`·
+      `paste_path_inline_code`·`paste_table_sheet_suggest`)이 늘었고, `editor_md_autoformat`
+      하나만 담은 "입력" 카드가 붙여넣기·드롭 다음에 새로 섰다(표시 카드에 얹지 않은 이유는
+      `EditorSection.tsx` 모듈 doc — "어떻게 보이는지"가 아니라 "타이핑 중 무슨 일이 일어나는지"
+      축이라서). docs/SETTINGS.md §2.2 "2026-09-20(UI)".
+
+      또 같은 날 세 번째 웨이브(오너: "4~7번도 넣어봐, 보고 이상하면 지울게") — **실험적** 설정
+      4종을 얹으며 카드가 넷에서 **다섯**으로 늘었다: 입력 카드에 `link_open_on_click`(2단
+      세그먼트 Ctrl+클릭/클릭) 행 추가, 입력과 표시 사이에 새 "새 노트" 카드
+      (`new_note_date_precision` 3단 세그먼트 · `new_note_section_name` 텍스트 입력 — blur/Enter
+      커밋, 40자 클램프, × 지우기), 표시 카드에 `editor_width`(3단 세그먼트 좁게/보통/넓게, 전체
+      너비가 켜져 있으면 잠김) · `editor_word_count` 행 추가(순서: 전체 너비 → 본문 폭 → 글자 수
+      표시 → 맞춤법 검사). 오너가 앱에서 보고 별로면 뺄 수 있다는 전제로 각 키가 자기완결
+      (키 하나·스토어 필드 하나·UI 행 하나)이다 — docs/SETTINGS.md §2.2 "2026-09-20(실험적 4종)".
+    cases:
+      - id: rail-five-groups-no-orphans
+        given:
+          open: settings
+        expect:
+          first: "settings-nav-group-general"
+          new_page: "settings-nav-ai_permissions"
+          last_group: "settings-nav-group-plugins"
+        covered_by: "레일이 일반·기능·AI·시스템·플러그인 순으로 갈리고 고아 항목이 없다"
+
+      - id: rail-labels-drop-ai-prefix-and-view-becomes-region
+        given:
+          open: settings
+        expect:
+          view_label_key: "settings.page_view"
+          permissions_label_key: "settings.page_ai_permissions"
+        covered_by: "AI 그룹 항목 라벨에서 'AI' 접두가 빠지고 보기 페이지가 '지역'이 된다"
+
+      # D8: 권한 6종은 기능 페이지 맨 위가 아니라 자기 페이지 한 곳에 모인다.
+      - id: ai-permissions-is-its-own-page
+        given:
+          click: settings-nav-ai_permissions
+        expect:
+          renders: "mock-ai-permissions"
+          not_renders: "mock-ai-capability-catalog"
+        covered_by: "AI 연결·권한·기능 페이지가 각자 자기 섹션만 렌더한다"
+
+      - id: ai-permissions-six-toggles-in-three-grids
+        given:
+          open: ai_permissions
+        expect:
+          read_grid: "ai-permissions-read-grid"
+          write_grid: "ai-permissions-write-grid"
+          safety_grid: "ai-permissions-safety-grid"
+          keys:
+            - "chat_read_history"
+            - "chat_read_files"
+            - "chat_write_enabled"
+            - "collect_chat_register"
+            - "ai_confirm_before_apply"
+            - "ai_debug_verbose"
+        covered_by: "권한 6종이 카드 하나 안의 읽기/쓰기/안전장치 SubGroup 셋의 스위치 그리드로 모여 있다 (R2)"
+
+      # PLAN-2026-10-24 D7: 마스터는 AI 제공자(`ai`) 페이지 첫 줄 하나뿐. 다른 AI 페이지는 꺼져 있을 때
+      # 그 페이지로 가는 링크 한 줄만 둔다(켜기 버튼 없음).
+      - id: ai-master-switch-lives-on-ai-provider-page
+        given:
+          open: ai
+          click: settings-ai-enabled-toggle
+        expect:
+          entries: "ai_enabled"
+        covered_by: "turning the master on saves ai_enabled, then checks reachability"
+
+      - id: ai-off-link-points-to-master-page-not-second-switch
+        given:
+          aiEnabled: false
+          open: ai_permissions
+        expect:
+          link: "ai-off-link-go"
+          navigates_to: "ai"
+        covered_by: "D7: AI 가 꺼져 있으면 켜기 버튼 없이 AI 제공자 페이지로 가는 링크 한 줄만 뜬다"
+
+      # D7(2026-09-12): 통계·자동 백업은 일반으로 이사하고, 데이터는 위험 작업 전용이 됐다.
+      # PLAN-2026-10-24 D6: 저장 및 백업 카드와 저장 공간 게이지가 다시 데이터 관리로 이사했다
+      # (사용일·노트·첨부 타일은 일반에 남는다).
+      # 설정 리뷰 2026-09-13: 카드를 "데이터 보관" 한 카드 + SubGroup 으로 병합(testid 유지).
+      # 2026-09-20: 원본 처리는 D7 이후 계속 일반에 있었지만, 이 웨이브로 "에디터" 페이지로
+      # 다시 옮겼다 — 이 케이스에서 빠지고 바로 아래 editor-page-collects-five-editor-settings
+      # 케이스가 그 자리를 잇는다.
+      - id: data-management-holds-storage-and-autobackup
+        given:
+          open: data
+        expect:
+          auto_backup: "settings-backup-auto"
+        covered_by: "저장 위치·자동 백업 행이 데이터 관리의 저장 및 백업 카드에 있다"
+
+      # 2026-09-20 신설, 같은 날 후속 웨이브("1, 2, 3번 넣어줘")로 세 카드에서 네 카드로,
+      # 같은 날 세 번째 웨이브("4~7번도 넣어봐")로 네 카드에서 다섯 카드로 확장 — 오너:
+      # "일반-에디터 페이지 신설해서, 날짜 자동등록, 지역 제한, 드롭 정책 등 관련 내용을 모으는
+      # 게 좋아 보임". 자동 제안·붙여넣기·드롭·입력·새 노트·표시 여섯(→다섯) 관심사가 한 페이지에
+      # 모인다.
+      - id: editor-page-collects-editor-settings-into-five-cards
+        given:
+          open: editor
+        expect:
+          auto_suggest_card: "settings-editor-auto-suggest"
+          paste_drop_card: "settings-editor-paste-drop"
+          input_card: "settings-editor-input"
+          new_note_card: "settings-editor-new-note"
+          display_card: "settings-editor-display"
+        covered_by: "자동 제안·붙여넣기·드롭·입력·새 노트·표시 다섯 카드가 이 순서로 선다"
+
+      # 2026-09-20 세 번째 웨이브("4~7번도 넣어봐") — **실험적** 설정 4종. 각 케이스는 해당 값이
+      # 스토어를 반영하고 settings_set 을 부르는 것까지만 본다(실효 게이트는 다른 에이전트 소관).
+      - id: experimental-link-open-on-click-segment
+        given:
+          open: editor
+        expect:
+          entries: "link_open_on_click"
+        covered_by: "링크 열기 세그먼트가 입력 카드에 있고 linkOpenOnClick 을 반영하며 고르면 setLinkOpenOnClick 을 부른다"
+
+      - id: experimental-new-note-card-date-precision
+        given:
+          open: editor
+        expect:
+          entries: "new_note_date_precision"
+        covered_by: "새 노트 카드가 입력과 표시 사이에 있고 기본 날짜 세그먼트가 newNoteDatePrecision 을 반영한다"
+
+      - id: experimental-new-note-section-name-commits-on-blur-not-keystroke
+        given:
+          open: editor
+        expect:
+          entries: "new_note_section_name"
+        covered_by: "첫 섹션 이름 입력이 blur/Enter 에서만 커밋되고 매 키 입력마다는 커밋하지 않으며, 40자로 잘리고, ×가 비운다"
+
+      - id: experimental-editor-width-locked-by-full-width
+        given:
+          open: editor
+        expect:
+          entries: "editor_width"
+        covered_by: "본문 폭 세그먼트가 표시 카드에 있고 전체 너비가 켜지면 잠긴다"
+
+      - id: experimental-display-card-row-order
+        given:
+          open: editor
+        expect:
+          order: "settings-editor-width"
+        covered_by: "표시 카드의 행 순서가 전체 너비 → 본문 폭 → 글자 수 표시 → 맞춤법 검사다"
+
+      # 2026-09-20(UI) — 토글 2개(date_nudge_auto·region_nudge_strict)가 3단 세그먼트로 바뀌면서
+      # 앞에 선 enabled 불리언(date_nudge_enabled·region_nudge_enabled, 신설)까지 함께 저장한다.
+      # dateNudgeModeOf/regionNudgeModeOf 가 두 불리언 → 3단 표시값 매핑을 맡는다(순수 함수,
+      # stores/settings.ts).
+      - id: date-region-nudge-rows-are-3-way-selectors
+        given:
+          open: editor
+        expect:
+          date_group: "날짜 제안"
+          region_group: "지역 제안"
+        covered_by: "날짜 제안 선택기가 enabled·auto 네 조합 모두에서 옳은 옵션을 선택 상태로 보여준다"
+
+      # setDateNudgeMode/setRegionNudgeMode 콤보 setter — 한 settings_set 호출로 enabled+값 쌍을
+      # 같이 쓰고, off 로 갈 때는 뒤 키를 entries 에서 빼 이전 선택을 보존한다(함정 9와 같은 롤백
+      # 규약, stores/settings.ts 주석).
+      - id: date-nudge-mode-combo-setter-writes-one-settings-set
+        given:
+          click: settings-date-nudge-mode
+        expect:
+          entries: "date_nudge_enabled"
+        covered_by: "날짜 제안 선택기에서 옵션을 고르면 setDateNudgeMode 가 한 settings_set 호출로 두 키를 같이 바꾼다"
+
+      # 2026-09-20(UI) — 붙여넣기·드롭에 신설된 토글 3종과, "입력" 카드의 마크다운 자동 서식
+      # 토글. 넷 다 simplePrefs(낙관적 set() + settings_set, 함정 9 롤백 규약).
+      - id: paste-and-autoformat-toggles-follow-store
+        given:
+          open: editor
+        expect:
+          entries: "paste_link_nudge"
+        covered_by: "붙여넣기 제안 토글 세 개가 붙여넣기·드롭 카드에 있고 클릭하면 각자의 스토어 값과 settings_set 을 함께 바꾼다"
+
+      # spellcheck_enabled 가 로컬 state 에서 스토어 simplePref 로 승격되면서, 에디터 툴바
+      # (SpellcheckToggle)와 이 설정 행이 같은 값을 공유한다 — 어느 창에서 바꿔도 다른 창은
+      # "settings-changed" → load() 재조회로 따라온다(stores/settings.ts, lib/settingsChanged.ts).
+      - id: spellcheck-enabled-syncs-editor-toolbar-and-settings-row
+        given:
+          open: editor
+        expect:
+          toolbar_reflects_load: "spellcheck_enabled"
+        covered_by: "설정 창에서 바뀐 spellcheckEnabled 가 load() 재조회 뒤 이미 열려 있는 에디터 툴바에도 반영된다"
+
+      - id: data-page-danger-strip-replaces-advanced-popover
+        given:
+          open: data
+        expect:
+          backup: "settings-file-backup"
+          restore: "settings-restore"
+          reset: "settings-reset-db"
+          danger_class: "btn-danger"  # 되돌릴 수 없는 동작이라 아이콘이 아니라 글자 단추로 이름을 말한다
+        covered_by: "백업·복원·초기화가 '고급' 메뉴 없이 글자 단추로 펼쳐져 있다"
+
+      # D12: 지역 페이지는 2단이되 고정 px 열이 아니다 — 지도는 창 폭을 따라 늘어난다.
+      # 2026-09-15 2차 R5: 날씨가 스트립으로 올라가 카드가 전폭을 되찾았으므로 2단은
+      # RegionPickerFields 의 6:4 퍼센트 flex 하나만 남는다(ViewSection 의 덧댄 격자는 삭제).
+      - id: region-page-two-fluid-columns
+        given:
+          open: view
+        expect:
+          no_extra_grid: "settings-region-grid"
+        covered_by: "lays the region card out with one fluid two-column picker — no fixed px column"
+
+      # D2: 옵션 행 아래에는 선을 긋지 않는다. 남는 선은 하위 그룹 경계 하나.
+      - id: no-row-hairlines-only-area-boundary
+        given:
+          open: view
+        # 2026-09-15 R5: 주 시작·공휴일 행이 알림 페이지로 옮겨가 남은 서브그룹 하나엔 구분선이 없다.
+        # 이제 단언은 "행 헤어라인(var(--line)) 이 하나도 없다" 뿐이다.
+        expect:
+          token: "var(--line)"
+        covered_by: "draws no row hairlines — only the one sub-group boundary carries a divider (D2)"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  - id: F-ST03
+    name: 강조색 팔레트(OKLCH) · 본문 틴트
+    status: shipped
+    verify:
+      rust: src-tauri/src/repo/settings_schema.rs
+      vitest:
+        - src/lib/accentPalette.test.ts
+        - src/components/settings/AppearanceSection.test.tsx
+    notes: |
+      PLAN-2026-09-12 §4(D4)·§5(D6). 강조색은 5색 화이트리스트(`VALID_ACCENTS`)가 아니라
+      **hue 슬라이더 1칩 + 채도 5칩 + 초기화**의 팔레트 생성이다. 축은 셋이지만 사용자에게
+      여는 건 둘 — H(hue 슬라이더)·C(5칩 사다리)이고 **L 은 테마별 고정 상수**(다크 .7847 /
+      라이트 .6947, `lib/accentPalette.ts::ACCENT_L`). 저장 값은 계속 hex 라 Rust
+      `validate_setting` 의 `accent` arm(`is_hex_color`)은 손대지 않았다.
+
+      본문 틴트 `content_tint` 는 절대값이 아니라 **부호 있는 오프셋**이다: 실효 틴트 =
+      테마 기준값(다크 16 / 라이트 7) + 값. 음수면 틴트 색이 #000 → #fff 로 뒤집혀 본문이
+      사이드바보다 **밝아진다**. CSS 는 색과 세기를 두 변수로 가르고(`--content-tint-color` /
+      `--content-tint-amount`), 세기에 `%` 가 빠지면 `color-mix` 가 통째로 무효가 되어 본문
+      배경이 조용히 사라진다.
+    cases:
+      - id: accent-chroma-ladder-keeps-hue
+        given:
+          click: accent-chip-4
+        expect:
+          entries: "accent"
+        covered_by: "칩을 누르면 같은 색상각의 다른 채도로 저장된다(hex 로)"
+
+      - id: accent-neutral-step-disables-hue-chip
+        given:
+          click: accent-chip-0
+        expect:
+          hue_chip: "accent-hue-chip"
+        covered_by: "무채 칩을 고르면 색이 회색이 되고 hue 칩이 죽는다"
+
+      - id: accent-hue-slider-turns-the-angle
+        given:
+          hue: 25
+        expect:
+          popover: "accent-hue-popover"
+          slider: "accent-hue-slider"
+        covered_by: "hue 칩을 누르면 팝오버가 열리고, 슬라이더가 색상각을 바꾼다"
+
+      - id: accent-reset-returns-default-celadon
+        given:
+          click: accent-reset
+        expect:
+          hex: "#9cc5a4"
+        covered_by: "초기화는 기본 청자색 #9cc5a4 를 **정확히** 낸다"
+
+      # L 이 테마 상수라, 같은 저장값이 라이트에서는 tokens.css 가 쓰던 그 색으로 앉는다.
+      - id: accent-light-theme-matches-tokens-css
+        given:
+          theme: light
+        expect:
+          hex: "#7da98c"
+        covered_by: "라이트 테마의 기본 강조색은 tokens.css 의 --accent:#7da98c 와 같다"
+
+      - id: accent-hex-not-a-five-color-whitelist
+        given:
+          value: "#d9817a"
+        expect:
+          fn: "isAccentHex"
+        covered_by: "hex 면 통과한다(5색 열거가 아니다)"
+
+      - id: on-accent-keeps-body-contrast
+        given:
+          chips: 5
+        expect:
+          ratio: "4.5:1"
+        covered_by: "어떤 칩 위에서도 본문 대비 4.5:1 을 넘는다"
+
+      - id: content-tint-moves-content-only
+        given:
+          value: -18
+        expect:
+          entries: "content_tint"
+        covered_by: "전역 배경 밝기와 **별개로** 본문만 조절하고 정수로 저장된다"
+
+      # 부호가 색을 뒤집는다: 다크 기준 16 + (-30) = -14 → 흰색 14%.
+      - id: content-tint-negative-flips-to-white
+        given:
+          value: -30
+          theme: dark
+        expect:
+          color_var: "--content-tint-color"
+          amount_var: "--content-tint-amount"
+          color: "#fff"
+        covered_by: "음수 오프셋은 틴트를 흰색으로 뒤집어 본문을 사이드바보다 밝게 만든다"

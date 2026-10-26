@@ -1,0 +1,190 @@
+/* mobile/sheet.css — 시트 섹션(MobileSheetEditor + MobileSheetGrid)의 폰 레이아웃: 관계도처럼 화면 끝까지 닿는 한 장 */
+
+/* ── 왜 이 파일인가 ───────────────────────────────────────────────────────────────────────────
+ * 오너 피드백(2026-10-07): "에디터랑 관계도는 안 그런데 시트는 프레임 안에 갇혀 있어서 답답해 보임."
+ * 예전 시트는 `.card`(테두리·모서리) 한 장에 고정 높이 상자 + 그 안의 스크롤러였다. 높이가 고정이었던 이유는
+ * 본문 스크롤 상자(.mobile-note-body-wrap)의 아래 패딩(--m-fab-clear = 떠 있는 FAB 가 가리는 높이)이 `height:100%` 의
+ * 기준을 줄여서다 — 상자가 FAB 위에서 끝나고 그 밑은 빈 띠였다. 지금은 관계도(.mobile-diagram-host, editor-touch.css)와
+ * 같은 방식이다: 호스트가 좌우 거터를 음수 마진으로 밀어내 화면 끝까지 닿고, 테두리·모서리·상자 배경이 없다
+ * (표면 계약 — in-flow 는 배경을 칠하지 않는다). 높이는 본문 상자 전체이고, 아래쪽 여유는 그리드 스크롤러의
+ * 안쪽 패딩이 맡는다(마지막 행이 독·FAB 에 가리지 않고 올라올 수 있다).
+ *
+ * FAB: 시트·관계도 섹션에는 떠 있는 FAB 가 없다 — MobileNote 가 텍스트 섹션에서만 그리고, ＋ 스피드 다이얼은 독 슬롯으로
+ * 간다(`.mobile-note-stage[data-fab="dock"]`, note-capture.css). 그래서 아래 여유는 dock 일 땐 얇게, 아니면(= 떠 있는 FAB 가
+ * 있거나 속성이 없으면) 가림 높이(--m-fab-clear)를 그대로 준다 — 속성 이름이 바뀌어도 "여유가 좀 많은" 쪽으로만 틀린다.
+ *
+ * 본문 상자는 **세로 스크롤러로 남긴다**: MobileNoteBody 가 시트 호스트 뒤에 첨부 목록(.mobile-attach-section)을 같은
+ * 상자 안에 그린다. overflow:hidden 으로 닫으면 첨부에 닿을 방법이 없다. 시트가 첨부 없이 한 화면을 정확히 채우면
+ * 상자는 스크롤되지 않고, 첨부가 있으면 그리드 끝에서 이어지는 스와이프가 상자로 넘어가 첨부가 나온다.
+ * (가로는 그리드가 `overscroll-behavior-x: contain` 으로 막는다 — 시트 가로 스와이프가 상자로 번지지 않게.)
+ *
+ * 이 파일은 note-capture.css(.mobile-note-stage 규칙을 가진 쪽)·editor-touch.css 뒤에서 읽힌다. 아래 본문 상자 규칙은
+ * 기본 상자 규칙(0,2,0)을 명시도(0,3,0)로 이기고, 같은 (0,3,0) 인 `[data-fab="dock"]` 상자 규칙(note-capture.css)은 읽히는
+ * 순서(이 파일이 뒤)로 이긴다 — 그래서 import 순서(mobile.css, sheet.contract.test.ts 가 고정)가 계약이다. */
+
+/* 본문 상자: 위·아래 패딩을 걷는다 — 호스트(height:100%)가 상자 전체 높이를 쓰도록. 좌우 거터는 그대로 둬서 뒤따르는
+ * 첨부 목록이 다른 섹션과 같은 거터에 선다(호스트 쪽이 음수 마진으로 나간다). */
+.mobile-note-stage .mobile-note-body-wrap:has(> .mobile-sheet-host) {
+  padding-block: 0;
+}
+/* 상자 아래 패딩을 걷은 대가 — 이제 스크롤러의 끝은 첨부 목록이라, 맨 아래 줄이 독·FAB 에 붙지 않도록 여유를 그쪽에서 돌려준다. */
+.mobile-note-stage .mobile-note-body-wrap:has(> .mobile-sheet-host) .mobile-attach-section {
+  padding-bottom: var(--m-fab-clear);
+}
+.mobile-note-stage[data-fab="dock"] .mobile-note-body-wrap:has(> .mobile-sheet-host) .mobile-attach-section {
+  padding-bottom: var(--space-5);
+}
+
+/* 호스트(MobileNoteBody 의 div) — 관계도 호스트와 같은 음수 거터 마진. 세로 flex 열이라 안쪽 시트가 남는 높이를 먹는다.
+ * `min-height:0 !important`: MobileNoteBody 가 인라인으로 `minHeight: 300` 을 박아 두는데, 그러면 키보드가 열려
+ * 본문이 300px 아래로 줄 때 호스트가 상자를 넘쳐 셀 편집 바가 접힌 선 밑으로 밀린다. 줄어들 수 있어야 그리드가 대신
+ * 줄고 편집 바는 보인다. (인라인 스타일은 어떤 규칙도 !important 없이는 못 이긴다 — editor-touch.css 의 같은 사정.)
+ * ponytail: 근본 해결은 MobileNoteBody 의 인라인 style 을 이 클래스로 옮기는 것(그쪽은 이 웨이브 소유가 아니다). */
+.mobile-sheet-host {
+  display: flex;
+  flex-direction: column;
+  margin-inline: calc(-1 * var(--m-gutter));
+  min-height: 0 !important;
+}
+
+/* 시트 본체 — 상자(.card)·테두리·모서리 없음. 호스트의 남는 높이를 전부 먹는다. */
+.mobile-sheet-editor {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── 도구 줄: + 행 추가 / + 열 추가 (+ 차트 토글) ───────────────────────────────────────────────────
+ * 띠(배경·테두리)를 없애고 글자 버튼만 남긴다 — 얇아 보이는 건 칠이 없어서지 버튼이 작아서가 아니다(터치 높이는 48).
+ * 첫 글자가 16px 거터에 선다(버튼 오른쪽 패딩이 터치 폭을 채운다). 키보드가 열린 동안은 셀 입력과 무관한 크롬이라 걷는다
+ * (tabbar.css 의 data-kbd 블록과 같은 원칙) — 그리드가 그만큼 높아진다. */
+.mobile-sheet-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  padding-inline: max(var(--m-gutter), env(safe-area-inset-left)) max(var(--m-gutter), env(safe-area-inset-right));
+}
+.mobile-sheet-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.mobile-sheet-tool {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding: 0 var(--space-5) 0 0;
+  background: transparent;
+  border: none;
+  color: var(--m-accent-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.mobile-sheet-tool:active { opacity: 0.6; }
+/* 차트 토글: .mobile-icon-btn 의 켜짐 색(--sel + 강조 글자)은 그대로 쓰고, 꺼진 색만 흐리게. 아이콘(16px)이 48px 버튼 안에서
+ * 양옆 16px 씩 비므로, 오른쪽을 그만큼 밀어내 아이콘 가장자리가 거터에 선다(= --m-gutter, 아이콘 크기를 바꾸면 같이 본다). */
+.mobile-sheet-chart-toggle { margin-inline-end: calc(-1 * var(--m-gutter)); }
+.mobile-sheet-chart-toggle:not([data-active='true']) { color: var(--muted); }
+.mobile-app[data-kbd="open"] .mobile-sheet-toolbar { display: none; }
+
+/* 차트 패널: 띠 배경 없이 헤어라인 하나. 화면 폭 전체이므로 안쪽 여백이 거터를 지킨다. */
+.mobile-sheet-charts {
+  flex: none;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: var(--space-3) var(--m-gutter);
+  border-bottom: 1px solid var(--line);
+}
+.mobile-sheet-chart { margin-bottom: var(--space-3); }
+.mobile-sheet-chart:last-child { margin-bottom: 0; }
+
+/* ── 그리드 스크롤러(MobileSheetGrid 의 .mobile-sheet-grid-container) ─────────────────────────────────
+ * flex:1 + overflow:auto 는 그쪽 인라인이 이미 준다. 여기서 더하는 것: ⓐ min-height:0 — 안 그러면 table 의 내용 높이
+ * 로 늘어나 스크롤러가 아니라 상자가 스크롤된다. ⓑ 아래 안쪽 패딩 — 마지막 행이 맨 밑에 붙지 않고 올라올 수 있다(본문
+ * 상자의 같은 패딩은 위에서 걷었다; 값은 머리 주석의 FAB 설명). ⓒ 가로 오버스크롤 격리. 고정 머리글(열 글자·행 번호)은
+ * sticky 로 이 스크롤러 안에서 그대로 동작한다 — 구분선은 --line 헤어라인 토큰, 그쪽 인라인이 가진다. */
+.mobile-sheet-grid-container {
+  min-height: 0;
+  padding-bottom: var(--m-fab-clear);
+  overscroll-behavior-x: contain;
+}
+.mobile-note-stage[data-fab="dock"] .mobile-sheet-grid-container {
+  padding-bottom: var(--space-5);
+}
+/* 고정 머리글의 헤어라인이 스크롤 중에 사라지던 것: `border-collapse: collapse` 표에서는 sticky 셀의 테두리가 셀을 따라
+ * 움직이지 않고 표와 함께 스크롤돼 나가 버린다(Chromium, 2026-10-07 실측 — 가로·세로로 스크롤하면 열 글자 띠 아래·행 번호 띠
+ * 오른쪽 선이 없어진다). 셀마다 아래·오른쪽 테두리만 갖는 표라 separate+spacing 0 이어도 겹줄 없이 같은 모양이고,
+ * 테두리가 셀에 붙어 따라온다. MobileSheetGrid 가 `borderCollapse: "collapse"` 를 인라인으로 박아 둬서 !important 가 필요하다.
+ * ponytail: 근본 해결은 그쪽 인라인을 지우는 것(MobileSheetGrid.tsx — 이 웨이브 소유가 아니다). */
+.mobile-sheet-grid-container table {
+  border-collapse: separate !important;
+  border-spacing: 0;
+  /* 셀 글자: 오너 2026-10-10 "글자가 너무 큼" — 표가 본문 역할(--text-md = 폰 본문 17px)로 그려져 한 화면에 열이 두세 개뿐이었다.
+   * 폰 메타 단(--text-xs = --m-meta, 13px — 데스크톱 시트 셀과 같은 크기)으로 내린다. 머리글(열 글자·행 번호)은 이미 같은 단이고
+   * 굵기·색으로 구분된다. MobileSheetGrid 가 표에 `fontSize` 를 인라인으로 박아 둬서 !important 가 필요하다(위와 같은 사정). */
+  font-size: var(--text-xs) !important;
+}
+
+/* ── 셀 편집 바(키보드 위 독) ──────────────────────────────────────────────────────────────────────────
+ * `.overlay`(불투명 표면)를 쓰되 떠 있는 카드가 아니라 화면 폭 독으로 눕힌다: 모서리·좌우 테두리·그림자를 걷고 위쪽
+ * 헤어라인만 남긴다(독 .mobile-capture-bar 와 같은 문법). 불투명이라 밑으로 스크롤되는 셀이 비치지 않는다. 등장
+ * 애니메이션(.overlay 의 scale pop)은 화면 폭 독에는 어울리지 않아 끈다.
+ * z-index 를 일부러 주지 않는다: 독 슬롯의 ＋ 스피드 다이얼(note-capture.css)은 펼침 항목이 독 위로 열리며 `--z-overlay`
+ * 층에 그려진다. 이 바가 위 층(예: --z-sticky)이면 셀을 편집하는 중에 다이얼을 열었을 때 항목이 바 뒤로 깔린다. 떠 있는
+ * FAB 는 시트에 없으므로(머리 주석) 바가 그 밑에 깔릴 일도 없다. */
+.mobile-sheet-editbar.overlay {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) max(var(--m-gutter), env(safe-area-inset-right)) var(--space-3) max(var(--m-gutter), env(safe-area-inset-left));
+  border-width: 1px 0 0;
+  border-radius: 0;
+  animation: none;
+}
+
+/* 편집 바 버튼 — 수식 조각(= + - * / SUM()과 확인·닫기가 20px 남짓이라 엄지로 맞추기 어려웠다(2026-10-07 디자인 리뷰,
+ * 실측 21×17~47). 조각은 44px 정사각 이상, 확인·닫기는 48px. 조각 줄은 넘치면 가로로 스크롤한다(셀 주소 옆 남는 폭). */
+.mobile-sheet-snippets {
+  display: flex;
+  gap: var(--space-2xs);
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.mobile-sheet-snippets::-webkit-scrollbar { display: none; }
+.mobile-sheet-snippet {
+  flex: none;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  background: var(--surface-sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-md);
+}
+.mobile-sheet-snippet:active { filter: brightness(0.95); }
+.mobile-sheet-confirm {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  cursor: pointer;
+}
+.mobile-sheet-confirm:active { filter: brightness(0.95); }

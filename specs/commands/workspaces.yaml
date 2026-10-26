@@ -1,0 +1,180 @@
+# 커맨드 계약: workspaces (Wave 3A 신규) — 규약: _conventions.yaml
+# 결정: 스키마·시드·omit=active 규약은 Wave 1부터 준비됨. 이 파일은 CRUD + 전환만 추가.
+#       전환(switch)은 별도 커맨드 없이 settings_set { active_workspace_id } 로 수행
+#       (folders::active_workspace_id 가 미존재 id 를 첫 워크스페이스로 폴백하므로 안전).
+commands:
+  workspace_list:
+    input: {}
+    output:
+      workspaces: "Workspace[]"            # { id, name, created_at, folder_count, note_count }
+      active_id: uuid                       # settings.active_workspace_id 해석 결과 (폴백 반영)
+    errors: [DB]
+    agent:
+      kind: read
+      description: |
+        노트북(workspace) 목록과 현재 활성 노트북 id(active_id)를 조회한다.
+        대부분의 작업 흐름에서 노트북 id를 얻는 출발점이 된다.
+
+  workspace_create:
+    input: { name: string, copy_settings_from: "uuid|omit=none" }
+    output: "Workspace"
+    errors: [VALIDATION, DB]
+    notes: |
+      생성 시 기본 폴더 "Notes" 1개를 함께 시드 (migrations 의 초기 시드와 동일 패턴).
+      새 노트북의 설정(노트북 키, settings_schema::NOTEBOOK_KEYS)은 기본값이다. copy_settings_from 을
+      주면 그 노트북의 workspace_settings 를 복사한다(PLAN-2026-09-19-notebook-settings §7 Q4).
+
+  workspace_duplicate:
+    http: false
+    input: { id: uuid, name: string }
+    output: "Workspace"
+    errors: [NOT_FOUND, VALIDATION, DB]
+    notes: |
+      노트북 복제 — 노트·첨부·설정(workspace_settings)·반복 일정·달력 표시일까지 새 id 로 통째로
+      (dump_workspace → add_notebook, 가져오기와 같은 재매핑 규칙). 아이콘은 옮기고 배경 이미지는 옮기지 않는다.
+      활성 노트북은 바꾸지 않는다. 2026-09-20: 펫 대화(pet_sessions/pet_messages)·수집 소스
+      (collect_sources/collect_seen)·에디터 자동저장 스냅샷(note_snapshots)도 함께 복제한다 — 단, 이
+      셋은 노트북 내보내기 파일(brise-bundle.json)에는 절대 실리지 않는다(다른 사람에게 건네는 파일이
+      AI 대화 이력을 몰래 나르면 안 된다 — note_snapshots는 애초에 device-local 캐시라 별도 이유로도
+      내보내기 대상이 아니다). 복제는 파일을 거치지 않는 DB 내부 경로라 예외적으로 옮긴다. 수집 소스는
+      원본이 켜져 있었든 아니든 사본에서 항상 꺼진 채로 시작한다(enabled=false) — 조용히 같은 피드를
+      두 배로 폴링하거나 아직 열어보지 않은 노트북을 채우지 않도록, 사용자가 원하는 소스를 직접 켠다.
+      collect_seen도 함께 복사되므로 나중에 켜서 재수집돼도 이미 본 항목은 다시 수집하지 않는다.
+      스냅샷은 휴지통에 있는 노트의 것은 복제하지 않는다(그 노트 자체가 복제 대상이 아니므로).
+
+  workspace_rename:
+    input: { id: uuid, name: string }
+    output: "Workspace"
+    errors: [NOT_FOUND, VALIDATION, DB]
+
+  workspace_delete:
+    http: false   # 노트북 통째 삭제는 폰(원격)에서 불가 — 데스크톱 전용. 삭제 직전 pre-delete-*.zip 강제 백업(실패 시 중단)
+    input: { id: uuid }
+    output: { deleted_note_count: integer }
+    errors: [NOT_FOUND, VALIDATION, DB]     # VALIDATION: 마지막 워크스페이스는 삭제 불가
+    notes: |
+      CASCADE: folders → notes → sections/sources/attachments. FTS 행과 첨부 디렉토리도 정리
+      (folder_delete 의 정리 로직 재사용). 삭제 대상이 active 였다면 남은 첫 워크스페이스로
+      settings.active_workspace_id 갱신. 워크스페이스 배경 이미지 디렉토리(workspace_bg/{id}/)도 정리.
+
+  # Wave 13: 좌상단 워크스페이스 스위처는 노트 컬렉션의 "이름"이므로 사용자가 배경 이미지를
+  # 지정할 수 있어야 한다(owner 결정). attachment_add_file 과 동일한 스트리밍 복사 패턴이지만
+  # attachments/ 밑에 두면 orphan_cleanup 이 고아로 오인해 지우므로 별도 루트(workspace_bg/)를 쓴다.
+  workspace_set_bg_image:
+    http: false   # file_path는 로컬 파일 다이얼로그가 고른 경로 — 원격 클라이언트엔 의미 없음
+    input: { id: uuid, file_path: string }   # OS 파일 선택 다이얼로그는 프론트 plugin-dialog 사용
+    output: "Workspace"
+    errors: [NOT_FOUND, VALIDATION, IO]      # VALIDATION: 20MB 초과 / 이미지 아닌 확장자
+    notes: |
+      data_dir/workspace_bg/{id}/ 로 복사(원자적 임시명→rename). 기존 배경이 있었다면 교체 후
+      이전 파일을 정리(고아 방지).
+
+  workspace_clear_bg_image:
+    input: { id: uuid }
+    output: "Workspace"
+    errors: [NOT_FOUND, DB]
+    notes: 배경 이미지 파일 삭제 + bg_image_path NULL.
+
+  # 좌상단 스위처(노트 모음의 정체성) 아이콘을 큐레이션 팔레트에서 바꾼다(owner 요청). null =
+  # 해제(기본 그리드 아이콘). 키 유효성은 프론트 팔레트(src/lib/noteIcons.ts)가 보장 — folder_set_color
+  # 처럼 순수 표현 데이터라 서버는 자유 문자열로 저장한다.
+  workspace_set_icon:
+    input: { id: uuid, icon: "string|null" }
+    output: "Workspace"
+    errors: [NOT_FOUND, DB]
+
+  workspace_bg_base_dir:
+    input: {}
+    output: { base: string }
+    errors: []
+    notes: For asset protocol convertFileSrc (attachments_base_dir 와 동일 패턴, 별도 루트).
+
+  # Wave 14: 사용자 확장 지역/시대 — src/lib/eras.ts 의 프리셋(korea/france) 지역·시대 목록이
+  # 고정 세트라 사용자가 새 항목을 추가할 수 없었다(owner 요청). 여기 저장되는 행은 전부
+  # "사용자가 추가한" 항목만이다 — 내장 프리셋 목록은 여전히 eras.ts 상수이고 이 목록에는 없다
+  # (프론트가 두 출처를 합쳐 Région 필터·시대 칩으로 렌더링). 워크스페이스 스코프로 결정한 이유:
+  # 역사적 맥락(지역·연대)은 워크스페이스마다 다르다.
+  workspace_region_list:
+    input: { workspace_id: "uuid|omit=active" }
+    output: { regions: "RegionEntry[]" }
+    errors: [DB]
+
+  workspace_region_add:
+    input: { workspace_id: "uuid|omit=active", name: string }
+    output: "RegionEntry"
+    errors: [NOT_FOUND, VALIDATION, CONFLICT, DB]
+    notes: |
+      VALIDATION: 공백/빈 이름. CONFLICT: 같은 워크스페이스에 이름이 이미 존재(대소문자 무시,
+      COLLATE NOCASE). position 은 추가된 순서대로 끝에 붙는다(0-base, 기존 최대값+1).
+
+  workspace_region_remove:
+    input: { id: uuid }
+    output: { deleted: boolean }
+    errors: [NOT_FOUND]
+    notes: |
+      내장 프리셋 지역은 이 테이블의 행이 아니므로 애초에 이 커맨드의 대상이 될 수 없다(프론트는
+      내장 칩에 제거 버튼을 아예 렌더링하지 않는다). 삭제된 지역명을 쓰던 note.region 은 독립
+      자유 텍스트 컬럼이라 그대로 남는다(자동 NULL 처리 없음 — 노트 손상 방지).
+
+  workspace_era_list:
+    input: { workspace_id: "uuid|omit=active" }
+    output: { eras: "EraEntry[]" }
+    errors: [DB]
+
+  workspace_era_add:
+    input: { workspace_id: "uuid|omit=active", name: string, from_year: integer, to_year: integer }
+    output: "EraEntry"
+    errors: [NOT_FOUND, VALIDATION, DB]
+    notes: |
+      VALIDATION: 공백/빈 이름, to_year <= from_year, 또는 연도가 notes.year 와 동일한 유효 범위
+      (-9999..9999) 밖. position 은 추가된 순서대로 끝에 붙는다.
+
+  workspace_era_remove:
+    input: { id: uuid }
+    output: { deleted: boolean }
+    errors: [NOT_FOUND]
+    notes: 내장 프리셋 시대는 이 테이블의 행이 아니므로 대상이 될 수 없다(region_remove 와 동일 방침).
+
+  # Wave 15: 사용자 확장 노트 상태 — 타이틀바 재구성과 함께 도입. 내장 3종("작성중"/"내보냄"/
+  # "완료", src/lib/status.ts BUILT_IN_STATUSES)은 코드 상수라 이 목록에 없다(regions/eras 와
+  # 동일 원칙). owner 요구사항("검색필터쪽에서 추가할수있게 하자")에 따라 사이드바 YearFilter의
+  # "상태" 모드에서 추가/삭제한다(era_add/region_add 와 동일한 칩 UI 패턴).
+  workspace_status_list:
+    input: { workspace_id: "uuid|omit=active" }
+    output: { statuses: "StatusEntry[]" }
+    errors: [DB]
+
+  workspace_status_add:
+    input: { workspace_id: "uuid|omit=active", name: string }
+    output: "StatusEntry"
+    errors: [NOT_FOUND, VALIDATION, CONFLICT, DB]
+    notes: |
+      VALIDATION: 공백/빈 이름 또는 내장 상태명과 대소문자 무시 충돌(BUILT_IN_STATUSES). CONFLICT:
+      같은 워크스페이스에 이름이 이미 존재(대소문자 무시, COLLATE NOCASE). position 은 추가된
+      순서대로 끝에 붙는다(0-base, 기존 최대값+1).
+
+  workspace_status_rename:
+    input: { id: uuid, name: string }
+    output: "StatusEntry"
+    errors: [NOT_FOUND, VALIDATION, CONFLICT, DB]
+    notes: |
+      커스텀 상태만 대상 — 내장 상태는 이 테이블의 행이 아니므로 애초에 대상이 될 수 없다(remove 와
+      동일 방침). VALIDATION: 공백/빈 이름 또는 내장 상태명과 대소문자 무시 충돌(add 와 동일).
+      CONFLICT: 같은 워크스페이스의 "다른" 상태와 이름 충돌(대소문자 무시 — 자기 자신의 대소문자만
+      바꾸는 rename 은 허용). 노트는 상태를 id 로 참조하므로 rename 은 notes 를 건드리지 않는다.
+
+  workspace_status_remove:
+    input: { id: uuid }
+    output: { deleted: boolean }
+    errors: [NOT_FOUND]
+    notes: |
+      내장 상태는 이 테이블의 행이 아니므로 애초에 이 커맨드의 대상이 될 수 없다(프론트는 내장
+      항목에 제거 버튼을 아예 렌더링하지 않는다). 삭제된 상태를 참조하던 note.status 는 NULL 로
+      되돌린다(region_remove 와 달리 status 는 FK 검증 대상이라 고아 참조를 남기지 않는다 —
+      repo::taxonomy::remove_status, 단일 트랜잭션).
+
+shared_types:
+  Workspace: "{ id: uuid, name: string, created_at: iso8601, folder_count: integer, note_count: integer, bg_image_path: string|null, icon: string|null }"
+  RegionEntry: "{ id: uuid, workspace_id: uuid, name: string, position: integer }"
+  EraEntry: "{ id: uuid, workspace_id: uuid, name: string, from_year: integer, to_year: integer, position: integer }"
+  StatusEntry: "{ id: uuid, workspace_id: uuid, name: string, position: integer }"

@@ -1,0 +1,9 @@
+{
+  "current_location": "Position actuelle",
+  "locating": "Localisation en cours…",
+  "err_no_permission": "L'autorisation de localisation est désactivée. Activez-la dans les réglages.",
+  "err_no_provider": "Cet appareil ne peut pas fournir de position.",
+  "err_timeout": "Impossible d'obtenir votre position. Réessayez dans un instant.",
+  "err_security": "L'accès à la position a été bloqué.",
+  "err_unavailable": "Impossible d'obtenir votre position."
+}

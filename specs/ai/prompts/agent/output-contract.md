@@ -1,0 +1,1 @@
+[출력 계약 — 앱이 고정한 JSON 스키마. 값은 모두 비워 둔 골격이다. 자리표시자 문자열을 복사하지 말고, 컨텍스트에서 도출한 실제 값만 채워 넣으세요. type 은 create_note | update_note | delete_note | merge_notes 중 하나만. 불필요한 액션은 actions 배열에서 빼세요. JSON 외 출력 금지.]

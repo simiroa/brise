@@ -1,0 +1,9 @@
+{
+  "action": "실행 취소",
+  "deleted_named": "\"{{name}}\" 삭제됨",
+  "link_removed": "\"{{name}}\" 연결이 해제되었습니다",
+  "note_moved": "\"{{note}}\" 를 \"{{folder}}\" 로 옮겼습니다",
+  "metadata_applied": "\"{{note}}\"에 AI 정리를 적용했습니다",
+  "metadata_applied_partial": "\"{{note}}\"에 AI 정리를 적용했습니다 ({{fields}}은(는) 되돌릴 수 없음)",
+  "edit_conflict_skipped": "적용 후 \"{{note}}\"가 편집되어 되돌리지 않았습니다"
+}

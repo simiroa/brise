@@ -1,0 +1,93 @@
+/* WorkspaceSwitcher — the trigger shows the NAME of the note collection, not a minor control.
+   Kept in its own file (tokens.css is owned by another agent this pass); only existing tokens
+   are reused here (--space-*, --text-*, --sel, --accent, --divider, --surface-base, --radius-*)
+   — no new colors are invented, per docs/DESIGN.md's single-surface principle. */
+
+/* 플랫 정체성 타이틀. 예전 "솟아오른 프로스트 유리 칩"(그라디언트+--sel 틴트+backdrop-filter+
+   다층 그림자+테두리)은 owner 가 걷어내기를 요청 — 이미지 배경이 있을 땐 그 틴트가 이미 대비를
+   주고, 없을 땐 표면 위에 조용히 얹힌 큰 타이틀이면 충분하다. 배경(폰트 뒤 필) 제거, 큰 글씨/
+   아이콘, 위아래 안정적 패딩. 이미지 배경 변형은 컴포넌트가 인라인 backgroundImage(자체 틴트
+   그라디언트 82%)로 덮으므로 그 경우에만 이미지가 보인다. */
+.ws-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  /* W24(오너): 기본 상태에도 은은한 틴트 — 나중에 배경 이미지를 넣었을 때 "투명 → 이미지"의
+     갭을 줄인다(반투명이라 SINGLE-SHEET 계약 준수). 이미지 변형은 인라인 backgroundImage 가
+     이 색 위에 얹힌다.
+     PLAN-2026-09-12 §5: 예전엔 본문 캔버스와 **같은 토큰**(--workspace-tint)을 썼다. 본문 틴트가
+     사용자 슬라이더(`content_tint`)에 물리면서 그 공유를 끊었다 — 이 칩은 사이드바 소속이고,
+     사이드바 밝기는 전역 슬라이더(`bg_dim`)가 담당한다. 지금은 칩 전용 고정 토큰
+     --notebook-chip-tint(노트북 = 기존 workspace)를 쓰며, 값은 갈라지기 전과 같다(다크 16%/
+     라이트 7%). 본문 슬라이더를 여기 다시 물리지 마라. */
+  background: transparent;
+  background-color: var(--notebook-chip-tint);
+  background-size: cover;
+  background-position: center;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  /* Transition background-color only — never the `background` shorthand. The shorthand
+     interpolates size/position too; hover used to set `background: var(--hover)`, which
+     resets unspecified sub-properties to initial (size cover→auto, position center→0% 0%)
+     and animated that var(--dur-med) as a "sliding" cover image. */
+  transition: background-color var(--dur-med) ease, border-color var(--dur-fast);
+}
+.ws-trigger:hover,
+.ws-trigger:focus-visible {
+  /* Longhand only: leave background-size/position (and any inline backgroundImage) alone. */
+  background-color: var(--hover);
+  border-color: var(--divider);
+  outline: none;
+}
+/* Inline backgroundImage (WorkspaceSwitcher.tsx) wins over CSS background-image, but NOT over
+   size/position — those live on the longhands above (cover/center). Hover must not redeclare
+   the background shorthand or it would clobber size/position even when the image stays. */
+@media (prefers-reduced-motion: reduce) {
+  .ws-trigger {
+    transition: none;
+  }
+}
+
+.ws-trigger-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+  font-size: var(--text-xl);
+  /* W24(오너): 48px 스트립 안에서 칩 위 여백이 ~3px뿐이라 위에 붙어 보였다 — 한 줄 고정
+     타이틀이라 줄간격을 죄어(기본 ~1.4 → 1.2) 칩 자체 높이를 낮추고 상하 숨을 ~7px로 키운다.
+     폰트 크기(정체성 타이틀 위계)는 유지. */
+  line-height: 1.2;
+  color: var(--text);
+}
+
+/* Inline "edit background" panel — appears under a workspace row in the dropdown. */
+.ws-bg-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+.ws-bg-preview {
+  width: 100%;
+  height: 64px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--divider);
+  background-color: var(--surface);
+  background-size: cover;
+  background-position: center;
+}
+.ws-bg-actions {
+  display: flex;
+  gap: var(--space-2);
+}

@@ -1,0 +1,162 @@
+# 기능 카탈로그: search 도메인
+features:
+  - id: F-S01
+    name: 통합 검색 (FTS5 + 연대 범위 교집합)
+    status: shipped
+    commands: commands/search.yaml
+    db: db/schemas/fts.sql
+    service: service/search.yaml
+    verify:
+      rust:
+        - src-tauri/src/repo/search.rs
+        - src-tauri/tests/invariant_fts_sync.rs
+        - src-tauri/tests/invariant_year_filter.rs
+      vitest: src/lib/searchMatch.test.ts
+    cases:
+      - id: korean-mid-word-trigram
+        given:
+          body: "조선의 4대 왕 세종대왕은 한글을 창제했다."
+          queries: ["종대왕", "대왕은"]
+        expect:
+          body: "조선의 4대 왕 세종대왕은 한글을 창제했다."
+          token: "세종대왕은"
+        covered_by: korean_mid_word_substring_reflected
+
+      - id: english-and-semantics
+        given:
+          title: "Sejong the Great"
+          queries: ["Sejong", "Sejong Great", "Sejong Missing"]
+        expect:
+          title: "Sejong the Great"
+          and_hit: "Sejong Great"
+          and_miss: "Sejong Missing"
+        covered_by: english_keyword_search_no_regression
+
+      - id: source-korean-indexed
+        given:
+          source: { name: "HUNMIN.txt", body: "훈민정음 서문" }
+        expect:
+          file: "HUNMIN.txt"
+          body: "훈민정음 서문"
+          query: "훈민정음"
+        covered_by: source_add_reflected
+
+      - id: section-edit-reflected
+        given:
+          body: "거북선 turtle ship"
+        expect:
+          body: "거북선 turtle ship"
+          query: "turtle"
+        covered_by: section_edit_reflected
+
+      - id: create-then-search
+        given:
+          title: "Imjin War"
+          year: 1592
+        expect:
+          title: "Imjin War"
+          query: "Imjin"
+        covered_by: create_then_search
+
+      - id: delete-purges-fts
+        given:
+          title: "Ghost"
+          after: notes::delete
+        expect:
+          query: "Ghost"
+        covered_by: delete_purges_fts
+
+      - id: empty-query-excludes-deleted
+        given:
+          live: "LiveEmpty"
+          deleted: "GoneEmpty"
+          query: ""
+        expect:
+          live: "LiveEmpty"
+          gone: "GoneEmpty"
+          reason: "year_scoped_ids must exclude soft-deleted notes"
+        covered_by: empty_query_excludes_soft_deleted
+
+      - id: keyword-excludes-deleted
+        given:
+          live: "ξ-live"
+          deleted: "ξ-trash"
+          stale_fts: true
+        expect:
+          reason: "like_ids must exclude soft-deleted notes even with stale FTS"
+        covered_by: keyword_search_excludes_soft_deleted_notes
+
+      - id: snippet-highlight-sentinels
+        given:
+          title: "Simple Note Title"
+          body: "This is the main body text containing specialkeyword inside."
+          query: "specialkeyword"
+        expect:
+          title: "Simple Note Title"
+          query: "specialkeyword"
+          stx: "snippet has STX sentinel"
+          etx: "snippet has ETX sentinel"
+        covered_by: search_returns_highlighted_body_snippet
+
+      - id: diagram-body-searchable
+        given:
+          kind: diagram
+          query: "Yeonhwacheon"
+        expect:
+          # 싱글쿼트: rust 소스의 `\n`·`\"` 이스케이프와 바이트 단위로 같아야 한다.
+          body: '{\"v\":1,\"route\":\"curve\",\"nodes\":[{\"id\":\"A\",\"label\":\"Yeonhwacheon\"},{\"id\":\"B\",\"label\":\"Bakyeon\"}],\"edges\":[{\"id\":\"e1\",\"from\":\"A\",\"to\":\"B\",\"label\":\"daughter\"}]}'
+          query: "Yeonhwacheon"
+          reason: "a name inside a diagram section's json body must be found"
+        covered_by: diagram_section_body_is_keyword_searchable_same_as_prose
+
+  - id: F-S02
+    name: 연대 필터 3모드 UI (스크러버 / Range+왕조 / Decade)
+    status: shipped
+    notes: 프론트 전용 — 세 모드 모두 search_notes(year_from, year_to) 하나로 수렴
+    verify:
+      rust: src-tauri/tests/invariant_year_filter.rs
+    cases:
+      - id: inclusive-year-bounds
+        given:
+          query: ""
+          year_from: 918
+          year_to: 1443
+        expect:
+          years: "918, 1231, 1443"
+        covered_by: inclusive_bounds
+
+      - id: empty-range-ok
+        given:
+          query: ""
+          year_from: 1000
+          year_to: 1100
+        expect:
+          span: "Some(1000), Some(1100)"
+        covered_by: empty_range_ok
+
+      - id: invalid-range-rejected
+        given:
+          query: ""
+          year_from: 1500
+          year_to: 1400
+        expect:
+          error: "AppError::Validation"
+        covered_by: invalid_range_rejected
+
+      - id: query-and-range-intersect
+        given:
+          query: "Hangul"
+          year_from: 900
+          year_to: 1000
+        expect:
+          query: "Hangul"
+          reason: "Hangul 노트는 1443 → 900..1000 범위 밖이므로 제외"
+        covered_by: query_and_range_intersect
+
+  - id: F-S03
+    name: 의미(벡터) 검색
+    status: removed
+    notes: |
+      note_embeddings 테이블(V25 DROP), repo/commands vector.rs, vector_reindex/vector_status/
+      note_find_similar 커맨드, SemanticIndexSection/SimilarNotesModal 전부 삭제. keyword FTS5
+      검색과 4-signal related() 패널은 그대로 유지된다.

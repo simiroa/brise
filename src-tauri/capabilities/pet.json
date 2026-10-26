@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "pet",
+  "description": "Capability for the pet windows — character (pet) + bubble/chat (pet-bubble). Drag-to-move only; sizing/placement is decided in Rust (pet_window.rs) because the webview cannot see monitor work areas. App commands are gated separately by the default-deny allowlist in lib.rs (capabilities only cover core/plugin commands).",
+  "windows": ["pet", "pet-bubble"],
+  "permissions": [
+    "core:window:default",
+    "core:event:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-set-size",
+    "core:window:allow-set-position",
+    "core:window:allow-hide"
+  ]
+}

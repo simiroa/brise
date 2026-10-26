@@ -1,0 +1,19 @@
+# 커맨드 계약: slides (pptx 슬라이드 미리보기) — 규약: _conventions.yaml
+commands:
+  slide_preview_render:
+    http: false   # 반환값이 서버 머신의 로컬 파일 경로(convertFileSrc 대상) — 원격 클라이언트가 열 수 없다
+    input:  { attachment_id: uuid }
+    output: { pdf_path: "string|null", reason: "string|null" }
+    errors: []
+    notes: >
+      pptx 첨부를 LibreOffice(soffice --headless --convert-to pdf)로 변환해 pdf 절대 경로를
+      돌려준다. 변환된 pdf 는 **기존 pdf 프리뷰 분기**가 그대로 그린다(두 번째 렌더 구현 없음).
+      **에러를 던지지 않는다** — 변환기 부재·비활성·미지원·실패·타임아웃은 전부 정상 경로이고
+      토스트가 뜨면 안 된다. pdf_path=null 이면 reason 이 사유를 담는다:
+      no_converter | disabled | unsupported | failed | timeout.
+      게이트는 백엔드 한 곳(설정 slide_preview="off" → disabled) — 프런트가 설정을 다시 보지 않는다.
+      대상 확장자는 pptx 뿐(repo::slide_render::SLIDE_EXTS). 변환 결과는 data_dir/slide_previews/
+      아래 `{attachment_id}.{mtime}.{size}.pdf` 로 캐시하며 원본이 바뀌면 키가 바뀌어 다시 변환된다.
+      attachments/ 밑에 두지 않는 이유는 백업·내보내기·orphan_cleanup 이 그 디렉토리를 훑기 때문.
+      타임아웃 300s(넘으면 프로세스를 죽인다), 별도 UserInstallation 프로필로 실행(이미 떠 있는
+      LibreOffice 인스턴스에 붙어 조용히 멈추는 것을 피한다).

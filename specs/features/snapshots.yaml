@@ -1,0 +1,53 @@
+# 기능 카탈로그: 스냅샷
+features:
+  - id: F-SN01
+    name: 노트 스냅샷
+    status: shipped
+    commands: commands/snapshots.yaml
+    verify:
+      rust: src-tauri/src/repo/snapshots.rs
+    cases:
+      - id: capture-stores-current-sections
+        given:
+          section: { id: "sec1", title: "Overview", body_md: "hello", kind: "text" }
+        expect:
+          section_id: "sec1"
+          title: "Overview"
+          body_md: "hello"
+          kind: "text"
+        covered_by: capture_stores_current_sections_and_returns_meta
+
+      - id: capture-prunes-older-than-30-min
+        given:
+          existing: [{ id: old1, age_min: 40 }, { id: recent1, age_min: 20 }]
+        expect:
+          pruned: "40-minute-old snapshot must be pruned"
+          survived: "20-minute-old snapshot is inside the window, must survive"
+        covered_by: capture_prunes_snapshots_older_than_30_minutes_for_that_note
+
+      - id: restore-matched-recreated-extra
+        given:
+          snapshot: [sec1 hello, gone-sec Vanished]
+          live: [sec1 edited, sec2 Extra]
+        expect:
+          restored: "hello"
+          extra: "not in snapshot"
+          recreated_title: "Vanished"
+          recreated_body: "was here"
+          edited: "edited after snapshot"
+        covered_by: restore_round_trip_matched_recreated_and_extra
+
+      - id: restore-writes-safety-snapshot
+        given:
+          live_body: "changed before restore"
+        expect:
+          body: "changed before restore"
+          reason: "restore must add exactly one safety snapshot"
+        covered_by: restore_captures_a_pre_restore_safety_snapshot
+
+      - id: note-delete-cascades-snapshots
+        given:
+          after: DELETE FROM notes
+        expect:
+          reason: "ON DELETE CASCADE must remove the note's snapshots"
+        covered_by: note_snapshots_cascade_deleted_when_note_is_deleted

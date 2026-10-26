@@ -1,0 +1,14 @@
+# 커맨드 계약: weather (규약·공용 타입: _conventions.yaml)
+commands:
+  weather_forecast:
+    input:  { lat: "integer", lng: "integer" }
+    output: { entries: "WeatherEntry[]" }
+    errors: [VALIDATION, IO]
+    notes: |
+      met.no (Norwegian Meteorological Institute) locationforecast/2.0/compact 를 통한 날씨 조회.
+      Rust 백엔드에서 reqwest 호출 — 상용 무료(CC-BY 4.0, User-Agent 식별 필수, met.no ToS).
+      lat/lng 는 REAL — 스펙 DSL 에 부동소수 타입이 없어 integer 로 적지만 생성 타입은 number
+      (geocode.yaml 과 동일 관례).
+
+shared_types:
+  WeatherEntry: "{ time: string, temp_c: number, symbol_1h: string|null, symbol_6h: string|null, temp_max_6h: number|null, temp_min_6h: number|null, humidity_pct?: number|null, wind_ms?: number|null, pressure_hpa?: number|null, uv_index?: number|null, precip_mm?: number|null, precip_prob_pct?: number|null }"

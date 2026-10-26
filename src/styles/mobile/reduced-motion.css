@@ -1,0 +1,8 @@
+/* mobile/reduced-motion.css — prefers-reduced-motion catch-all for the base controls */
+
+/* ORDER: import this part after every part that gives these classes a `transition` (tabbar.css's
+ * .mobile-tab-icon, note-header.css's .mobile-icon-btn): same specificity, so the later rule wins.
+ * (src/styles/mobile/mobileCss.contract.test.ts pins the order.) */
+@media (prefers-reduced-motion: reduce) {
+  .mobile-card, .mobile-icon-btn, .mobile-record-btn, .mobile-tab-icon, .mobile-settings-row { transition: none; }
+}

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Brise probe</title>
+<style>body{font:14px sans-serif;margin:8px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #888;padding:4px;text-align:left;word-break:break-all}button{font-size:16px;margin:4px;padding:8px}</style>
+</head><body>
+<h3>Brise WebView probe</h3>
+<table id="t"></table>
+<button id="fileBtn">file (image capture)</button>
+<input id="f" type="file" accept="image/*" capture style="display:none">
+<script>
+var R={}, rows=[];
+function set(k,v){R[k]=v;render();}
+function render(){document.getElementById('t').innerHTML=Object.keys(R).map(function(k){return '<tr><th>'+k+'</th><td>'+R[k]+'</td></tr>'}).join('');}
+function done(){console.log("PROBE "+JSON.stringify(R));}
+set('isSecureContext',String(window.isSecureContext));
+set('origin',location.origin);
+set('typeof mediaDevices',typeof navigator.mediaDevices);
+set('BriseNative',typeof window.BriseNative);
+window.BriseNative&&(window.BriseNative.onmessage=function(e){set('BriseNative location (postMessage)',e.data);done();});
+function gum(name,c){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){set(name,'N/A (no getUserMedia)');return Promise.resolve();}
+  return navigator.mediaDevices.getUserMedia(c).then(function(s){s.getTracks().forEach(function(t){t.stop()});set(name,'OK tracks='+s.getTracks().length);},
+    function(e){set(name,'ERR '+e.name+': '+e.message);});
+}
+function geo(){return new Promise(function(res){
+  if(!navigator.geolocation){set('geolocation','N/A (no navigator.geolocation)');return res();}
+  navigator.geolocation.getCurrentPosition(function(p){set('geolocation','OK '+p.coords.latitude+','+p.coords.longitude+' acc='+p.coords.accuracy);res();},
+    function(e){set('geolocation','ERR code='+e.code+' '+e.message);res();},{timeout:15000});
+});}
+function native(){
+  if(!window.BriseNative){set('BriseNative','N/A');return;}
+  try{window.BriseNative.postMessage(JSON.stringify({id:1,type:'getLocation'}));}catch(e){set('BriseNative','ERR '+e);}
+}
+
+function t(){return performance.now();}
+function proxyTests(){
+  var seq=Promise.resolve();
+  seq=seq.then(function(){return fetch('/api/ping').then(function(r){return r.text()}).then(function(x){set('fetch GET /api/ping',x)},function(e){set('fetch GET /api/ping','ERR '+e)});});
+  seq=seq.then(function(){return fetch('/api/echo',{method:'POST',body:'hello-brise'}).then(function(r){return r.text()}).then(function(x){set('fetch POST /api/echo',x)},function(e){set('fetch POST /api/echo','ERR '+e)});});
+  seq=seq.then(function(){return new Promise(function(res){
+    var times=[],t0=t(),es=new EventSource('/api/events');
+    es.onmessage=function(){times.push(Math.round(t()-t0));if(times.length>=10){es.close();fin();}};
+    es.onerror=function(){es.close();fin();};
+    var d=false;function fin(){if(d)return;d=true;var gaps=times.slice(1).map(function(x,i){return x-times[i]});
+      set('SSE arrival ms',JSON.stringify(times)+' gaps='+JSON.stringify(gaps));res();}
+    setTimeout(fin,15000);
+  });});
+  seq=seq.then(function(){var t0=t();return fetch('/api/big').then(function(r){var rd=r.body.getReader(),n=0;
+    function pump(){return rd.read().then(function(x){if(x.done)return;n+=x.value.length;return pump();});}
+    return pump().then(function(){set('download /api/big','bytes='+n+' ms='+Math.round(t()-t0));});},function(e){set('download /api/big','ERR '+e)});});
+  seq=seq.then(function(){var t0=t();var b=new Blob([new Uint8Array(20*1024*1024)]);
+    return fetch('/api/upload',{method:'POST',body:b}).then(function(r){return r.text()}).then(function(x){set('upload 20MB',x+' ms='+Math.round(t()-t0))},function(e){set('upload 20MB','ERR '+e)});});
+  return seq;
+}
+document.getElementById('fileBtn').onclick=function(){document.getElementById('f').click();};
+document.getElementById('f').onchange=function(e){set('file chosen',(e.target.files[0]||{}).name||'none');done();};
+gum('getUserMedia audio',{audio:true}).then(function(){return gum('getUserMedia video',{video:true});}).then(geo).then(function(){native();done();return proxyTests();}).then(function(){done();});
+</script></body></html>

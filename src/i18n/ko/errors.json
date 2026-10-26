@@ -1,0 +1,19 @@
+{
+  "code_validation": "입력 확인",
+  "code_conflict": "동시 변경 충돌",
+  "code_not_found": "찾을 수 없음",
+  "code_io": "연결·파일 오류",
+  "code_db": "데이터베이스 오류",
+  "code_generic": "오류",
+  "win_file_busy": "다른 앱에서 열려 있어요",
+  "docx_cols_limit": "표의 열이 너무 많아요 (DOCX는 최대 63열)",
+  "encrypted_file": "암호가 걸린 문서는 열 수 없어요",
+  "invalid_docx": "올바른 Word 문서 형식이 아니에요",
+  "sqlite_busy": "데이터베이스가 사용 중이에요. 잠시 후 다시 시도해 주세요",
+  "sqlite_no_such_table": "데이터베이스 형식이 맞지 않아요",
+  "net_timeout": "응답이 없어요. 잠시 후 다시 시도해 주세요",
+  "net_rate_limit": "요청이 많아요. 잠시 후 다시 시도해 주세요",
+  "net_server_error": "서버가 잠시 응답하지 않아요",
+  "net_connection_failed": "연결할 수 없어요",
+  "technical_fallback": "문제가 생겼어요 · 자세한 내용은 진단 탭"
+}

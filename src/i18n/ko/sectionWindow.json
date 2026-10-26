@@ -1,0 +1,10 @@
+{
+  "open_in_window": "새 창에서 열기",
+  "drop_to_open": "놓으면 새 창으로 열기",
+  "detached_badge": "별도 창에서 열려 있음",
+  "placeholder_title": "이 섹션은 별도 창에서 열려 있습니다",
+  "placeholder_body": "한 섹션은 한 곳에서만 편집합니다. 창을 닫으면 여기로 돌아옵니다.",
+  "focus_window": "창으로 이동",
+  "return_here": "여기로 되돌리기",
+  "missing": "이 섹션을 찾을 수 없습니다. 삭제되었거나 다른 노트로 이동했을 수 있습니다."
+}

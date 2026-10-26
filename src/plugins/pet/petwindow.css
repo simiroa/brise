@@ -1,0 +1,12 @@
+/* 펫 **창**(#/pet, #/pet-bubble) 전용 전역. PetApp/PetBubbleApp 만 import 한다.
+   pet.css(컴포넌트 스타일)와 갈라 둔 이유: 설정 화면의 에셋 프리뷰가 PetSprite 를 재사용하는데,
+   아래 html/body 투명 규칙이 같이 딸려오면 **메인 앱 배경이 투명해진다**. */
+
+html,
+body,
+#root {
+  background: transparent;
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}

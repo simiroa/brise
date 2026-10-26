@@ -1,0 +1,175 @@
+# 커맨드 계약: sync (beta) — 규약: _conventions.yaml
+# 임베디드 읽기전용 HTTP 서버(같은 Tailscale tailnet 위 다른 기기용) 제어. 설정 키 SSOT는
+# db/schemas/settings.sql 주석(sync_enabled/sync_port/sync_token) — 진짜 SSOT 코드는
+# src-tauri/src/db/migrations.rs::validate_setting. 서버 자체 HTTP API(/api/v1/*, /app)는 이 커맨드
+# 계약 밖(Tauri invoke가 아니라 실제 HTTP) — src-tauri/src/sync_server/handlers.rs 가 유일한 명세.
+# /app이 실제 클라이언트(React, 폰이면 모바일 레이아웃 자동); /m과 루트 /는 구형 뷰어가 있던
+# 자리로 이제 쿼리스트링(토큰) 보존한 채 /app으로 307 리다이렉트만 한다.
+commands:
+  sync_status:
+    # http:false for two independent reasons (both would apply on their own):
+    # (1) policy — it's a sync-server-lifecycle read, same class as sync_set_enabled below.
+    # (2) generator limit — this fn takes TWO typed State params (State<AppState> AND
+    #     State<SyncState>); dispatch.gen.rs only ever wires State<AppState> (see gen-commands.mjs
+    #     RUST_TYPE_OVERRIDES/generator notes) — a real signature the generator can't express,
+    #     not just a policy call.
+    http: false
+    input:  {}
+    output: SyncStatus
+    notes: |
+      enabled/port/token은 설정 테이블(재부팅 후에도 유지), running/bound_addr/url은 현재 서버
+      프로세스 상태(진실원천: sync_server::SyncState) — 껐다 켠 직후처럼 둘이 잠깐 어긋날 수 있다.
+
+  sync_set_enabled:
+    http: false   # 서버 lifecycle 제어 — 원격 클라이언트가 자신이 붙어있는 서버 자체를 껐다 켤 수 없어야 함.
+                  # 영구 규칙(docs/CLIENT-RULES.md §2 addendum): settings_set으로도 sync_* 키는 차단된다.
+    input:  { enabled: boolean }
+    output: SyncStatus
+    errors: [IO]                                # 바인딩 실패(포트 사용중 등)
+    notes: |
+      on: 토큰이 비어있으면(첫 활성화) new_id()로 생성해 영속. off: 서버를 abort하고
+      sync_enabled=false 를 저장.
+
+  sync_regenerate_token:
+    http: false   # sync_set_enabled와 동일한 이유 — 원격 클라이언트가 자기 자신의 인증 토큰을 재발급할 수 없어야 함
+    input:  {}
+    output: SyncStatus
+    errors: [IO]
+    notes: 실행 중이면 새 토큰으로 서버를 재기동한다(가장 단순한 반영 방법 — 껐다 켠다).
+
+shared_types:
+  # qr_svg: url(토큰 포함)을 그대로 인코딩한 QR 코드 SVG 마크업 — running 일 때만 채워진다. 별도
+  # 커맨드 없음(url 이 바뀌는 시점마다 결정적으로 같이 재계산, commands/sync.rs::build_qr_svg).
+  # bind_stale(additive, 2026-07-30 추가): running=true 인 채로도 서버가 바인딩됐던 Tailscale
+  # CGNAT 인터페이스가 그 사이 사라졌을 수 있다(인터페이스 재기동/tailscale 재할당) — build_status
+  # 가 매 조회마다 bind::local_ipv4_addrs() 와 대조해 판정한다(commands/sync.rs::is_bind_stale).
+  # true 는 설정 화면이 경고를 보여줄 근거일 뿐 — 앱은 자동 재바인딩을 하지 않는다(owner 결정).
+  # loopback 바인딩(폴백)은 항상 false. running=false 일 때도 항상 false(바인딩 자체가 없으므로).
+  SyncStatus: "{ enabled: boolean, running: boolean, bound_addr: string|null, port: integer, token: string, url: string|null, qr_svg: string|null, bind_stale: boolean }"
+
+# 정보용(codegen 미대상, gen-commands.mjs 는 commands/shared_types 키만 읽는다) — 모바일 HTTP
+# 표면. 노트 생성/수정/단건 조회 REST(POST/PUT/GET /api/v1/notes/{id})는 삭제됨 — 그 쓰기는
+# POST /api/v1/invoke. 실제 명세는 src-tauri/src/sync_server/handlers.rs. 인증은 읽기
+# 엔드포인트와 동일(?token= 쿼리 또는 Bearer 헤더, authorized()).
+http_write_api:
+  "GET /api/v1/notes":
+    query: "?workspace=<id>(생략시 활성 워크스페이스) &limit=<int>(생략시 200, 상한 1000 —
+      repo::note_query::NOTE_QUERY_DEFAULT_LIMIT/NOTE_QUERY_MAX_LIMIT 재사용) &token=..."
+    response: "{ notes: [{ id, title, year, month, day, folder_id, folder_name, updated_at,
+      has_attachments, excerpt: string, tags: [{id, name}], checklist: null|{total, done,
+      items: [{text, checked, index}]}, thumb: string|null }], has_more: boolean }"
+    notes: |
+      모바일 웹 클라이언트(브라우저 전용, /app)의 피드 카드 전용 확장 필드 — 데스크톱 앱은 이
+      엔드포인트를 쓰지 않으므로 영향 없음. 세 필드 모두 노트 개수만큼의 N+1이 아니라 목록
+      전체에 대해 배치 1쿼리씩(repo::notes::feed_page 가 전담 — sections는 노트당 처음
+      section_scan_limit개만, tags/attachments는 repo::notes::tag_refs_for_ids /
+      repo::attachments::load_for_ids 로 기존과 동일하게 전체) 조립된다.
+        excerpt: 첫 번째 섹션 body_md 를 태그/엔티티 제거 + 공백 축약 후 160자로 자른 값
+          (repo::checklist::strip_tags_and_collapse). 섹션이 없으면 빈 문자열.
+        tags: {id, name} — name COLLATE NOCASE 오름차순(desktop tag_names()/note_summaries_map
+          과 동일 정렬).
+        checklist: 섹션 body_md 안의 태스크리스트 체크박스(에디터가 실제로 내보내는
+          `<li data-type="taskItem" data-checked="...">` 마크업, src/lib/mdSerialize.test.ts 참고)를
+          문자열 스캔(HTML 파서 아님, repo::checklist)으로 찾는다. 성능 상한: 노트당 처음 2개
+          섹션만 스캔(CHECKLIST_SECTION_SCAN_LIMIT, sync_server/handlers.rs — repo::notes::feed_page
+          의 section_scan_limit 인자로 전달) — 체크리스트가 3번째 이후 섹션에만 있으면 이 목록
+          응답엔 나타나지 않는다(POST .../checklist 토글 자체는 이 제한 없이 노트의 전 섹션을
+          스캔한다, 단일 노트라 비용이 작음). items 는 최초 3개, text 는 60자로 자른 태그-제거
+          텍스트, index 는 섹션들을 position 순으로 이어붙였을 때의 0-based 전역 순번(토글 시
+          그대로 넘긴다). 체크박스가 하나도 없으면 checklist 는 null.
+        thumb: kind='image'인 첫 attachment 의 rel_path(position 순, 이미지가 아닌 다른 종류가
+          먼저 있어도 건너뛴다) — 없으면 null. 클라이언트는 기존 GET /api/v1/attachments/{note_id}/
+          {*file} 로 그대로 로드한다.
+      has_more(additive, 2026-07-30 추가): `notes.length == limit` AND 워크스페이스에 더 남은
+      노트가 있으면 true. LIMIT+1 로 조회해 판정하므로 별도 COUNT(*) 쿼리가 없다. 예전엔 LIMIT이
+      아예 없어(전체 워크스페이스 스캔 + 세 배치 쿼리 전부 무제한) 유일한 소비자(모바일 웹
+      클라이언트)가 클라이언트단에서 100개로 잘라 쓰고 있었다 — 이제 서버가 페이지를 자른다.
+  "POST /api/v1/notes/{note_id}/checklist":
+    body: "{ index: integer, checked: boolean }"
+    response: "NoteDetail 셰이프(토글 반영 후 재조회 — note_get과 동일)"
+    errors: [401 unauthorized, 404 not found (trashed 포함), 400 validation (index 범위 밖)]
+    notes: |
+      index는 GET /api/v1/notes의 checklist.items[].index와 같은 규약(노트의 전 섹션을
+      position 순으로 이어붙인 0-based 전역 순번) — 어느 섹션이 그 순번을 갖는지
+      repo::checklist::count_checkboxes로 섹션별 개수를 누적해 찾은 뒤, 그 섹션 body_md 안에서만
+      repo::checklist::toggle_at으로 `data-checked` 속성과 `<input type="checkbox" ...>`를
+      함께 뒤집는다(tiptap이 내보내는 마크업 그대로 유지 — 나머지 바이트는 건드리지 않는다).
+      저장은 데스크톱 section_update 와 완전히 같은 repo::sections::update 경로(updated_at
+      전파 + FTS upsert 포함). 성공 시 "remote-note-write"({note_id, created:false,
+      origin:"remote"}) 를 낸다. 노트 생성/수정/단건 조회는 REST가 아니라 POST /api/v1/invoke
+      (`note_create`/`note_update`/`section_update`/`note_get`).
+  "POST /api/v1/notes/{note_id}/attachments":
+    query: "?token=... &filename=<string>(선택 — 표시명·kind 판별용, 생략 시 \"attachment\")"
+    body: "raw bytes (Content-Type 무관, 본문 그대로 파일 바이트) — multipart 아님(의존성 추가
+      회피, 클라이언트는 단일 fetch(body: file)로 충분)"
+    response: "201 Created, 첨부 행 하나: { id, name, kind, rel_path, url: null, size_bytes,
+      position } — note_get attachments[] / models::Attachment 와 동일한 셰이프"
+    errors: [401 unauthorized, 404 not found (trashed 포함), 413 payload too large (25MB 초과,
+      route-level axum DefaultBodyLimit — ATTACHMENT_UPLOAD_MAX_BYTES), 500 internal server error]
+    notes: |
+      desktop attachment_add_file 커맨드가 쓰는 것과 완전히 같은 repo::attachments::add_file 을
+      재사용한다(해싱/썸네일 판정/position/정리(cascade) 전부 동일 경로 — 파일 배치 로직을 여기서
+      새로 짜지 않음). add_file 은 디스크 경로를 받으므로, 업로드 바이트를 OS temp 아래 새
+      디렉토리에 (repo::transfer::render::safe_attachment_basename 으로 새니타이즈한) 원본
+      파일명 그대로 먼저 써 둔 뒤 그 경로를 넘기고, 끝나면 임시 디렉토리를 지운다 — 파일명이
+      attachment 행의 name/kind(kind_from_ext, 확장자 기준)를 결정하므로 UUID 임시 파일명을 그대로
+      넘기면 모든 업로드가 kind="doc"으로 오분류된다(구현 중 실제로 걸렸던 함정). 썸네일은 desktop
+      커맨드 계층과 동일하게 add_file 이후 별도 단계(attachments::ensure_thumb_for_attachment,
+      spawn_blocking)로 만든다. 30초 처리 타임아웃(디스크 스테이징 + DB insert 전체). 성공 시
+      "remote-note-write"({note_id, created:false, origin:"remote"}) 를 낸다. 크기 상한은
+      데스크톱 로컬 드롭(repo::attachments::add_file 내부 MAX_ATTACHMENT_BYTES=200MB)과 별개로
+      25MB — 모바일 데이터 요금제 위 업로드를 가정한 훨씬 보수적인 값.
+  # 이 엔드포인트는 통지를 직접 내지 않는다 — 디스패치되는 커맨드가 이미 낸다(이중 emit 금지,
+  # src-tauri/src/events.rs). 대신 dispatch 호출을 events::scope_remote 로 감싸 그 커맨드의
+  # 통지가 origin="remote" 로 찍히게 한다.
+  "POST /api/v1/invoke":
+    body: "{ cmd: string, args?: object }"
+    response: "그 커맨드가 네이티브 invoke()로 반환했을 output 그대로(specs/commands/*.yaml 의
+      해당 커맨드 output 셰이프) — 필드 이름은 invoke()와 동일하게 snake_case(카멜케이스 변환 없음,
+      모든 커맨드가 rename_all=\"snake_case\")."
+    errors: >
+      401 unauthorized (토큰 없음/오류) | 404 not found ({error}, cmd 미존재 — http:false 커맨드
+      포함, 존재하지 않는 것과 동일하게 취급) | 400 bad request ({error}, args 역직렬화 실패 —
+      예: 필수 필드 누락) | 503 service unavailable ({error}, 서버가 살아있는 AppHandle 없이
+      떠 있는 예외적 경우) | 409 conflict ({error, code:"CONFLICT"}, 커맨드가 CONFLICT 반환) |
+      500 internal server error ({error, code}, 커맨드 자체가 그 밖의 AppError 반환 — code 는
+      NOT_FOUND/VALIDATION/IO/DB).
+    notes: |
+      이 엔드포인트만 다른 /api/v1/* 엔드포인트(위)와 에러 매핑이 다르다 — 저것들은 NotFound→404/
+      Validation→400 식으로 AppError variant별로 세분화하지만, /api/v1/invoke는 커맨드의 AppError를
+      상태로는 세분화하지 않는다(CONFLICT 만 409, 나머지 500). 대신 본문에 **additive `code`**
+      (2026-10-07, D2② W1 — 그전엔 {"error"} 만 있어 폰이 CONFLICT·NOT_FOUND 를 서버 고장과
+      구분하지 못했다)를 싣는다: {"error": "<message>", "code": "<AppError code>"}. 도메인
+      NOT_FOUND 를 404 로 내리지 않는 이유 — 404 는 클라이언트(httpBridge·cli)가 "HTTP 표면 밖
+      커맨드"로 읽는다. 이 엔드포인트는 ~100개 커맨드를 그대로 통과시키는 범용 브리지다 —
+      대상 커맨드 목록·http:false 제외 클래스는 docs/CLIENT-RULES.md §2, 생성 방식은
+      scripts/gen-commands.mjs + src-tauri/src/sync_server/dispatch.gen.rs 참고.
+      네이티브 invoke()가 던지는 AppError = {code, message}(commands.gen.ts)와는 필드 이름이
+      다르다(message 대신 error) — httpBridge.ts 가 body.code 를 우선 읽어 {code, message} 로 맞춘다.
+  "GET /api/v1/events":
+    response: "text/event-stream (SSE). v1은 remote-note-write 이벤트 1종만:
+      data: {\"event\":\"remote-note-write\",\"note_id\":string|null,\"created\":boolean,
+      \"origin\":\"local\"|\"remote\"}"
+    errors: [401 unauthorized]
+    notes: |
+      토큰은 쿼리 파라미터로만(?token=) — EventSource는 커스텀 요청 헤더를 못 보낸다. 웹
+      클라이언트는 이 이벤트를 재조회(refetch) 트리거로만 쓴다(payload에 갱신된 노트 전체를 담지
+      않는다). 프레임 이름(`event: remote-note-write`)과 기존 필드(note_id/created)는 그대로다.
+
+      **2026-07-30 변경 — 통지 지점이 HTTP 계층에서 커맨드 계층으로 옮겨졌다**(진짜 SSOT:
+      src-tauri/src/events.rs 헤더 주석). 예전엔 손으로 쓴 REST 쓰기 핸들러만 emit 했기 때문에
+      (a) 폰이 POST /api/v1/invoke 로 한 쓰기(웹 클라이언트의 거의 모든 쓰기)와 (b) 데스크톱
+      IPC 쓰기가 아무에게도 통지되지 않았다 — 양방향 실시간 반영이 사실상 죽어 있었다. 이제
+      **모든 변경 커맨드**가 프로세스 전역 버스(crate::events)로 publish 하고, 그 버스가
+      데스크톱 웹뷰 Tauri 이벤트와 이 SSE 스트림으로 한 번에 팬아웃한다. 그래서 이 스트림은
+      데스크톱에서 방금 친 편집(section_update 등)도 실어 나른다.
+
+      additive(구버전 클라이언트 호환 — docs/CLIENT-RULES.md §2-3):
+        origin: 누가 쓴 변경인지. "local"=데스크톱 Tauri IPC, "remote"=HTTP 경로(폰).
+          데스크톱 웹뷰 리스너는 origin=="local"(자기 쓰기)을 무시해 자기가 낸 이벤트로
+          새로고침 루프를 돌지 않는다. 브라우저 클라이언트는 둘 다 반영한다(데스크톱 쓰기를
+          받는 것이 이 기능의 나머지 절반). 필드가 없는 구버전 payload는 "remote"로 본다.
+        note_id: **null 일 수 있다**(기존엔 항상 문자열). null = "뭔가 바뀌었다" — 폴더/
+          워크스페이스/일괄 임포트/백업 복원처럼 노트 하나로 좁힐 수 없는 변경. 클라이언트는
+          이걸 무시하지 말고 가벼운 재조회(목록/트리)를 해야 한다. 기존 클라이언트 코드는
+          note_id 를 "열린 노트 id 와 같은가" 비교에만 써서 null 이면 자연히 비교가 빗나간다.

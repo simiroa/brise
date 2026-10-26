@@ -1,0 +1,13 @@
+# Initial seed for Brise — SSOT: src-tauri/src/db/migrations.rs::seed()
+#
+# 신규 설치는 **빈 DB**로 시작한다 (2026-07-29 owner 결정 — 인생기록 중심 컨셉,
+# 첫 콘텐츠는 온보딩 마무리 단계의 가져오기/빈 시작 + 빈 상태 프리셋이 담당).
+# 예전의 예제 노트 6개(Histoire de Corée: Goryeo/Joseon) 시드는 제거됨.
+# 기존 설치에 이미 심어진 예제 노트와 examples_seeded 마커는 사용자 데이터로
+# 간주해 마이그레이션에서 건드리지 않는다.
+workspace:
+  name: "Histoire de Corée"   # 온보딩 1단계에서 사용자가 이름을 정하며 rename됨
+  folders:
+    - name: "Notes"
+      notes: []               # 예제 노트 없음 — 빈 상태로 시작
+settings: default_settings()  # src-tauri/src/db/migrations.rs 참조

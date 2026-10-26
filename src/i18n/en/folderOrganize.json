@@ -1,0 +1,21 @@
+{
+  "name": "Name",
+  "color": "Color",
+  "color_reset": "Default color",
+  "rules": "Folder rules",
+  "rules_hint": "Inherited when AI organizes notes in this folder. Overrides the notebook-wide metadata guidance.",
+  "rules_locked": "Locked while AI reading is blocked. The text is kept as-is.",
+  "search_excluded": "Exclude from search",
+  "search_excluded_hint": "Hides this folder's notes from global search results. They still show up in the tree, graph, and timeline.",
+  "ai_excluded": "Block AI from reading",
+  "ai_excluded_hint": "AI never reads this folder's notes — they stay out of scans, organize, and batch organize.",
+  "ai_excluded_disabled_tooltip": "AI reading is blocked for this folder",
+  "notes": "Notes",
+  "select_all": "Select all",
+  "select_none": "Clear selection",
+  "batch_organize": "Organize selected",
+  "batch_plan": "Organize & merge",
+  "empty": "No notes in this folder",
+  "load_failed": "Couldn't load the folder: {{msg}}",
+  "save_failed": "Couldn't save: {{msg}}"
+}

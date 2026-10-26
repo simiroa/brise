@@ -1,0 +1,7 @@
+{
+  "_comment": "수집 — 기술 폴더에 그대로 있어야 하는 n07(gold.folder == 시작 폴더 collect_tech, \"제자리\")을 '읽을거리'(reading)로 옮김. 닫힌 목록 안의 key 라 스키마는 통과하고, 폴더 채점기가 n07 을 잡아야 한다.",
+  "expect": { "scorer": "folder", "ids": ["n07"] },
+  "split": "dev",
+  "target": { "prompt": "classify", "note_id": "n07" },
+  "response": { "folder": "reading", "tags": ["동기화", "CRDT"], "date": null, "region": null, "todos": [], "topic_hint": "로컬퍼스트 동기화", "suspicious_instructions": false }
+}

@@ -1,0 +1,66 @@
+# 기능 카탈로그: 노트북(= 내부 workspace)
+features:
+  - id: F-W01
+    name: 노트북 전환 · CRUD
+    status: shipped
+    commands: commands/workspaces.yaml
+    verify:
+      rust: src-tauri/tests/invariant_workspaces.rs
+      vitest:
+        - src/stores/workspaces.test.ts
+        - src/components/WorkspaceSwitcher.test.tsx
+      smoke: boot
+    cases:
+      - id: isolation-notes-do-not-leak
+        given:
+          notebooks: [A, B]
+          notes: [A-note, B-note]
+        expect:
+          a: "A-note"
+          b: "B-note"
+        covered_by: isolation_folder_list
+
+      - id: last-workspace-undeletable
+        given:
+          notebooks: 1
+        expect:
+          table: "workspaces"
+        covered_by: last_workspace_undeletable
+
+      - id: create-seeds-default-folder
+        given:
+          name: C
+        expect:
+          folder: "Notes"
+        covered_by: create_seeds_default_folder
+
+      - id: delete-active-falls-back
+        given:
+          active: B
+        expect:
+          key: "active_workspace_id"
+        covered_by: delete_active_falls_back
+
+      - id: ui-create-workspace
+        given:
+          name: New Workspace
+        expect:
+          command: workspace_create
+          name: "New Workspace"
+        covered_by: "create() calls workspace_create then reloads the list"
+
+      - id: ui-switch-workspace
+        given:
+          from: a
+          to: b
+        expect:
+          command: settings_set
+          key: "active_workspace_id"
+        covered_by: "switchTo flushes pending saves, calls settings_set with the id, reloads the tree, and resets tabs/active note"
+
+      - id: ui-last-workspace-guard
+        given:
+          notebooks: 1
+        expect:
+          command: workspace_delete
+        covered_by: "remove() is a no-op when only one workspace remains (guards the last workspace)"

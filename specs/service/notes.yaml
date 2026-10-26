@@ -1,0 +1,53 @@
+# SSaC: notes 도메인 핵심 흐름 (커맨드 시그니처는 commands/notes.yaml — 여기선 의사결정만)
+flows:
+  note_create:
+    steps:
+      - validate: folder 존재 → 없으면 NOT_FOUND
+      - tx:
+          - insert notes (title 기본 'Untitled Note', year/month/day 기본 오늘(로컬) — life-recording
+            피벗(2026-08, 앱 컨셉이 "역사 노트 전용"→"인생 기록 중심, 역사는 부차") 이후
+            create_today_default가 이 기본값을 담당. 저수준 create/create_with_timestamp의
+            "연도 없으면 1900" 계약은 가져오기 전용 경로에 남아있고 이 커맨드와는 무관)
+          - insert sections 1행 (name='Overview', body_md='' (빈 문자열, 제목 헤딩 안 심음), position=0)
+          - fts_upsert(note_id)
+      - return: NoteDetail
+    decisions:
+      - 새 노트는 항상 섹션 1개를 갖고 시작한다 (섹션 0개 상태는 존재 불가)
+      - 소스/첨부는 빈 목록으로 시작
+
+  note_delete:                     # Trash: 소프트 삭제 (V12, 2026 상반기 도입 — 상세: commands/notes.yaml)
+    steps:
+      - validate: note 존재 → NOT_FOUND
+      - tx: [update notes SET deleted_at=now, fts_delete(note_id)]
+      - 자식 콘텐츠(sections/sources/attachments/note_tags)와 첨부 파일은 그대로 둔다 — note_restore로
+        복구되면 원상복구되어야 하므로. 목록/검색/related 등 노출 경로는 deleted_at IS NULL을 걸어
+        휴지통 노트를 제외하지만 note_get·note_trash_list에는 계속 나타난다.
+    decisions:
+      - 완전 삭제(하드 삭제, CASCADE)는 별도 커맨드 note_purge — "휴지통 비우기" 전용.
+        구 note_delete(즉시·영구)의 동작이 note_purge로 이름이 옮겨갔다.
+
+  note_restore / note_purge / note_trash_list / note_trash_count:
+    notes: 상세 계약은 commands/notes.yaml — restore는 deleted_at 해제 + fts_upsert, purge는
+      CASCADE + fts_delete + internal 링크 정리(커밋 후 첨부 파일 삭제).
+
+  note_archive / note_unarchive / note_archived_list / note_archived_count:  # W7-f, Trash와 별개
+    notes: |
+      archived_at(Trash의 deleted_at과 나란한 두 번째 소프트 상태) — 트리/대시보드/태그 집계에서
+      숨기되 FTS 행은 유지("검색하면 나온다"가 휴지통과의 핵심 차이). note_get은 필터하지 않음
+      (아카이브 화면의 "노트로 이동"이 열 수 있어야 하므로). note_query의 include_archived
+      플래그(기본 false)로 opt-in 노출. 상세 계약: commands/notes.yaml.
+
+  autosave:                      # section_update 경유
+    steps:
+      - debounce: 프론트 700ms ('Saving…' 표시)
+      - call: section_update { body_md }
+      - tx: [update sections, update notes.updated_at, fts_upsert(note_id)]
+      - ui: 'Saved · just now' 표시, 실패 시 재시도 1회 후 에러 토스트 + 미저장 배지
+    decisions:
+      - 충돌 개념 없음 (단일 프로세스 로컬 앱, R2 단일 인스턴스 강제) — last-write-wins
+      - flush 트리거: 노트/섹션 전환 직전, 창 close 이벤트 (리스크 R1 — service/reliability.yaml)
+
+  orphan_cleanup:                # 앱 시작 시 1회
+    steps:
+      - scan: attachments/ 하위 디렉토리 중 notes에 없는 note_id → 삭제
+      - scan: attachments 행 중 rel_path 파일 부재 → 행 유지, UI에 'missing' 배지

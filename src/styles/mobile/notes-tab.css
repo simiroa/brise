@@ -1,0 +1,121 @@
+/* mobile/notes-tab.css — 노트 tab: notebook (ws) switcher trigger, sub-bar, folder-tree rows */
+
+/* 노트 tab top bar — workspace switcher trigger (owner feedback item 6). Typography/icon parity
+ * pass (this round, item 2): the workspace name IS this header's identity element, same as
+ * desktop's own equivalent chrome (src/styles/workspace-switcher.css .ws-trigger-name: 700 weight,
+ * --text-xl) — no bordered pill, no separate "Brise" wordmark competing with it for the prominent
+ * slot (desktop's sidebar header has none either). Icon comes from the same lib/noteIcons.ts lookup
+ * desktop's WorkspaceSwitcher uses (icons.tsx set, not redrawn). */
+.mobile-ws-trigger {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.mobile-ws-trigger:active { background: var(--hover); }
+.mobile-ws-trigger-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: var(--text-xl);
+}
+
+/* 노트 탭 sub-bar — the second row under the topbar (MobileHome.tsx). */
+.mobile-subbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--m-gutter) var(--space-2);
+}
+/* 폴더 (tree) view rows — MobileNoteTree.tsx / MobileTreeRow.tsx (folders are flat, no nested subfolders). */
+.mobile-tree { padding-top: var(--space-2); }
+/* V11: the list pads --m-gutter (16); a row bleeds 8px into it so the hover/active fill has room
+ * while its icon + text start exactly on the 16px line shared with topbar/tab bar/cards. */
+.mobile-tree-row {
+  width: calc(100% + var(--space-3) * 2);
+  margin-inline: calc(var(--space-3) * -1);
+  min-height: 48px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mobile-tree-row:active { background: var(--hover); }
+.mobile-tree-row-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-md);
+}
+.mobile-tree-row-count {
+  flex: none;
+  font-size: var(--text-xs);
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 노트 탭 ＋ (MobileTreeFab, 폴더 보기만) — 입력 화면의 .mobile-note-fab 과 같은 자리·같은 다이얼(note-capture.css 의
+ * .mobile-speed-dial float 규칙을 그대로 받는다). .mobile-screen(position:absolute)이 위치 기준이다. 래퍼는 터치를 통과시키고
+ * ＋ 와 펼친 항목만 받는다(옆의 행은 그대로 눌린다). 선택 모드에서는 컴포넌트가 아예 그리지 않는다. */
+.mobile-tree-fab {
+  position: absolute;
+  right: max(var(--m-gutter), env(safe-area-inset-right));
+  bottom: var(--space-5); /* the tab bar below the screen already owns the bottom safe-area inset */
+  z-index: var(--z-overlay);
+  pointer-events: none;
+}
+/* ＋ 가 떠 있는 동안 목록 끝을 ＋ 높이만큼 더 내려 마지막 행의 오른쪽 끝(개수)이 ＋ 위로 스크롤돼 오게 한다.
+ * 80 = ＋ 56 + 아래 여백 12 + 숨 쉴 틈 12 — 입력 화면 FAB 가림 높이(MobileNoteFab::FAB_CLEARANCE_PX)와 같은 값.
+ * data-fab 는 ＋ 가 그려질 때만 붙는다 — 선택 모드의 아래 여백(tabbar.css, 선택 바 자리)과 겹쳐 다투지 않는다. */
+.mobile-tree[data-fab="true"] {
+  --m-tree-fab-clear: 80px;
+  padding-bottom: var(--m-tree-fab-clear);
+}
+
+/* ＋ → AI 시트(MobileFolderAiSheet) — 항목마다 이름 + 한 줄 설명(꺼졌을 때는 꺼진 이유). */
+.mobile-folder-ai-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+.mobile-folder-ai-row-label { font-weight: 600; }
+.mobile-folder-ai-row-hint {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  line-height: 1.4;
+}
+.mobile-folder-ai-pick {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.mobile-folder-ai-pick-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

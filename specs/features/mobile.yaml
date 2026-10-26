@@ -1,0 +1,364 @@
+# 기능 카탈로그: mobile 도메인 (모바일 재편 라운드 W1~W6, docs/WORKORDER-2026-09-02-mobile-rework.md)
+# W1~W5 산출물은 컴포넌트 파일을 소유하지 않는 W6 이 사후 등재한다 — verify 는 각 웨이브가 이미
+# 만든 실제 테스트를 가리킨다(새 테스트를 대신 쓰지 않는다). W6 자체가 만든 두 갭(K2 섹션 관리,
+# K4 첨부 삭제)만 이 라운드에서 새로 작성된 테스트를 가리킨다.
+features:
+  - id: F-MO01
+    name: 필터 탭 뷰 스위처 (트리·지역·타임라인·달력·갤러리)
+    status: shipped
+    notes: 데스크톱 leftpanel/YearFilter.tsx 와 같은 로스터·순서·아이콘·data-testid. 2026-10-06 오너 결정으로 region(보기 전용 지도)·chat(HTTP 개방) 포함 — 예전 D6·D7 제외 해제. chat 은 데스크톱처럼 AI 꺼짐이면 숨김.
+    verify:
+      vitest: src/mobile/MobileViewSwitcher.test.tsx
+    cases:
+      - id: tree-always-first
+        given:
+          roster: CANONICAL_ROSTER 순서 그대로
+        expect:
+          testid: "view-tab-tree"
+        covered_by: "always renders tree first, using the same data-testid convention as desktop's YearFilter"
+      - id: chat-shown-when-ai-on
+        given:
+          roster: "chat enabled=true"
+        expect:
+          testid: "view-tab-chat"
+        covered_by: "shows chat when enabled in the roster and AI is on; hides it while AI is off (desktop parity)"
+      - id: region-shown
+        given:
+          roster: "region enabled=true"
+        expect:
+          testid: "view-tab-region"
+        covered_by: "shows region (view-only map since 2026-10-06, formerly D6) when enabled in the roster"
+
+  - id: F-MO02
+    name: 노트 트리 5섹션 (즐겨찾기·인박스·폴더·휴지통·아카이브)
+    status: shipped
+    notes: notetree/rows.ts::flattenRows 재사용, folder_list_meta + note_query(창 단위)만 — folder_list/loadTree 금지.
+    commands: commands/notes.yaml
+    verify:
+      vitest: src/mobile/MobileNoteTree.test.tsx
+    cases:
+      - id: five-sections-render
+        given:
+          folders: "Folder One(열림, 1개) + Folder Two(닫힘, 0개)"
+        expect:
+          favorites: "Favorites"
+          archive: "Archive"
+        covered_by: "renders the favorites header, an open folder's note, and a closed folder"
+      - id: no-unbounded-fetch
+        given:
+          folders: []
+        expect:
+          call: "folder_list_meta"
+        covered_by: "boots folders via folder_list_meta, never folder_list or loadTree()"
+
+  - id: F-MO03
+    name: 롱프레스 액션 시트 7종 (이름변경·이동·즐겨찾기·태그·보관·선택·삭제)
+    status: shipped
+    notes: 전부 lib/noteActions.ts 또는 stores/archive.ts 경유 — 컴포넌트가 call() 을 직접 찍지 않는다.
+    commands: commands/notes.yaml
+    verify:
+      vitest: src/mobile/MobileActionSheet.test.tsx
+    cases:
+      - id: exactly-seven-verbs
+        given:
+          note: 일반 노트 1건
+        expect:
+          testid: "mobile-action-rename"
+        covered_by: "renders exactly the 7 verbs"
+      - id: delete-requires-confirmation
+        given:
+          tap: 삭제 → 확인
+        expect:
+          command: "note_delete"
+        covered_by: "delete: requires confirmation, then calls note_delete and closes"
+
+  - id: F-MO04
+    name: 필터 시트 4축 (상태·태그·연도·기간)
+    status: shipped
+    notes: 상태=OR 다중, 태그=AND 다중(세로 목록, 구름 아님), 연도=최근10/50년+taxonomy 시대 칩(setYearRange, 재탭 해제), 기간=3칩 단일선택(재탭 해제).
+    verify:
+      vitest: src/mobile/MobileFilterSheet.test.tsx
+    cases:
+      - id: status-axis-or-toggle
+        given:
+          tap: "in_progress 칩 1회"
+        expect:
+          testid: "mobile-filter-status-in_progress"
+        covered_by: "toggles a built-in status axis (OR, multi) and reflects data-active"
+      - id: date-range-single-select
+        given:
+          tap: "last7 → last30 → last30(재탭)"
+        expect:
+          testid: "mobile-filter-date-last7"
+        covered_by: "date range chips are single-select, re-tap clears"
+      - id: year-chips-set-year-range
+        given:
+          tap: "last10 → last10(재탭)"
+        expect:
+          testid: "mobile-filter-year-last10"
+        covered_by: "year chips write setYearRange and re-tap restores bounds"
+
+  - id: F-MO05
+    name: 확장 뷰 3종 디스패치 (달력·타임라인·갤러리)
+    status: shipped
+    notes: leftpanel/expanded/index.tsx 와 같은 매핑. region → MobileRegionView(보기 전용, maplibre 지연 로드), chat → MobileChatView(SidebarChat 재사용).
+    verify:
+      vitest: src/mobile/MobileExpandedView.test.tsx
+    cases:
+      - id: dispatch-timeline
+        given:
+          filterMode: timeline
+        expect:
+          testid: "stub-timeline"
+        covered_by: "dispatches timeline mode to MobileTimelineView"
+      - id: dispatch-gallery
+        given:
+          filterMode: gallery
+        expect:
+          testid: "stub-gallery"
+        covered_by: "dispatches gallery mode to MobileGalleryView"
+      - id: dispatch-calendar
+        given:
+          filterMode: calendar
+        expect:
+          testid: "stub-calendar"
+        covered_by: "dispatches calendar mode to MobileCalendarView"
+
+  - id: F-MO06
+    name: 검색 이력 (데스크톱과 공유하는 search_recent)
+    status: shipped
+    notes: stores/search.ts::recentSearches, 설정 키 search_recent(최대 20) — 데스크톱 SearchBox 와 공유.
+    verify:
+      vitest: src/mobile/MobileSearch.test.tsx
+    cases:
+      - id: loads-shared-history
+        given:
+          search_recent: "[alpha, beta]"
+        expect:
+          testid: "mobile-search-history-alpha"
+        covered_by: "loads recentSearches from the shared search_recent setting on mount"
+      - id: remove-one-entry
+        given:
+          tap: "× on alpha"
+        expect:
+          label: "Remove from history"
+        covered_by: "the × button removes one entry without touching the rest"
+
+  - id: F-MO07
+    name: 원격 쓰기 반영 + 충돌 배너 (K1)
+    status: shipped
+    notes: |
+      MobileApp 이 listenRemoteNoteWrite() 를 등록. 모바일 경로는 loadTree() 를 건너뛰고
+      bumpNoteQueryVersion() 만 한다(folder_list 무제한 금지).
+      포커스 보호로 reloadActive() 를 건너뛴 경우 MobileNote 헤더 아래 배너 1줄 + [불러오기].
+    verify:
+      vitest:
+        - src/lib/remoteNoteWrite.test.ts
+        - src/mobile/MobileNote.test.tsx
+    cases:
+      - id: focus-guard-skips-reload-fires-banner-hook
+        given:
+          editingFocused: true
+          savedState: saved
+        expect:
+          hook: "onFocusSkipped"
+        covered_by: "skips reloadActive() and fires onFocusSkipped instead when the buffer-protection guard trips"
+      - id: banner-shows-for-open-note
+        given:
+          notifyRemoteChange: 현재 열린 노트 id
+        expect:
+          text: "This note changed on another device."
+        covered_by: "shows the banner when notifyRemoteChange fires for the note currently open"
+      - id: reload-flushes-then-reloads-then-hides-banner
+        given:
+          tap: "[불러오기]"
+        expect:
+          text: "Reload"
+        covered_by: "tapping Reload flushes, calls reloadActive(), and hides the banner"
+
+  - id: F-MO08
+    name: 폰 설정 노출 정책 (원격 차단 키 제외 + 로스터 왕복)
+    status: shipped
+    notes: |
+      src/lib/remoteSettingsPolicy.ts 가 단일 관문(Rust sync_server/handlers/remote_policy.rs::is_remote_blocked_settings_key
+      의 TS 미러). MobileSettings 는 PHONE_SETTINGS_KEYS 부분집합만 settings_set 으로 내보낸다.
+    commands: commands/settings.yaml
+    verify:
+      vitest:
+        - src/lib/remoteSettingsPolicy.test.ts
+        - src/mobile/MobileSettings.test.tsx
+    cases:
+      - id: phone-keys-never-blocked
+        given:
+          keys: PHONE_SETTINGS_KEYS 전체
+        expect:
+          const: "PHONE_SETTINGS_KEYS"
+        covered_by: "폰이 노출하는 키는 하나도 원격 차단이 아니다"
+      - id: roster-toggle-round-trips
+        given:
+          tap: "timeline 행 체크박스"
+        expect:
+          key: "filter_roster"
+        covered_by: "toggling a row's checkbox persists filter_roster with only that entry flipped, order intact"
+
+  - id: F-MO09
+    name: 태블릿 인앱 설정/활동 (BrowserAuxOverlay, D4/D4-a)
+    status: shipped
+    notes: |
+      브라우저 모드는 OS 창 대신 ModalShell 인앱 오버레이로 SettingsPanel 을 띄운다(D4).
+      레일은 remoteSettingsPolicy.BROWSER_SETTINGS_PAGES 7페이지만 남는다(2026-09-20: 에디터
+      다섯 키 전부 원격 허용이라 추가돼 6→7) — 남은 페이지가 속한 그룹 헤더 둘(일반·시스템)은
+      그대로 서고, 항목이 하나도 안 남는 그룹은 헤더까지 사라진다(PLAN-2026-09-12 §1 의 5그룹
+      IA). 활동 이력은 원격 도달 불가 커맨드라 버튼 자체를 렌더하지 않는다(D4-a, activity.yaml
+      이 전부 http:false).
+    verify:
+      vitest:
+        - src/App.browserAux.test.tsx
+        - src/components/SettingsPanel.test.tsx
+        - src/components/BrowserAuxOverlay.test.tsx
+    cases:
+      - id: browser-routes-to-overlay
+        given:
+          isBrowser: true
+        expect:
+          route: "overlay"
+        covered_by: "routes to the in-app overlay in browser mode (tablet, sync beta tab)"
+      - id: browser-rail-five-pages
+        given:
+          isBrowser: true
+        expect:
+          testid: "settings-nav-license"
+        covered_by: "브라우저 모드에서는 레일에 7페이지(일반·에디터·알림 및 일정·모양·지역·대시보드·라이선스)와 그룹 헤더 둘(일반·시스템)만 남는다"
+
+  - id: F-MO10
+    name: 태블릿 세로 안내 배너 (D3, CSS 전용)
+    status: shipped
+    notes: |
+      JS 0줄·상태 0개 — `@media (orientation:portrait) and (min-width:768px) and (pointer:coarse)`
+      에서만 보이는 1줄 안내. 차단하지 않고 회전하면 스스로 사라진다. Tauri 데스크톱은 마우스=fine
+      pointer 라 이 media query 자체가 성립하지 않는다.
+    verify:
+      vitest: src/styles/tabletPortraitBanner.contract.test.ts
+    cases:
+      - id: media-query-shape
+        given:
+          viewport: "portrait, width>=768, coarse pointer"
+        expect:
+          selector: "tablet-portrait-banner"
+        covered_by: "tokens.css shows the banner only under orientation:portrait + min-width:768px + pointer:coarse"
+      - id: hidden-by-default
+        given:
+          viewport: "무관 — 기본값"
+        expect:
+          rule: ".tablet-portrait-banner{display:none}"
+        covered_by: "tokens.css hides the banner by default (display:none outside the media query)"
+
+  - id: F-MO11
+    name: 섹션 관리 — 이름변경/재정렬/삭제 (K2, W6 신규)
+    status: shipped
+    commands: commands/sections.yaml
+    verify:
+      vitest: src/mobile/MobileNote.test.tsx
+    cases:
+      - id: rename-updates-strip
+        given:
+          section: "Overview → Renamed"
+        expect:
+          command: "section_update"
+        covered_by: "rename: flushes, calls section_update{id,name}, and the strip label updates"
+      - id: reorder-swaps-neighbor
+        given:
+          tap: "뒤로 (s1 ↔ s2)"
+        expect:
+          command: "section_reorder"
+        covered_by: "move forward/backward: calls section_reorder with the swapped order and reflects it in the strip"
+      - id: delete-falls-back-to-remaining-section
+        given:
+          delete: 현재 활성 섹션
+        expect:
+          command: "section_delete"
+        covered_by: "delete: removes the tab and, when the deleted section was active, switches to a remaining one"
+      - id: last-section-delete-disabled-client-side
+        given:
+          sections: 1개뿐
+        expect:
+          testid: "mobile-section-action-delete"
+        covered_by: "the delete row is disabled for a note's last remaining section (client-side guard, no round trip)"
+
+  - id: F-MO12
+    name: 첨부 삭제 — 롱프레스 확인 (K4, W6 신규)
+    status: shipped
+    commands: commands/attachments.yaml
+    verify:
+      vitest: src/mobile/MobileAttachmentList.test.tsx
+    cases:
+      - id: confirm-delete-calls-attachment-remove
+        given:
+          longPress: "이미지 첨부"
+        expect:
+          command: "attachment_remove"
+        covered_by: "confirming delete calls attachment_remove({id}) and patches the note's attachments in the store"
+      - id: failed-delete-does-not-lose-the-row
+        given:
+          server: NOT_FOUND 에러
+        expect:
+          text: "Delete this attachment?"
+        covered_by: "a failed delete leaves the store untouched and keeps the confirm dialog open to retry/cancel"
+
+  - id: F-MO13
+    name: 폰 입력 감지 — 날짜·지역은 문장 위 버블, 링크·#태그는 키보드 위 칩 (docs/PLAN-2026-10-07-mobile-typing-nudges.md)
+    status: shipped
+    notes: 커서 문단만 700ms 디바운스(#태그는 즉시)·IME 조합 중 건너뜀·노트 세션 무시 기억. 문서 안 Decoration 없이 — 날짜·지역은 해당 문단 첫 줄 위 오버레이 버블(MobileNudgeBubble, 위 공간 없으면 아래로, 화면 밖이면 숨김, 2026-10-07 오너), 링크·#태그는 독 위 칩 줄(.mobile-nudge-row). 새 설정 키 없음(date_nudge_*, region_nudge_* 재사용). 실기 한글 IME 는 오너 확인(계획서 §7).
+    commands: commands/notes.yaml
+    verify:
+      vitest:
+        - src/mobile/useMobileTypingNudges.test.tsx
+        - src/mobile/mobileNudgeApply.test.ts
+        - src/mobile/MobileNote.test.tsx
+        - src/mobile/useMobileNudgeChips.test.tsx
+        - src/mobile/MobileNudgeBubble.test.tsx
+        - src/mobile/useNudgeBubblePlacement.test.ts
+    cases:
+      - id: date-after-debounce
+        given:
+          typed: "내일 오후 3시 치과 (커서가 매치 끝 뒤)"
+        expect:
+          start_time: "15:00"
+        covered_by: "날짜: 700ms 디바운스 뒤에 후보가 나온다(커서가 매치 끝을 지난 상태)"
+      - id: date-accept-marks-and-undo
+        given:
+          tap: "일정 등록 칩"
+        expect:
+          command: "note_date_add"
+          undo: "stripDateMark"
+        covered_by: "날짜 칩: 누르면 note_date_add → 매치 범위에 마크 → 되돌리기 토스트(마크 걷기 + note_date_remove)"
+      - id: region-waypoint-undo
+        given:
+          note: "대표 지역 있음 + 지역 칩"
+        expect:
+          command: "note_region_remove"
+        covered_by: "지역 칩: 대표 지역이 있으면 경유지로 넣고, 되돌리면 note_region_remove"
+      - id: tag-immediate-top3
+        given:
+          typed: "메모 #회 (태그 회사·회의·개인)"
+        expect:
+          items: "회사"
+        covered_by: "#태그: 디바운스 없이 즉시, 빈도순 일치 + 정확히 일치가 없으면 새 태그"
+      - id: tag-replace-registers
+        given:
+          tap: "#company 칩"
+        expect:
+          setTags: "company"
+        covered_by: "태그 칩: 누르면 #질의 를 #태그 로 바꾸고 setTags 로 기존 태그 뒤에 덧붙인다"
+      - id: ime-composing-skip
+        given:
+          view: "composing=true"
+        expect:
+          event: "compositionend"
+        covered_by: "IME 조합 중에는 건너뛰고, 조합이 끝나면 다시 본다"
+      - id: dismiss-memory-resets-on-note-change
+        given:
+          action: "지역 칩 무시 → 같은 텍스트 → 노트 전환"
+        expect:
+          region: "경주"
+        covered_by: "무시 기억: 같은 텍스트는 다시 안 뜨고, 노트를 바꾸면 초기화된다"

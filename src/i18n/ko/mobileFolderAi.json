@@ -1,0 +1,21 @@
+{
+  "fab_label": "노트·폴더 추가",
+  "dial_folder": "폴더 추가",
+  "dial_note": "노트 추가",
+  "dial_ai": "AI",
+  "sheet_title": "AI 폴더 정리",
+  "inbox_organize": "미분류 노트 정리",
+  "inbox_hint": "미분류 노트를 AI가 하나씩 보고 폴더·태그를 제안합니다",
+  "inbox_empty": "미분류 노트가 없습니다",
+  "inbox_missing": "이 노트북에는 미분류 폴더가 없습니다",
+  "folder_organize": "폴더 골라 정리",
+  "folder_hint": "고른 폴더의 노트를 AI가 하나씩 보고 제안합니다",
+  "folder_pick_title": "정리할 폴더",
+  "folder_no_notes": "이 폴더에는 노트가 없습니다",
+  "plan_desktop_only": "데스크톱 앱에서만 쓸 수 있습니다",
+  "loading": "노트를 불러오는 중…",
+  "more_title": "정리할 노트 수",
+  "more_hint": "최근 수정한 노트 {{n}}개를 가져왔습니다. 더 있을 수 있어요.",
+  "more_start": "이 {{n}}개 정리 시작",
+  "more_load": "더 보기 (최대 {{n}}개)"
+}

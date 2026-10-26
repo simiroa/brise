@@ -1,0 +1,55 @@
+# 커맨드 계약: timeline_routines (규약·공용 타입: _conventions.yaml)
+#
+# 그릴 2026-09-13 W3 — 시간축(달력 사이드바/대시보드의 하루 축)에 매주 같은 요일·시각으로 칠해지는
+# 반복 블록(출퇴근 등). routine.yaml(캔버스 습관 체크트래커, note_id 필수)과는 다른 개념 — 이름이
+# 겹치지 않게 timeline_routine* 로 둔다. note_dates 처럼 노트에 속하지 않고, 드래그로 옮기거나
+# 리사이즈하지 않는다(v1 — SSOT: specs/db/schemas/timeline_routines.sql 헤더).
+commands:
+  timeline_routine_list:
+    http: false   # 로컬 UI 설정 성격 — sync API에 노출하지 않는다(collect_source_list와 동일 판단).
+    input:
+      workspace_id: "uuid|omit=active"
+    output:
+      routines: "TimelineRoutine[]"   # position asc
+    notes: repo::timeline_routine::list
+
+  timeline_routine_create:
+    http: false
+    input:
+      workspace_id: "uuid|omit=active"
+      title: string
+      weekday_mask: "integer(1..127)"
+      start_time: string   # 'HH:MM'
+      end_time: string      # 'HH:MM', start_time보다 뒤(자정 넘김 v1 미지원)
+      color_hue: "integer?"
+      skip_holidays: "boolean|omit=false"
+    output: TimelineRoutine
+    errors: [VALIDATION]   # end_time <= start_time, weekday_mask 범위 밖
+    notes: |
+      position은 이 workspace의 기존 루틴 중 MAX+1(note_date_add의 next_position과 같은 관례,
+      항상 맨 뒤 append). skip_holidays(v83)는 켜면 그 요일이어도 공휴일인 날엔 축에서 숨는다
+      (프론트의 useHolidayMap 기준 — 서버는 공휴일 날짜를 모르고 이 플래그만 저장한다).
+
+  timeline_routine_update:
+    http: false
+    input:
+      id: uuid
+      title: "string|omit"
+      weekday_mask: "integer(1..127)|omit"
+      start_time: "string|omit"
+      end_time: "string|omit"
+      color_hue: "integer?|omit"
+      skip_holidays: "boolean|omit"
+    output: TimelineRoutine
+    errors: [NOT_FOUND, VALIDATION]
+    notes: 제공된 필드만 반영 — note_update와 같은 부분 업데이트 관례.
+
+  timeline_routine_delete:
+    http: false
+    input: { id: uuid }
+    output: { ok: boolean }
+    errors: [NOT_FOUND]
+    notes: "id가 없어도 { ok: true } — note_date_remove와 같은 멱등 자세."
+
+shared_types:
+  TimelineRoutine: "{ id: uuid, workspace_id: uuid, title: string, weekday_mask: integer, start_time: string, end_time: string, color_hue: integer|null, skip_holidays: boolean, position: integer, created_at: timestamp, updated_at: timestamp }"

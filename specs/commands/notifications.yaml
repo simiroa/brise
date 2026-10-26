@@ -1,0 +1,21 @@
+# 커맨드 계약: notifications — OS 알림 발화 한 줄(docs/PLAN-2026-08-25-space-widget-waves.md §3.3)
+# 규약: _conventions.yaml. http:false — OS 알림은 데스크톱 로컬 부수효과다(_conventions.yaml
+# "http 플래그"의 "OS UI를 여는 커맨드" 부류). 발화 경로는 repo::schedule::fire 와 같은
+# tauri-plugin-notification 빌더이고, JS 플러그인 바인딩·capability 추가는 없다(Cargo.toml 의
+# 기존 결정 유지 — 앱 커맨드는 ACL 을 안 탄다). 새 OS 창을 만들지 않는다(§5 함정 체크리스트).
+commands:
+  notify_send:
+    http: false
+    input:
+      title: string                          # 토스트 제목(위젯 이름 등)
+      body: string                           # 토스트 본문
+    output: { ok: boolean }                  # true=발화, false=notifications_enabled 가 꺼져 억제
+    errors: []                               # 억제·발화 실패 모두 앱 에러로 승격하지 않는다
+    notes: |
+      게이트는 notifications_enabled 마스터 스위치(repo::schedule::NOTIFICATIONS_ENABLED_KEY)다 —
+      schedule 틱과 동일한 읽기 규칙(as_bool, 기본 false)을 커맨드 안에서 다시 본다. 꺼져 있으면
+      ok:false 로 조용히 억제한다("알림 끔"은 사용자 선택이지 실패가 아니다). show() 의 실패도
+      무시한다(repo::schedule::fire 와 같은 태도).
+      첫 호출부는 학습 타이머(src/components/home/space/widgets/StudyTimerWidget.tsx)의 페이즈
+      완료 알림이다. 위젯 간 자동 연동 금지 원칙상 이 커맨드가 상태를 저장하지 않는다 — 발화 즉시
+      끝나는 편의 함수다.

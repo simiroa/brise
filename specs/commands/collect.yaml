@@ -1,0 +1,229 @@
+# 커맨드 계약: collect (P3 수집 관문) — 규약: _conventions.yaml
+# docs/PLAN-2026-08-07-second-brain.md Q6 — 소스 어댑터형 관문.
+# 2026-08-08 결정: kind 기반 모듈식, 추가는 자연어 입력을 AI가 {kind,name,config}로 구조화해 즉시 등록.
+# 2026-08-23 오너 결정 번복(docs/PLAN-2026-08-23-collect-advanced.md): 구조화 폼을 주 경로로 승격
+# (collect_source_create / collect_source_update), 자연어 입력은 지름길(collect_source_add_nl)로 존치.
+# 실제 수집 실행(fetch·파싱·인박스 append)은 백그라운드 러너(src-tauri/src/collect/mod.rs)가 하고,
+# 이 커맨드들은 collect_sources 테이블 CRUD만 담당한다.
+commands:
+  collect_source_list:
+    http: false   # 수집 소스는 서버 로컬 파일/네트워크 자원을 사용하므로 원격 sync API에 노출하지 않는다.
+    input:
+      workspace_id: "uuid|omit=active"
+    output:
+      sources: "CollectSource[]"   # created_at desc
+    notes: repo::collect::list
+
+  collect_source_set_enabled:
+    http: false
+    input:
+      id: uuid
+      enabled: boolean
+    output: { ok: boolean }
+    errors: [NOT_FOUND]
+    notes: |
+      repo::collect::set_enabled. enabled=false면 러너가 다음 tick부터 이 소스를 건너뛴다 —
+      이미 진행 중인 실행을 중단하지는 않는다.
+
+  collect_source_delete:
+    http: false   # collect_seen과 로컬 DB를 함께 변경한다.
+    input:
+      id: uuid
+    output: { ok: boolean }
+    errors: [NOT_FOUND]
+    notes: repo::collect::delete — collect_seen 도 함께 정리한다(V96 부터 FK CASCADE, 수동 삭제도 유지).
+
+  collect_source_run_now:
+    http: false   # 서버 로컬 네트워크/파일을 즉시 읽는 부수효과 커맨드.
+    input:
+      id: uuid
+    output: "{ ok: boolean, added: number, error: string|null }"
+    errors: [NOT_FOUND]
+    notes: |
+      주기 무시하고 지금 1회 실행(3단계 UI "지금 실행" 버튼). crate::collect::run_now — 백그라운드
+      러너(run_one/run_cycle)와 완전히 같은 경로(collect_for_kind 디스패치 → ingest_item →
+      collect_seen 중복 제거 → record_result)를 재사용한다(중복 구현 없음). kind에 아직 실행
+      어댑터가 없으면(collect_for_kind가 None) ok=false·error에 사유를 담아 반환하고
+      last_status는 건드리지 않는다(러너의 "조용히 스킵" 정책과 동일 — 여기선 이유를 사용자에게
+      보여줄 뿐). fetch/파싱 실패도 ok=false·error, added는 이미 성공적으로 저장된 항목 수를 포함하며
+      일부 항목만 실패해도 last_status='error'와 last_error에 실패 목록을 기록한다.
+
+  collect_source_dry_run:
+    http: false   # 드라이런: 쓰기 0건, 미리보기 항목 반환
+    input:
+      id: uuid
+    output: "{ ok: boolean, items: DryRunItem[], error: string|null }"
+    errors: [NOT_FOUND]
+    notes: |
+      드라이런: 어댑터 fetch/파싱은 정상 수행하되, collect_seen 및 노트 생성을 건너뛰고
+      항목 목록(is_seen 조회 결과 포함)을 반환한다. 쓰기 0건, last_run_at 변경 없음.
+
+  collect_source_create:
+    http: false
+    input:
+      workspace_id: "uuid|omit=active"
+      kind: string
+      name: string
+      config: string
+      dry_run: "boolean|omit"
+      target_folder_id: "string?|omit"
+      post_process: "string|omit"
+      post_process_model: "string?|omit"
+      interval_minutes: "integer?|omit"
+      show_in_briefing: "boolean|omit"   # 생략: create=true, update=유지
+    output: CollectSource
+    errors: [VALIDATION, IO]
+    notes: |
+      구조화 폼을 통한 수집 소스 생성.
+
+  collect_source_update:
+    http: false
+    input:
+      id: uuid
+      name: "string|omit"
+      config: "string|omit"
+      dry_run: "boolean|omit"
+      target_folder_id: "string?|omit"
+      post_process: "string|omit"
+      post_process_model: "string?|omit"
+      interval_minutes: "integer?|omit"
+      show_in_briefing: "boolean|omit"   # 생략: create=true, update=유지
+    output: CollectSource
+    errors: [NOT_FOUND, VALIDATION]
+    notes: |
+      수집 소스 메타데이터 및 설정 수정.
+
+  collect_source_add_nl:
+    http: false   # AI가 구조화한 URL/경로를 서버의 수집 러너에 저장한다.
+    input:
+      workspace_id: "uuid|omit=active"
+      input: string    # 자연어 요청 또는 URL
+    output: CollectSource
+    errors: [VALIDATION, IO]
+    notes: |
+      ai_enabled 프라이버시 게이트 필수(repo::ai::privacy_gate_ok — 클라우드 프로바이더거나 원격
+      ollama면 ai_enabled 필요, 로컬 loopback ollama는 예외). repo::ai::RealTextTransport로 AI에게
+      사용자 입력을 {kind, name, config} JSON으로 구조화시킨다(빈 값 스켈레톤 계약, docs/AI.md
+      계약 3 — 채워진 예시를 프롬프트에 넣지 않는다). kind는 "rss"|"claude_prompts"|"web" 허용.
+      성공 시 즉시 저장(enabled=1)하고 저장된 소스를 반환. ai_history에 action_type='collect_source_add_nl'로
+      기록(입력 원문 + 구조화 결과 요약).
+      챗 경유 진입(PLAN-2026-09-01 W11): pet_chat의 add_collect_source 액션(repo/pet/mod.rs)이 이
+      커맨드를 그대로 재사용한다(lib/chatPipeline.ts) — 새 판정 로직 없음. collect_chat_register
+      킬스위치(기본 OFF)와 allow_write가 둘 다 켜져 있을 때만 호출되고, 꺼져 있으면 IPC를 쏘지 않고
+      안내 메시지로 강등한다.
+
+  collect_resolve_youtube_channel:
+    http: false   # 채널 페이지를 서버가 직접 fetch한다(SSRF 가드 필요, 서버 로컬 네트워크 부수효과).
+    input:
+      url: string    # 유튜브 채널 URL(/@handle, /channel/UC..., /c/..., /user/...) 또는 이미 완성된 피드 URL
+    output:
+      feed_url: string   # https://www.youtube.com/feeds/videos.xml?channel_id=UC... — kind='rss' 소스로 그대로 등록 가능
+    errors: [VALIDATION, IO]
+    notes: |
+      DB 접근 없음(State 없음) — 순수 URL 해석 커맨드. 호스트는 youtube.com|www.youtube.com|
+      m.youtube.com만 허용, 그 외 VALIDATION. 이미 /feeds/videos.xml?channel_id=... 형태면 그대로
+      반환(멱등). path가 /channel/UC<22자>면 네트워크 없이 문자열 변환만. path가 /@handle·/c/...·
+      /user/...면 채널 페이지를 fetch해 raw HTML에서 채널 id를 정규식으로 추출(commands::collect::
+      extract_channel_id) — SSRF 가드는 repo::web_reader::guard_public_host 재사용, 응답 3MB 캡·
+      리다이렉트 호스트 재검증은 collect::rss의 fetch_feed_xml과 동일 패턴. collect_source_add_nl이
+      kind="youtube" 초안의 URL이 채널형이면 저장 전에 이 로직으로 kind='rss'+feed_url로 바꾼다
+      (단일 영상 전용 어댑터 collect::ytdlp가 채널 URL을 받아 60초 타임아웃으로 죽는 배선 불일치
+      수리 — docs/PLAN-2026-08-23-collect-advanced.md §4/W4). 설정 화면의 "유튜브 채널" 소스 유형도
+      이 커맨드로 얻은 feed_url을 kind='rss'로 collect_source_create 한다(UI 전용 의사 kind, 서버에는
+      존재하지 않음).
+
+  collect_ytdlp_status:
+    http: false   # yt-dlp 설치 여부는 이 서버 머신 로컬 상태 — 원격 클라이언트엔 의미 없음.
+    input: {}
+    output: { installed: boolean }
+    errors: []
+    notes: |
+      data_dir/bin 아래 yt-dlp(.exe) 존재 여부. crate::collect::ytdlp::ytdlp_installed —
+      ensure_ytdlp를 비파괴로 호출해 씨앗 복사 후보(번들/개발 경로)까지 있으면 "설치됨"으로
+      인정한다(다운로드 불필요). 설정 UI가 유튜브 소스 저장/지금 실행/드라이런 전에 호출.
+
+  collect_ytdlp_install:
+    http: false   # GitHub 릴리스 다운로드는 이 서버 머신 로컬 상태 — 원격 클라이언트엔 의미 없음.
+    input: {}
+    output: { ok: boolean }
+    errors: [IO]
+    notes: |
+      사용자 동의(ask 다이얼로그) 후 온디맨드 다운로드 — 설정 > 수집의 유튜브 소스 게이트만 호출
+      하고, 백그라운드 러너는 절대 호출하지 않는다(설치는 항상 사용자 동작 경유). 이미 설치돼
+      있으면(ytdlp_installed) 다운로드 없이 즉시 ok=true(멱등). 아니면
+      crate::collect::ytdlp::ytdlp_download — GitHub 최신 릴리스에서 SHA2-256SUMS로 자산
+      체크섬을 검증한 뒤 임시 파일 경유 원자적 rename으로 설치. conn을 받지 않는 시그니처라
+      (§2.2 락 규율과 동일 원칙) 다운로드 동안 전역 DB 뮤텍스를 애초에 쥐지 않는다.
+
+  collect_detect_local:
+    http: false   # 이 서버 머신의 로컬 브라우저/세션 로그를 읽는다 — 원격 클라이언트엔 의미 없음.
+    input:
+      workspace_id: "uuid|omit=active"
+    output:
+      candidates: "LocalCandidate[]"
+    notes: |
+      아무것도 등록/실행하지 않는 순수 조회(PLAN-2026-09-04-local-import.md §W7). 크롬/엣지는
+      `%LOCALAPPDATA%/.../User Data`아래 `History` 파일이 있는 프로필만(Local State의
+      profile.info_cache[dir].name → 표시 이름, 없으면 dir명) 최근 7일·15초 이상 방문 수와 마지막
+      방문 시각을 크게 훑어(crate::collect::browser_history의 임시 복사 헬퍼 재사용) 반환한다.
+      클로드/코덱스는 표준 세션 로그 루트가 존재할 때만 후보에 넣고, mtime이 최근 14일인 파일만
+      (최대 200개) 열어 프롬프트 줄 수/최근 시각을 센다(1.2GB 전체를 매번 파싱하지 않음). 순서:
+      크롬 프로필(Default 먼저, 그다음 dir명순) → 엣지 프로필 → 클로드 → 코덱스. 비Windows는
+      브라우저 후보 없음(어댑터 자체가 Windows 전용). `source_id`는 같은 kind(프롬프트) 또는 같은
+      browser+profile(브라우저) 소스가 이미 등록돼 있으면 그 id.
+
+  collect_detect_chat_sessions:
+    http: false   # 이 서버 머신의 로컬 세션 로그를 읽는다 — 원격 클라이언트엔 의미 없음.
+    input: {}
+    output:
+      sessions: "DetectedChatSession[]"
+    notes: |
+      클로드/코덱스 세션 로그를 훑어 "대화 하나" 단위 후보를 돌려주는 순수 조회 — 아무것도
+      등록/실행하지 않는다(collect_detect_local 과 같은 자세). 소스 단위가 아니라 세션 단위라
+      workspace_id 를 받지 않는다: 어떤 노트북으로 가져올지는 사용자가 화면에서 고른다.
+      비Windows 는 표준 세션 로그 루트가 없으면 빈 목록.
+
+  collect_import_local:
+    http: false   # 이 서버 머신 로컬 자원을 등록하는 부수효과 커맨드.
+    input:
+      workspace_id: "uuid|omit=active"
+      key: string   # collect_detect_local 이 반환한 LocalCandidate.key 그대로
+    output: CollectSource
+    errors: [VALIDATION, NOT_FOUND, IO]
+    notes: |
+      후보 하나를 1클릭 등록(PLAN-2026-09-04-local-import.md §W7, crate::collect::detect::
+      import_local_source). 이미 같은 kind(claude_prompts/codex_prompts) 또는 같은
+      browser+profile(browser_history) 소스가 있으면 새로 만들지 않고 그 소스를 그대로
+      반환한다(멱등 — 프리셋을 두 번 눌러도 중복 소스가 안 생긴다). 없으면 평평한 고정 폴더를
+      찾거나 만들어(`repo::folders::ensure_named_folder_id`) target_folder_id로 걸고,
+      interval_minutes=0("창을 열 때")·dry_run=false로 소스를 생성한다: 프롬프트 kind는
+      "수집 — AI 대화" 폴더 + post_process="summary", browser_history는 "수집 — 브라우징" 폴더 +
+      post_process="none". `key`는 `"claude_prompts"` | `"codex_prompts"` |
+      `"chrome:<profile dir>"` | `"edge:<profile dir>"` — 그 외는 VALIDATION.
+
+  collect_get_stats:
+    http: false
+    input:
+      workspace_id: "uuid|omit=active"
+      since: "string|omit"   # YYYY-MM-DD; 부재 시 7일 전
+    output:
+      per_action: "CollectActionStat[]"
+      total_today: integer
+      total_since: integer
+    errors: []
+    notes: |
+      수집 탭 상단 "이번 주 AI 호출" 카드용 집계. ai_usage 테이블을 workspace+since 이후로
+      action_type별로 그룹핑. 수집 관련 action_type(link_suggest, link_preview,
+      collect_post_process)만 필터링 — 나머지 AI 호출(organize, translate 등)은
+      AiHistoryPanel.tsx 가 이미 보여준다. providers 분해는 카운트가 0인 provider 는
+      생략하고 카운트 내림차순으로 정렬한다.
+
+shared_types:
+  # 세션 하나 = 대화 하나. last_active_at 은 RFC3339(없으면 null), relative_time 은 서버가
+  # 만든 표시용 문자열("3시간 전")이라 프론트가 다시 계산하지 않는다.
+  DetectedChatSession: "{ id: string, kind: string, project: string, title: string, last_prompt: string, prompt_count: integer, last_active_at: string|null, relative_time: string }"
+  CollectSource: "{ id: uuid, workspace_id: uuid, kind: string, name: string, config: string, enabled: boolean, dry_run: boolean, show_in_briefing: boolean, target_folder_id: string|null, post_process: string, post_process_model: string|null, interval_minutes: integer|null, last_run_at: timestamp|null, last_status: string|null, last_error: string|null, created_at: timestamp, updated_at: timestamp }"
+  DryRunItem: "{ title: string, guid: string, seen: boolean, preview: string }"
+  CollectActionStat: "{ action_type: string, calls: integer, providers: CollectProviderBreakdown[] }"
+  CollectProviderBreakdown: "{ provider: string, calls: integer }"
+  LocalCandidate: "{ key: string, kind: string, label: string, detail: string, recent_count: integer, last_seen_at: string|null, source_id: string|null, config: string }"

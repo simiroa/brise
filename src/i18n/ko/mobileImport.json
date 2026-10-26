@@ -1,0 +1,16 @@
+{
+  "filled": "가져온 내용을 입력 화면에 채웠어요. 화면을 나가면 노트로 저장돼요.",
+  "filled_skipped": "가져온 내용을 입력 화면에 채웠어요. {{count}}개는 가져오지 못했어요(25MB 초과 등).",
+  "nothing": "가져올 수 있는 내용이 없었어요. 25MB가 넘는 파일이나 지원하지 않는 형식은 가져올 수 없어요.",
+  "failed": "가져오지 못했어요. 연결을 확인하고 다시 시도해 주세요.",
+  "commit_failed": "저장하지 못했어요. 가져온 내용은 화면에 그대로 있어요.",
+  "upload_dropped": "사진 {{count}}장은 올릴 수 없어 건너뛰었어요.",
+  "upload_failed_bg": "사진 {{count}}장을 아직 못 올렸어요. 노트 위쪽에서 다시 올릴 수 있어요.",
+  "strip_images": "가져온 사진 {{count}}장 · 나가면 함께 올라가요",
+  "strip_remove": "가져온 사진 빼기",
+  "strip_text": "가져온 내용 · 나가면 노트가 돼요",
+  "strip_discard": "버리기",
+  "pending_bar": "가져온 사진 {{count}}장을 아직 못 올렸어요",
+  "pending_uploading": "가져온 사진 {{count}}장 올리는 중…",
+  "pending_retry": "다시 올리기"
+}

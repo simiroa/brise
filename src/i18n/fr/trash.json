@@ -1,0 +1,16 @@
+{
+  "title": "Corbeille",
+  "moved": "Déplacé vers la corbeille",
+  "restore": "Restaurer",
+  "delete_forever": "Supprimer définitivement",
+  "delete_confirm": "Supprimer définitivement « {{title}} » ? Cette action est irréversible.",
+  "empty": "Vider la corbeille",
+  "empty_confirm": "Cela supprime définitivement les {{n}} notes de la corbeille. Cette action est irréversible.",
+  "empty_type_prefix": "Tapez",
+  "empty_type_suffix": "pour confirmer.",
+  "empty_state": "La corbeille est vide",
+  "notes_heading": "Notes",
+  "sections_heading": "Sections",
+  "section_from": "« {{name}} » — depuis {{note}}",
+  "section_restore_blocked": "Restauration impossible : sa note est dans la corbeille"
+}

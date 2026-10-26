@@ -1,0 +1,44 @@
+/*
+ * Mobile layout shell — the entry stylesheet, imported only by src/mobile/MobileApp.tsx. It holds no
+ * rules of its own: the parts live in styles/mobile/ and are imported below IN CASCADE ORDER. The
+ * order is load-bearing (equal-specificity rules resolve by position, and later parts restyle classes
+ * an earlier part defines), so a part is never moved without checking which classes it shares with its
+ * neighbours — src/styles/mobile/mobileCss.contract.test.ts pins the import list.
+ *
+ * Uses tokens.css variables exclusively (identity/tokens SSOT: PRODUCT.md + docs/DESIGN.md — hanji/
+ * celadon/ink, no new colors/fonts/shadows/gradients/glassmorphism). Desktop's `.app` layout CSS is
+ * never referenced here — `.mobile-app` owns its own minimal reset (mobile/shell.css) so this tree can
+ * mount standalone.
+ *
+ * SURFACE PRESET CONTRACT (tokens.css): in-flow elements paint no background at all — the canvas
+ * painted on `.mobile-app` itself (same 4 background-* properties as `.app`'s own class rule in
+ * tokens.css, duplicated here because `.mobile-app` is a separate root, not `.app`) shows straight
+ * through. The floating surfaces (bottom sheet, centered modal — mobile/overlays.css) use `.overlay`
+ * (always-opaque, tokens.css).
+ */
+
+@import "./mobile/shell.css";
+@import "./mobile/lists-cards.css";
+@import "./mobile/tabbar.css";
+@import "./mobile/settings.css";
+@import "./mobile/postsave-search.css";
+@import "./mobile/note-header.css";
+@import "./mobile/note-capture.css";
+@import "./mobile/notes-tab.css";
+@import "./mobile/overlays.css";
+@import "./mobile/switch.css";
+@import "./mobile/attachments.css";
+@import "./mobile/reduced-motion.css";
+@import "./mobile/editor-touch.css";
+@import "./mobile/sheet.css";
+@import "./mobile/offline-banner.css";
+@import "./mobile/image-size.css";
+@import "./mobile/settings-roster.css";
+@import "./mobile/note-editor-aids.css";
+@import "./mobile/notes-tab-filters.css";
+@import "./mobile/modal-contents.css";
+@import "./mobile/search-history.css";
+@import "./mobile/note-views.css";
+@import "./mobile/focus-visible.css";
+@import "./mobile/active-chips.css";
+@import "./mobile/chat.css";

@@ -1,0 +1,9 @@
+{
+  "action": "Undo",
+  "deleted_named": "Deleted \"{{name}}\"",
+  "link_removed": "Unlinked \"{{name}}\"",
+  "note_moved": "Moved \"{{note}}\" to \"{{folder}}\"",
+  "metadata_applied": "Applied AI organize to \"{{note}}\"",
+  "metadata_applied_partial": "Applied AI organize to \"{{note}}\" ({{fields}} can't be undone)",
+  "edit_conflict_skipped": "\"{{note}}\" was edited after the apply, so it wasn't undone"
+}

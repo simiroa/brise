@@ -1,0 +1,21 @@
+{
+  "fab_label": "Ajouter une note ou un dossier",
+  "dial_folder": "Ajouter un dossier",
+  "dial_note": "Ajouter une note",
+  "dial_ai": "IA",
+  "sheet_title": "Rangement des dossiers par l’IA",
+  "inbox_organize": "Ranger la boîte de réception",
+  "inbox_hint": "L’IA examine chaque note de la boîte de réception et propose un dossier et des tags",
+  "inbox_empty": "Aucune note dans la boîte de réception",
+  "inbox_missing": "Ce carnet n’a pas de boîte de réception",
+  "folder_organize": "Choisir un dossier à ranger",
+  "folder_hint": "L’IA examine chaque note du dossier choisi et propose des changements",
+  "folder_pick_title": "Dossier à ranger",
+  "folder_no_notes": "Ce dossier ne contient aucune note",
+  "plan_desktop_only": "Disponible uniquement dans l’application de bureau",
+  "loading": "Chargement des notes…",
+  "more_title": "Notes à organiser",
+  "more_hint": "Les {{n}} notes modifiées le plus récemment sont chargées. Il peut y en avoir d'autres.",
+  "more_start": "Organiser ces {{n}}",
+  "more_load": "Charger plus (jusqu'à {{n}})"
+}

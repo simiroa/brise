@@ -1,0 +1,71 @@
+# 커맨드 계약: data_location — 데이터 저장 위치 조회/점검/이동
+# (PLAN-2026-09-28-onboarding-rebuild.md §6 D1~D5 + 구현 계약). 규약: _conventions.yaml.
+# 전부 http:false — 서버 머신의 파일시스템에 직접 손대는 부수효과(경로 검사·복사·포인터 기록)라
+# db_reset/backup_restore/data_dir_open 과 같은 급(원격 클라이언트엔 의미 없음).
+commands:
+  data_location_get:
+    http: false
+    input: {}
+    output:
+      root: string
+      attachments_dir: string
+      backups_dir: string
+      is_default: boolean
+      split: boolean
+    notes: |
+      root = 현재 살아있는 data_dir(포인터의 root 가 적용됐으면 그 경로, 아니면 OS 기본 앱
+      데이터 폴더). attachments_dir/backups_dir 는 db::attachments_dir/backups_dir 이 실제로
+      반환하는 절대 경로(클라우드 분리 시 root 바깥). is_default = 포인터 파일이 비어 있음
+      (root/attachments/backups 전부 미설정). split = 포인터에 attachments 가 설정됨(클라우드
+      분리 상태, D3).
+
+  data_location_inspect:
+    http: false
+    input: { path: string }             # 사용자가 고른 후보 폴더(네이티브 다이얼로그 결과)
+    output:
+      path: string
+      cloud_provider: "string|null"     # 알려진 동기화 클라이언트 폴더 아래면 그 이름, 아니면 null
+      writable: boolean
+      has_existing_data: boolean        # path/brise.db 존재 여부(기존 라이브러리 열기 거부 판정용)
+      free_bytes: "integer|null"
+      total_bytes: "integer|null"
+      current_data_bytes: integer       # 지금 위치(DB+첨부+백업) 총량 — 대상 폴더가 아니다
+    notes: |
+      writable 는 파일 생성+삭제 프로브(폴더가 이미 있으면 그 안, 없으면 상위 폴더 기준 — 아직
+      안 만들어진 새 폴더 이름도 "쓸 수 있음"으로 보여야 네이티브 폴더 선택 다이얼로그의 "새 폴더"
+      플로우와 맞는다. 실제로 만드는 건 apply 뿐, inspect 는 아무것도 만들지 않는다).
+      free/total_bytes 는 fs4::available_space/total_space, 대상/상위 폴더 모두 없으면 둘 다
+      null. cloud_provider 판정(repo::data_location::cloud_provider, Windows 우선): OneDrive/
+      OneDriveConsumer/OneDriveCommercial 환경변수 아래, Dropbox(%APPDATA%|%LOCALAPPDATA%/
+      Dropbox/info.json 의 personal/business 경로 아래), Google Drive("My Drive"/"내 드라이브"/
+      "Shared drives"/"DriveFS" 경로 힌트), iCloud Drive(%USERPROFILE%/iCloudDrive 아래).
+      async(spawn_blocking) — current_data_bytes 가 attachments/·backups/ 를 walk 한다
+      (db_stats 와 동일 이유, 후보 폴더를 고르는 동안 반복 호출될 수 있어 동기면 다른 IPC 를 막는다).
+
+  data_location_apply:
+    http: false
+    input: { path: string }
+    output: { split: boolean, restart_required: boolean }
+    errors: [VALIDATION, IO]
+    notes: |
+      거부(VALIDATION): 선택한 폴더가 현재 위치와 같거나 그 안쪽, 쓸 수 없음, 이미 brise.db 가
+      있음(기존 라이브러리 열기는 범위 밖).
+      cloud_provider 가 없으면(일반 로컬 폴더, D2): 라이브 연결의 SQLite 온라인 백업 API로
+      <path>/brise.db 에 일관 스냅샷 → 복사본 PRAGMA integrity_check → data_dir 최상위의 나머지
+      전부(brise.db(-wal/-shm)·포인터 파일만 제외 — 허용 목록이 아니라 제외 목록이라 새 디렉토리가
+      생겨도 저절로 옮겨진다) 구조 보존 복사 → 포인터에 root 기록(attachments/backups 는 비움) →
+      split:false. cloud_provider 가 있으면(D3): DB는 로컬에 그대로 두고 attachments/·backups/
+      만 <path>/attachments, <path>/backups 로 복사 → 포인터에 attachments/backups 기록(root는
+      건드리지 않음) → split:true. 두 경우 모두 restart_required:true(프런트가
+      @tauri-apps/plugin-process relaunch 호출, process:allow-restart 권한 필요).
+      포인터 파일은 항상 OS 기본 앱 데이터 폴더에 있다(위치를 옮겨도 다음 부팅이 찾는 유일한
+      고정점) — data_location_apply 가 쓰는 곳도 항상 거기다, 이동한 target 이 아니다.
+      포인터 기록 전 실패(백업/무결성 검사/복사 중 에러)는 포인터를 건드리지 않는다(원본 무손상)
+      — target 에 남는 부분 복사본은 정리하지 않고 그대로 둔다: 실패한 자리에서 또 다른 파일
+      삭제를 시도하면 실패를 감출 위험이 실익보다 크다는 판단(§6). 사용자는 에러를 보고 대상
+      폴더를 비우거나 다시 고른다.
+      성공 시(REVIEW-2026-09-28 §6 #3): 커맨드가 DB 락을 쥔 채로 그 자리에서 프로세스를
+      재시작한다(tauri AppHandle::restart, never returns) — 스냅샷과 재시작 사이에 락을 놓으면
+      그 틈에 들어온 쓰기가 스냅샷 뒤에 일어나 재시작 후 사라지기 때문. 그래서 이 커맨드는
+      **성공하면 호출부의 Promise 가 영원히 resolve 되지 않는다**(창이 다시 뜨는 게 응답이다) —
+      프런트는 성공 시 응답을 기다리지 않고, 실패(reject)만 잡아 에러를 보여준다.

@@ -1,0 +1,10 @@
+{
+  "open_in_window": "Open in new window",
+  "drop_to_open": "Release to open in a new window",
+  "detached_badge": "Open in a separate window",
+  "placeholder_title": "This section is open in a separate window",
+  "placeholder_body": "A section is edited in one place at a time. Close that window to bring it back here.",
+  "focus_window": "Go to window",
+  "return_here": "Bring back here",
+  "missing": "This section could not be found. It may have been deleted or moved to another note."
+}

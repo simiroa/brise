@@ -1,0 +1,234 @@
+# 커맨드 계약: export / import — 규약: _conventions.yaml
+# Share = 내보내기 (확정 결정). 성공 시 notes.exported_at 갱신 → 트리 공유 아이콘 근거
+commands:
+  export_note:
+    http: false   # dest_path는 로컬 저장 다이얼로그가 고른 경로 — 원격 클라이언트엔 의미 없음
+    input:  { id: uuid, dest_path: string }  # dest_path = 저장 대화상자가 고른 **.md 파일** 경로 (PLAN-2026-10-07 W6)
+    output: { written_path: string, exported_at: timestamp }
+    errors: [NOT_FOUND, IO, VALIDATION]
+    notes: |
+      Markdown 만 — 프론트매터(title/year/tags) + 섹션들(시트는 마크다운 표) + 사료 원문 부록. 첨부 파일은 그 파일 옆
+      `{파일 이름}_files/` 로 복사. (W6: html 형식 제거 — 마크다운 원문을 <pre> 로 감싼 덤프였다. 읽히는 HTML 은
+      export_html. 그리고 dest_path 를 폴더로 취급해 `x.md/x.md` 를 만들던 결함 수정 — 이제 고른 파일 경로에 쓴다.)
+      폴더 단위(export_folder)는 폴더 안 노트마다 슬러그 이름으로 쓴다.
+      슬러그 규칙(R6): Windows 금지 문자 '_' 치환, 예약어 접미, 120byte 절단, 충돌 시 ' (2)'.
+      흐름 상세: service/export.yaml
+
+  export_diagram_png:             # 관계도 캔버스 → PNG 파일 (FlowCanvas 툴바 "PNG로 내보내기")
+    http: false   # dest_path는 로컬 저장 다이얼로그가 고른 경로 — 원격 클라이언트엔 의미 없음
+    input:  { dest_path: string, data_base64: string }
+    output: { written_path: string }
+    errors: [IO, VALIDATION]
+    notes: |
+      DB 를 전혀 읽지 않는 유일한 export — 래스터는 프론트(html-to-image)가 이미 만들었고 여기는
+      "고른 경로에 그 바이트를 쓴다"뿐이다. 디코딩은 attachment_add_bytes 와 동일(STANDARD base64,
+      실패 시 VALIDATION). 쓰기는 export_note 와 동일한 tmp→rename 이라 실패해도 기존 파일이
+      반쯤 덮이지 않는다. 첨부로 저장(attachment_add_bytes)은 같은 래스터의 두 번째 목적지로
+      그대로 남는다 — 첨부는 노트와 함께 동기화/검색되고, 이쪽은 외부 공유용.
+
+  export_sheet_csv:               # 시트 그리드 → CSV 파일 (SheetToolbar "CSV로 내보내기")
+    http: false   # dest_path는 로컬 저장 다이얼로그가 고른 경로 — 원격 클라이언트엔 의미 없음
+    input:  { dest_path: string, csv: string }
+    output: { written_path: string }
+    errors: [IO, VALIDATION]
+    notes: |
+      프론트가 생성한 CSV 문자열을 지정된 경로에 UTF-8 BOM과 함께 쓴다.
+
+  export_section_md:              # 섹션 탭 우클릭 "내보내기…" — 텍스트 섹션 한 개를 .md 파일로
+    http: false   # dest_path는 로컬 저장 다이얼로그가 고른 경로 — 원격 클라이언트엔 의미 없음
+    input:  { id: uuid, dest_path: string }   # id = section_id
+    output: { written_path: string }
+    errors: [NOT_FOUND, VALIDATION, IO]
+    notes: |
+      sections.body_md 를 그대로 쓴다(텍스트 섹션의 body_md 는 이미 마크다운이다) — 프론트가
+      직렬화해 보내는 export_sheet_csv/export_diagram_png 와 반대 방향이고, DB 를 읽는다는
+      점에서 export_note 와 같은 부류다. 쓰기는 export_note 와 동일한 tmp→rename.
+      kind != 'text' 이면 VALIDATION — 시트는 export_sheet_csv, 관계도는 export_diagram_png 가
+      이미 각자의 형식을 갖고 있고, 그 둘의 body_md(JSON)를 .md 로 쓰는 건 의미가 없다.
+      노트 전체 내보내기(export_note)와 달리 프론트매터·사료 부록이 없다 — 섹션 본문뿐이다.
+
+  export_hwpx:                    # 내보내기·인쇄 모달 "HWPX" (PLAN-2026-10-07-doc-import-export W3)
+    http: false   # dest_path는 로컬 저장 다이얼로그가 고른 경로 — 원격 클라이언트엔 의미 없음
+    input:  { note_id: uuid, dest_path: string, title: string, sections: "DocExportSection[]",
+              paper: "'a4-portrait'|'a4-landscape'|'b5-portrait'|'b5-landscape'|'letter-portrait'|'letter-landscape'",
+              margin: "'narrow'|'normal'|'wide'" }
+    output: { written_path: string, image_count: integer, skipped_images: integer }
+    errors: [NOT_FOUND, VALIDATION, IO]   # VALIDATION: sections 비어 있음 · doc 이 ProseMirror JSON 이 아님 · 크기 상한
+    notes: |
+      body_md 를 Rust 가 다시 파싱하지 않는다 — 프런트가 섹션마다 헤드리스 TipTap 으로 body_md → JSON 을 만들어
+      보낸다(마크다운 규칙을 Rust 에 두 번째로 두지 않기 위해서, 가져오기 doc_import_html 과 같은 이유). 그래서
+      Rust 만 도는 일괄 경로(export_folder·export_all·CLI·MCP)는 HWPX 를 만들지 않는다.
+      sections 가 둘 이상이면 섹션 이름을 제목 문단으로 앞에 둔다. 텍스트 섹션만 — 시트·관계도는 프런트가 뺀다.
+      그림은 doc 의 image 노드 relPath(`{폴더}/{파일}`)를 첨부 루트(attachments/) **안에서만** 해석해(루트 밖으로 나가는
+      경로·없는 파일·이미지가 아닌 것은 건너뜀 — skipped_images) BinData 로 넣는다. 폴더가 note_id 일 필요는 없다 —
+      섹션을 다른 노트로 옮기면 본문 이미지가 원 노트 id 경로 그대로 남아(section_move) 앱 화면에는 계속 그려지므로,
+      내보내기도 같이 나가야 미리보기와 파일이 어긋나지 않는다. 쓰기는 export_note 와 같은 tmp→rename.
+      패키지 규칙은 docs/research/doc-format-compat-2026-10-07.md §6.3(mimetype 첫 항목·무압축, linesegarray 미기록,
+      한컴 오타 속성명 그대로, hp:switch 두 벌). 글꼴은 함초롬바탕/함초롬돋움 이름만 적는다.
+      쪽 설정: paper = 용지 크기(A4 · JIS B5 182×257mm · Letter)와 방향, margin = 여백 단계. 보통은 그 편집기의 기본값
+      (한글: 위 20 · 좌우 30 · 아래 15 · 머리말/꼬리말 15mm, Word: 25.4mm), 좁게 = 본문이 사방 12.7mm, 넓게 = 보통에서
+      좌우만 50.8mm. 표·그림 폭 맞춤도 그 본문 폭을 쓴다. 미리보기·인쇄(exportPaper.ts)가 같은 값을 mm 로 그린다.
+
+  export_docx:                    # 내보내기·인쇄 모달 "DOCX" (PLAN-2026-10-07-doc-import-export W4)
+    http: false   # dest_path는 로컬 저장 다이얼로그가 고른 경로 — 원격 클라이언트엔 의미 없음
+    input:  { note_id: uuid, dest_path: string, title: string, sections: "DocExportSection[]",
+              paper: "'a4-portrait'|'a4-landscape'|'b5-portrait'|'b5-landscape'|'letter-portrait'|'letter-landscape'",
+              margin: "'narrow'|'normal'|'wide'" }
+    output: { written_path: string, image_count: integer, skipped_images: integer }
+    errors: [NOT_FOUND, VALIDATION, IO]   # export_hwpx 와 같은 규칙
+    notes: |
+      export_hwpx 와 입력·검증·그림 해석(첨부 루트 안에서만)·쓰기(tmp→rename)가 같고 형식만 OOXML 이다(repo/doc_export/docx.rs).
+      글꼴은 맑은 고딕(본문·제목)·Consolas(코드) 이름만. 병합은 gridSpan·vMerge, 셀 배경은 w:shd, 그림은 word/media + wp:inline.
+
+  export_html:                    # 내보내기 모달 "HTML" — 읽히는 단일 HTML 파일 (PLAN-2026-10-07 W6)
+    http: false   # dest_path는 로컬 저장 다이얼로그가 고른 경로 — 원격 클라이언트엔 의미 없음
+    input:  { note_id: uuid, dest_path: string, html: string }
+    output: { written_path: string, image_count: integer, skipped_images: integer }
+    errors: [NOT_FOUND, VALIDATION, IO]   # VALIDATION: 확장자가 .html/.htm 아님 · 크기 상한
+    notes: |
+      html 은 프런트가 만든 완성 문서(미리보기와 같은 헤드리스 TipTap 렌더 + 화면·인쇄 CSS) — Rust 는 다시 렌더하지 않는다.
+      Rust 가 하는 일은 그림 채우기와 쓰기뿐: `<img>` 의 `data-rel-path`(첨부 상대 경로)를 export_hwpx 와 같은 규칙
+      (첨부 루트 안에서만, 이미지가 아니거나 없거나 상한 초과는 skipped_images)으로 읽어 src 를 data: URI 로 바꾸고
+      data-rel-path 는 지운다(파일 하나로 어디서나 열린다). 못 채운 그림의 src 는 앱 내부 주소가 남지 않게 비운다.
+      src 의 asset/http 주소로는 절대 파일을 읽지 않는다. 쓰기는 tmp→rename. exported_at 은 찍지 않는다(export_hwpx 와 같다).
+
+  export_html_inline:             # 내보내기 모달 "서식 복사" — 클립보드용 HTML 에 그림 채우기 (PLAN-2026-10-07 W6)
+    http: false   # 첨부 파일을 읽는 데스크톱 경로
+    input:  { note_id: uuid, html: string }
+    output: { html: string, image_count: integer, skipped_images: integer }
+    errors: [NOT_FOUND, VALIDATION]   # VALIDATION: 크기 상한
+    notes: |
+      export_html 과 같은 그림 채우기(같은 함수)를 하고 파일 대신 결과 문자열을 돌려준다 — 프런트가 navigator.clipboard 에
+      text/html 로 넣는다. 붙여넣는 곳(메일·그룹웨어 편집기)이 <style> 을 버리므로 html 은 인라인 style 조각이다(프런트 몫).
+
+  export_open:                    # 내보내기 완료 토스트 [기본 앱으로 열기] · [폴더 열기]
+    http: false   # 로컬 경로
+    input:  { path: string, reveal: boolean }   # reveal=true 면 파일 탐색기에서 그 파일을 선택해 연다
+    output: {}
+    errors: [VALIDATION, IO]   # VALIDATION: 내보내기 형식이 아닌 확장자 · 일반 파일이 아님
+    notes: |
+      프런트 opener 권한은 $RESOURCE 만 열 수 있어(capabilities/default.json) 내보낸 파일을 프런트에서 openPath 로
+      열면 조용히 거부된다 — 그래서 Rust 가 연다(attachment_open 과 같은 opener 경로). 아무 경로나 여는 명령이 되지
+      않게 확장자를 내보내기 형식(hwpx·docx·pdf·md·html·htm·csv·png)으로 제한하고 존재하는 일반 파일만 받는다.
+
+  export_all:                     # 설정 모달 "Export all notes"
+    http: false   # dest_dir는 로컬 폴더 다이얼로그가 고른 경로 — 로컬 FS 쓰기
+    input:  { dest_dir: string }
+    output: { note_count: integer, bundle_path: string }
+    errors: [IO]
+    notes: brise-bundle.json (전 노트/폴더/설정) + attachments/ 디렉토리 복사
+
+  export_folder:                  # Wave 4: 폴더 단위 구조화 내보내기 — dest/{folder-slug}/{note-slug}.md
+    http: false   # dest_path는 로컬 저장 다이얼로그가 고른 경로
+    input:  { id: uuid, dest_path: string }
+    output: { exported_count: integer, skipped_count: integer, written_dir: string }
+    errors: [NOT_FOUND, VALIDATION, IO]
+    notes: |
+      Markdown 만(W6 에서 html 제거 — 오너 결정 2026-10-08: 폴더 단위 HTML 은 쓸 일이 없다). 노트마다 export_note 의
+      마크다운 본체를 재사용 (첨부 {slug}_files/ 포함). 슬러그 충돌은 unique_filename.
+
+  export_folder_bundle:           # 폴더 단위 "번들" 내보내기 — export_folder(위, md)와 별개
+    http: false   # dest_dir는 로컬 폴더 다이얼로그가 고른 경로
+    input:  { id: uuid, dest_dir: string }
+    output: { note_count: integer, bundle_path: string }
+    errors: [DB, IO]              # 존재하지 않는 folder id는 query_row 실패로 DB (NOT_FOUND 아님)
+    notes: |
+      export_all과 동일한 brise-bundle.json + attachments/ 산출물이되 한 폴더로 필터링 — 다른
+      사람에게 폴더 하나(예: AI로 정리한 학습 노트 묶음)를 넘기고 import_bundle로 그대로
+      가져오게 하는 용도. 포함: 그 폴더의 notes/sections/sources/attachments(파일 복사)/
+      note_tags + 실제로 쓰인 tags만 + folder 행 + 그 workspace 행. 미포함: settings,
+      workspace_regions/eras/statuses(워크스페이스 전역이라 폴더 스코프 밖).
+      폴더 밖 노트를 가리키는 internal 위키링크는 번들 안에서 dangling — import_bundle이
+      이미 조용히 정리한다(prune_dangling_internal), 데이터 손실 아님(의도된 동작).
+
+  export_workspace_bundle:        # 노트북(= workspace) 단위 번들 내보내기 — QA8 3C
+    http: false   # dest_dir는 로컬 폴더 다이얼로그가 고른 경로
+    input:  { id: uuid, dest_dir: string }   # id = workspace_id (= 노트북)
+    output: { note_count: integer, bundle_path: string }
+    errors: [DB, IO]
+    notes: |
+      dump_folder 모양을 따르되 dump_folder 가 의도적으로 제외한 노트북 스코프 데이터
+      (workspace_regions / workspace_eras / workspace_statuses)를 포함한다 — 노트북이 자립적으로
+      복원 가능해야 한다. settings 는 기기 전역이라 비움. soft-deleted 노트 제외.
+      산출물은 export_folder_bundle 과 동일하게 slug 하위 디렉토리의 brise-bundle.json +
+      attachments/. 가져오기는 import_bundle 의 add_notebook / hash_merge 모드.
+
+  import_bundle:                  # 설정 모달 "Import…" — export_all/export_folder_bundle/export_workspace_bundle 왕복
+    http: false   # bundle_path는 데스크톱에서 고른 로컬 경로 — 폰에는 애초에 그 번들 파일이 없음
+    input:
+      bundle_path: string
+      mode: "'merge'|'replace'|'add_notebook'|'hash_merge'"
+      # hash_merge 전용: 병합 대상 노트북(workspace_id). 다른 모드에서는 omit.
+      target_workspace_id: "uuid?"
+      # hash_merge 전용: true 면 동일 제목 노트를 제자리 갱신, false(기본) 면 변경분은 새 노트로 추가.
+      update_existing: "boolean?"
+    output:
+      imported_notes: integer
+      skipped: integer
+      # replace 전용: 지우기 전에 찍은 안전 스냅샷(.db) 경로 — db_reset/backup_restore 의 backup_path 와 같은 뜻. 다른 모드는 생략.
+      backup_path: "string?"
+    errors: [IO, VALIDATION, CONFLICT, NOT_FOUND]   # VALIDATION: 번들 스키마/버전; NOT_FOUND: hash_merge 대상 노트북 없음
+    notes: |
+      merge: id 충돌 시 skip (레거시). replace: 전체 재구축.
+      add_notebook: 노트북/폴더/노트 id 를 전부 새 id 로 재매핑해 기존 데이터와 절대 충돌하지 않게
+      추가. 같은 번들을 두 번 가져오면 노트북이 두 개 생긴다(무결성 우선).
+      hash_merge: target_workspace_id 노트북에 내용 해시(제목+섹션 본문)로 병합. 동일 해시→skip,
+      다른 해시→기본은 새 노트 추가, update_existing=true 면 동일 제목 제자리 갱신.
+      불변성 - tests/invariant-export-roundtrip.yaml
+      보안: 번들 내 rel_path는 정규화 후 attachments/ 내부 확인 — 탈출 시 전체 거부 (R5)
+      버전 게이트(backup_restore와 동일 원칙): 번들의 schema version이 이 앱의 migrations::
+      current_version보다 새로우면 어떤 파괴적 단계보다 먼저 fail-closed 거부.
+      태그 병합(merge/add_notebook/hash_merge): 태그 이름 COLLATE NOCASE 매칭 시 기존 tag id 재사용.
+
+  db_reset:                       # 설정 모달 "Reset database" — 백업 후 초기화
+    http: false   # 파괴적: 전체 DB 초기화 — 원격 클라이언트가 서버 데이터를 지울 수 없어야 함
+    input:  { confirm: "'RESET'" }       # 문자열 일치 필수 (오호출 방어)
+    output: { backup_path: string }
+    errors: [VALIDATION, IO]
+
+  backup_create:                  # 설정 모달 "백업(전체)" — docs/SYNC.md 옵션 0
+    http: false   # dest_path는 로컬 저장 다이얼로그가 고른 경로
+    input:  { dest_path: string }        # 저장 다이얼로그가 고른 .zip 경로
+    output: { backup_path: string, size_bytes: integer, excluded_reference_count: integer }
+    errors: [IO]
+    notes: |
+      brise.db(온라인 백업 API 스냅샷) + attachments/ + workspace_bg/ + manifest.json 을 zip 하나로.
+      excluded_reference_count: 이 zip 에 담기지 **않은** 참조 첨부의 수
+      (스냅샷의 SELECT COUNT(*) FROM attachments WHERE ext_path IS NOT NULL). 참조 첨부의 원본은
+      앱 폴더 밖이라 attachments/ 트리에 없다 — 담지 않는 것이 의도된 동작이고, UI 는 이 수를
+      알려 "복원했는데 파일이 없다"를 백업 시점에 미리 말한다.
+
+  backup_restore:                 # 설정 모달 "복원(전체)" — 전체 로컬 상태를 zip 스냅샷으로 교체
+    http: false   # 파괴적 + zip_path 로컬 경로: 원격 클라이언트가 서버 상태 전체를 교체할 수 없어야 함
+    input:  { zip_path: string, confirm: "'RESTORE'" }  # 문자열 일치 필수 (오호출 방어, db_reset과 동일)
+    output: { backup_path: string, note_count: integer }  # backup_path: 스왑 직전 안전 스냅샷
+    errors: [VALIDATION, IO]
+    notes: |
+      zip의 schema_migrations 버전이 이 앱보다 새로우면 거부(fail-closed) — 오래된 건 허용(마이그레이션 재실행).
+      검증(zip 유효성/스키마/quick_check) 전부 통과 전에는 라이브 상태를 전혀 건드리지 않는다.
+
+  data_dir_open:                  # 설정 "데이터 폴더 열기" — data_dir 를 OS 파일 탐색기로
+    http: false   # 서버 머신의 OS 파일 탐색기를 여는 명령 — 원격 클라이언트엔 의미 없음
+    input:  {}
+    output: { ok: boolean }
+    errors: [IO]
+
+  backup_auto_status:              # 설정 "자동 백업" 카드 — 현재 스케줄 설정 + 마지막 백업 시각
+    input:  {}
+    output: { last_backup_at: "timestamp|null", interval: string, keep: integer, last_error: "string|null" }
+    notes: |
+      interval/keep 은 backup_auto_interval/backup_auto_keep 설정값 그대로(스케줄 UI는 settings_set 으로 직접 씀).
+      last_error: backup_auto_last_error 설정값(비어있으면 null) — 마지막 자동 백업 시도가 실패했을 때
+      "타임스탬프: 메시지" 형식으로 채워진다(repo/transfer/backup.rs::record_auto_backup_error).
+
+  backup_auto_run:                  # 설정 "지금 백업" — 스케줄 무시하고 즉시 전체 zip 백업 + 회전
+    http: false   # 인자는 없지만 서버 머신 로컬 디스크(data_dir/backups/)에 즉시 쓰는 부수효과 —
+                  # db_reset/backup_restore와 같은 "서버 로컬 상태를 건드리는 관리 동작" 급
+    input:  {}
+    output: { backup_path: string, size_bytes: integer, excluded_reference_count: integer }
+    errors: [IO]
+    notes: backup_create 와 동일 zip(brise.db+attachments/+workspace_bg/), data_dir/backups/auto-<타임스탬프>.zip 에 저장 후 backup_auto_keep 개수로 회전.
+
+shared_types:
+  # export_hwpx·export_docx 의 섹션 하나 — doc 은 그 섹션 body_md 를 헤드리스 TipTap(markdownSchemaExtensions)으로 연 getJSON().
+  DocExportSection: "{ name: string, doc: json }"

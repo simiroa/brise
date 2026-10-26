@@ -1,0 +1,103 @@
+# 기능 카탈로그: 지도 도메인
+features:
+  - id: F-M01
+    name: 대시보드/사이드바 지도 — 장소 검색, 노트 위치 핀, 우클릭 새 노트
+    status: shipped
+    commands: [commands/geocode.yaml, commands/dashboard.yaml]
+    verify:
+      vitest:
+        - src/components/home/HomeMapPane.test.tsx
+        - src/components/home/MapPlaceSearch.test.tsx
+        - src/components/home/MapCreatePopover.test.tsx
+        - src/components/settings/MapSection.test.tsx
+    notes: |
+      Nominatim 기반 geocode_search/geocode_reverse. 세부 결정은 코드가 사실상의 SSOT.
+    cases:
+      - id: geocode-search-reports-pick
+        given:
+          query: "Seoul"
+        expect:
+          command: geocode_search
+          query: "Seoul"
+          label: "Seoul, KR"
+        covered_by: "debounces geocode_search and reports pick with coords"
+
+      - id: stale-geocode-response-ignored
+        given:
+          first: "Paris"
+          second: "Berlin"
+        expect:
+          newer: "Berlin, DE"
+          stale: "Paris, FR"
+        covered_by: "ignores stale geocode_search response when query changes before response resolves"
+
+      - id: create-pin-does-not-move-viewport
+        given:
+          click: { lat: 12, lng: 22 }
+        expect:
+          temp_pin: "__home_map_temp__"
+          command: note_create
+          title: "새 노트"
+          created: "new-1"
+        covered_by: "stays put through click → temp pin → confirm → note added to the map"
+
+      - id: bbox-query-carries-tag-status
+        given:
+          tags: ["voyage"]
+          statuses: ["done"]
+        expect:
+          command: note_query
+          tags: ["voyage"]
+          statuses: ["done"]
+        covered_by: "queries markers by viewport bbox and carries the tag/status filter axes"
+
+      - id: drop-and-move-write-location
+        given:
+          drop: { lat: 1, lng: 2 }
+          move: { lat: 3, lng: 4 }
+        expect:
+          command: note_set_location
+        covered_by: "exposes onDropNote / onMarkerMove — both write the new location"
+
+      - id: note-regions-waypoints-path
+        given:
+          note_id: "note-a"
+        expect:
+          command: note_regions_list
+          waypoint: "wp:r1"
+          name: "Waypoint 1"
+          color: "var(--info)"
+        covered_by: "selecting a note with note_regions renders its waypoints as distinct-color markers connected by a path line"
+
+      - id: place-search-pick-flies-camera
+        given:
+          pick: { lat: 48.8566, lng: 2.3522, label: "Paris" }
+        expect:
+          camera: "{ lat: 48.8566, lng: 2.3522, zoom: 320 }"
+          temp_pin: "__home_map_temp__"
+        covered_by: "a place-search pick flies the camera to the result and drops the temp pin"
+
+      - id: dashboard-search-dims-in-place
+        given:
+          query: "A"
+          hits: ["note-a"]
+        expect:
+          matching: "note-a"
+          dimmed: "note-b"
+        covered_by: "dashboard search dims non-matching markers in place, never removing them"
+
+      - id: create-popover-wires-confirm
+        given:
+          pin: { lat: 33.5, lng: 126.5, label: "Jeju" }
+        expect:
+          label: "Jeju"
+          confirm: "home-map-create-confirm"
+          cancel: "home-map-create-cancel"
+        covered_by: "renders label and wires confirm/cancel"
+
+      - id: settings-no-numeric-lat-lng
+        given:
+          section: MapSection
+        expect:
+          no_inputs: 'input[type="number"]'
+        covered_by: "has no numeric lat/lng/zoom inputs (replaced by the map+search picker)"

@@ -1,0 +1,19 @@
+{
+  "code_validation": "Vérifier la saisie",
+  "code_conflict": "Conflit de modification",
+  "code_not_found": "Introuvable",
+  "code_io": "Erreur de connexion ou de fichier",
+  "code_db": "Erreur de base de données",
+  "code_generic": "Erreur",
+  "win_file_busy": "Le fichier est ouvert dans une autre application",
+  "docx_cols_limit": "Le tableau a trop de colonnes (DOCX autorise au maximum 63 colonnes)",
+  "encrypted_file": "Les documents chiffrés ne peuvent pas être ouverts",
+  "invalid_docx": "Ce n'est pas un document Word valide",
+  "sqlite_busy": "La base de données est occupée. Veuillez réessayer dans un instant",
+  "sqlite_no_such_table": "Le format de la base de données ne correspond pas",
+  "net_timeout": "Aucune réponse reçue. Veuillez réessayer dans un instant",
+  "net_rate_limit": "Trop de requêtes. Veuillez réessayer dans un instant",
+  "net_server_error": "Le serveur est temporairement indisponible",
+  "net_connection_failed": "Impossible de se connecter",
+  "technical_fallback": "Un problème est survenu · Voir l'onglet Diagnostics pour les détails"
+}

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="connection_settings"
+        android:enabled="true"
+        android:shortcutShortLabel="@string/shortcut_settings"
+        android:shortcutLongLabel="@string/shortcut_settings">
+        <intent
+            android:action="com.brise.shell.OPEN_SETTINGS"
+            android:targetPackage="com.brise.shell"
+            android:targetClass="com.brise.shell.MainActivity" />
+    </shortcut>
+</shortcuts>

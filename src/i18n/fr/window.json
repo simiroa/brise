@@ -1,0 +1,8 @@
+{
+  "minimize": "Réduire",
+  "maximize": "Agrandir / Restaurer",
+  "close": "Fermer",
+  "always_on_top": "Toujours au premier plan",
+  "always_on_top_failed": "Impossible de modifier le mode Toujours au premier plan : {{msg}}",
+  "always_on_top_not_applied": "Le gestionnaire de fenêtres n’a pas appliqué l’état demandé"
+}

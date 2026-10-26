@@ -1,0 +1,6 @@
+{
+  "warn_title": "Organiser de nombreuses notes",
+  "warn_desc": "{{count}} notes × jusqu'à 45 s chacune = jusqu'à {{minutes}} min. Vous pouvez [Arrêter] en cours de route. Continuer ?",
+  "warn_confirm_btn": "Continuer",
+  "abort_cancelled_pending": "Arrêt demandé — l'appel en cours a aussi été annulé"
+}

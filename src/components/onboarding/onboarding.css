@@ -1,0 +1,1125 @@
+/* PLAN-2026-09-28 §3 — 온보딩 좌측 설명용 SVG 애니메이션.
+   transform/opacity/stroke-dashoffset만 움직인다. 색은 전부 tokens.css 변수. */
+
+/* PLAN-2026-09-28 §2 — 설정 4쪽 공통 2단 레이아웃(왼쪽 아트 / 오른쪽 입력). 좁은 창에서는
+   세로로 쌓되 입력을 먼저 읽을 수 있게 아트를 아래로 보낸다(row-reverse가 아니라
+   column-reverse: DOM 순서는 아트가 먼저라 포커스/스크린리더 순서는 그대로 두고, 시각 순서만 뒤집는다). */
+/* 본문(.modal-body)은 고정 높이 모달 안에서 남는 높이를 다 쓴다 — 행이 그 높이를 채우고(min-height)
+   내용은 세로 가운데에 놓아 짧은 쪽도 위쪽만 무겁지 않게 한다(오너 2026-09-29 스크린샷 점검). */
+.ob-setup-row {
+  display: flex;
+  gap: var(--space-6);
+  align-items: center;
+  min-height: 100%;
+}
+.ob-first {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  justify-content: center;
+  min-height: 100%;
+}
+/* 네 쪽은 전부 마운트된 채 hidden 속성으로 한 쪽만 보인다(OnboardingWizard.tsx). 위 display:flex 가
+   UA 의 [hidden]{display:none} 을 덮으므로 명시적으로 되돌린다 — 없으면 네 쪽이 한 화면에 다 보인다. */
+.ob-setup-row[hidden] {
+  display: none;
+}
+.ob-setup-row > .ob-setup-art {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.ob-setup-row > .ob-setup-fields {
+  flex: 1 1 320px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+@media (max-width: 680px) {
+  .ob-setup-row {
+    flex-direction: column-reverse;
+  }
+  .ob-setup-row > .ob-setup-art {
+    max-width: 220px;
+    margin: 0 auto;
+  }
+}
+
+/* ══ 목업 정렬(2026-09-29) — 타이포 위계 · 컨트롤 크기 · 프레임 패널 · 쪽별 레이아웃 ═════════════
+   색·간격·굵기·둥글기는 전부 토큰(굵기 400/600, 간격은 --space 사다리). 인라인 스타일 대신 여기 클래스로. */
+
+/* 컨트롤 키우기: --ctrl-h-lg 를 안쪽 열에서만 한 단 키운다(.field·.btn·.field-select·SegGroup·.icon-btn--lg 가
+   전부 이 변수를 읽는다). 값은 바깥 요소에서 먼저 계산해 안쪽에 넘긴다 — 같은 요소에서 자기 자신을
+   참조하면 순환이라 두 단으로 나눴다. */
+.ob-setup-row,
+.ob-first {
+  --ob-ctrl-h: calc(var(--ctrl-h-lg) + var(--space-3));
+}
+.ob-setup-row > .ob-setup-fields,
+.ob-first-form {
+  --ctrl-h-lg: var(--ob-ctrl-h);
+  /* Select·SegGroup 은 너비를 이 변수로 받는다(기본 220px) — 열 폭 전체로. */
+  --settings-ctrl-w: 100%;
+}
+.ob-setup-row > .ob-setup-fields :is(.field, .field-select, .btn, .icon-btn),
+.ob-first-form :is(.field, .field-select, .icon-btn) {
+  border-radius: var(--radius-md);
+}
+.ob-setup-row > .ob-setup-art {
+  flex: 1 1 260px;
+}
+.ob-setup-row > .ob-setup-fields {
+  flex: 1 1 360px;
+  gap: var(--space-5);
+}
+
+.ob-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+.ob-title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text);
+}
+.ob-title--hero {
+  font-size: var(--text-2xl);
+  line-height: 1.2;
+}
+.ob-sub {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-md);
+  color: var(--muted);
+  line-height: 1.5;
+}
+.ob-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+.ob-hint {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--muted);
+  line-height: 1.5;
+}
+.ob-hint--warn {
+  color: var(--danger-soft);
+}
+.ob-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+/* SegGroup 안쪽 띠는 인라인 radius 라 !important. */
+.ob-seg [role="radiogroup"] {
+  border-radius: var(--radius-md) !important;
+}
+/* 모양·톤은 앱 배지 한 벌 `.badge`(styles/tokens.css, GRILL-2026-10-19 R8) — 여기는 자리만. */
+.ob-pill {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+}
+
+/* 그림을 담는 둥근 패널(테마·기기 연결 왼쪽). */
+.ob-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-5);
+  box-sizing: border-box;
+  padding: var(--space-8) var(--space-7);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-lg);
+  background: var(--surface-sunken);
+}
+.ob-panel > .ob-art {
+  max-height: 240px;
+}
+.ob-panel > .ob-pill {
+  position: absolute;
+  top: var(--space-5);
+  left: var(--space-5);
+}
+
+/* 안내 상자(정보 아이콘 + 한 줄) */
+.ob-callout {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+.ob-callout > svg {
+  flex: none;
+  color: var(--accent);
+}
+
+/* 테두리 있는 카드(가져오기 · 기기 연결) */
+.ob-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  box-sizing: border-box;
+  padding: var(--space-6) var(--space-7);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-lg);
+}
+.ob-card[data-tone="active"] {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--divider));
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+.ob-card[data-dim="true"] {
+  opacity: 0.6;
+}
+.ob-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.ob-card-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+/* 테두리 안에 버튼이 붙는 한 줄(경로 · 주소) */
+.ob-inline-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  box-sizing: border-box;
+  min-height: var(--ctrl-h-lg);
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-5);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+.ob-inline-row > svg {
+  flex: none;
+  color: var(--muted);
+}
+.ob-inline-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-md);
+}
+.ob-inline-text--mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+.btn.ob-btn-inline {
+  flex: none;
+  min-height: calc(var(--ctrl-h-lg) - var(--space-3));
+  padding: 0 var(--space-5);
+  font-size: var(--text-sm);
+  border-radius: var(--radius-sm);
+}
+.ob-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ok);
+}
+
+/* ── 첫 화면 ── */
+.ob-first {
+  gap: var(--space-7);
+}
+.ob-first-top {
+  display: flex;
+  gap: var(--space-8);
+  align-items: center;
+  flex-wrap: wrap;
+}
+.ob-first-art {
+  flex: 1 1 300px;
+  min-width: 0;
+}
+.ob-first-art .ob-art {
+  max-height: 220px;
+  margin: 0 auto;
+}
+.ob-first-copy {
+  flex: 1 1 300px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+.ob-eyebrow {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.ob-first-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 0.62fr);
+  gap: var(--space-3);
+  align-items: end;
+}
+.ob-first-form > .ob-group {
+  gap: var(--space-2);
+}
+.ob-paths {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+.ob-path {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.ob-path-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-5) var(--space-6);
+  font: inherit;
+  text-align: left;
+  color: var(--text);
+  cursor: pointer;
+  background: transparent;
+  transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
+}
+.ob-path-card:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.ob-path-card:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--divider));
+}
+.ob-path-card[data-primary="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent), 0 6px 22px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.ob-path-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.ob-path-card[data-primary="true"] .ob-path-icon {
+  color: var(--accent);
+}
+.ob-path-title {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+.ob-path-go {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--divider);
+  color: var(--muted);
+}
+.ob-path-card[data-primary="true"] .ob-path-go {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--btn-primary-fg);
+}
+.ob-path-desc {
+  padding: 0 var(--space-3);
+}
+
+/* ── 테마 ── */
+.ob-theme-split {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-6);
+}
+.ob-theme-split > .ob-group {
+  flex: 1 1 0;
+}
+.ob-vr {
+  flex: none;
+  width: 1px;
+  background: var(--divider);
+}
+/* 강조색 줄(AccentRow bare) — 설정 화면 부품을 그대로 쓰되 폭은 내용만큼(칸 사이는 부품의 gap). */
+.ob-accent {
+  --settings-ctrl-w: fit-content;
+}
+
+/* ── 데이터 ── */
+.ob-contents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-6);
+}
+.ob-contents-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+.ob-contents-item > span:first-child {
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--accent);
+}
+
+/* ── 지역 ── */
+.ob-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.ob-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+.ob-preview-cards {
+  display: flex;
+  align-items: stretch;
+}
+.ob-pcard {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-md);
+}
+.ob-pcard-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+}
+.ob-pcard-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ob-pcard-val {
+  font-size: var(--text-md);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ob-pcard-cap {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+.ob-pconn {
+  flex: none;
+  align-self: center;
+  width: var(--space-5);
+  height: 1px;
+  background: var(--divider);
+}
+
+/* ── AI ── */
+.ob-ai-row {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr);
+  gap: var(--space-4);
+  align-items: end;
+}
+.ob-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-5);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-md);
+  font-size: var(--text-md);
+  color: var(--muted);
+}
+.ob-status[data-tone="ok"] {
+  border-color: color-mix(in srgb, var(--ok) 35%, transparent);
+  background: color-mix(in srgb, var(--ok) 9%, transparent);
+  color: var(--ok);
+}
+.ob-status[data-tone="danger"] {
+  border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  color: var(--danger);
+}
+.ob-status-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.ob-status[data-tone="ok"] .ob-status-text {
+  font-weight: 600;
+}
+
+/* ── 기기 연결: QR 네 모서리 ── */
+.ob-qr-frame {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 220px;
+  padding: var(--space-7);
+}
+.ob-qr-corner {
+  position: absolute;
+  width: var(--space-8);
+  height: var(--space-8);
+  border: 0 solid var(--accent);
+}
+.ob-qr-corner[data-c="tl"] {
+  top: 0;
+  left: 0;
+  border-top-width: 2px;
+  border-left-width: 2px;
+  border-top-left-radius: var(--radius-sm);
+}
+.ob-qr-corner[data-c="tr"] {
+  top: 0;
+  right: 0;
+  border-top-width: 2px;
+  border-right-width: 2px;
+  border-top-right-radius: var(--radius-sm);
+}
+.ob-qr-corner[data-c="bl"] {
+  bottom: 0;
+  left: 0;
+  border-bottom-width: 2px;
+  border-left-width: 2px;
+  border-bottom-left-radius: var(--radius-sm);
+}
+.ob-qr-corner[data-c="br"] {
+  bottom: 0;
+  right: 0;
+  border-bottom-width: 2px;
+  border-right-width: 2px;
+  border-bottom-right-radius: var(--radius-sm);
+}
+.ob-qr-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  text-align: center;
+}
+
+/* ── 가져오기 ── */
+.ob-import-left {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+.ob-import-left .ob-art {
+  max-height: 220px;
+}
+
+/* ── 요약 ── */
+.ob-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  min-height: 100%;
+  text-align: center;
+}
+.ob-done .ob-done-scene {
+  height: 88px;
+}
+.ob-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--space-4) var(--space-6);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-md);
+  text-align: left;
+}
+.ob-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  font-size: var(--text-sm);
+  color: var(--text);
+}
+.ob-chip:not(:first-child)::before {
+  content: "";
+  flex: none;
+  width: 3px;
+  height: 3px;
+  margin-right: var(--space-3);
+  border-radius: 50%;
+  background: var(--faint);
+}
+.ob-chip > svg {
+  flex: none;
+  color: var(--muted);
+}
+.ob-chip > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
+}
+.ob-strip-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+  padding-left: var(--space-5);
+  border-left: 1px solid var(--divider);
+  font-size: var(--text-sm);
+}
+.ob-divlabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  width: 100%;
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+.ob-divlabel::before,
+.ob-divlabel::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--divider);
+}
+.ob-feats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+  width: 100%;
+}
+.ob-feat {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-6);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-md);
+  text-align: left;
+}
+.ob-feat-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+.ob-feat-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+@media (max-width: 680px) {
+  .ob-paths,
+  .ob-feats {
+    grid-template-columns: 1fr;
+  }
+  .ob-first-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ob-art {
+  display: block;
+  overflow: visible;
+  /* 그림 높이 상한 — 인라인이 아니라 여기라야 .ob-panel/.ob-first-art 가 더 낮게 덮어쓸 수 있다. */
+  max-height: 320px;
+}
+.ob-art * {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* ══ WelcomeArt — 8초, 장면이 크로스페이드 없이 누적된다 ══════════════════════════════
+   잉크 점(.ob-art 밖, 항상 보임)만 빼고 전부 "쌓인다": 노트 → 타임라인 → 핀 → AI 연결
+   → 동글이가 사람 어깨에 착지(클라이맥스, squash&stretch) → 90~93%에 한꺼번에 걷히고
+   잉크 점만 남아 쉬다가(93~100%) 재시작한다. 각 그룹은 자기 등장 타이밍만 갖고, 부모
+   그룹(.ob-w-timeline/.ob-w-ai)이 공용 obWStay 로 리셋을 대신 맡는다. */
+@keyframes obWNote {
+  0%, 3% { opacity: 0; transform: scale(0.6); animation-timing-function: cubic-bezier(.34,1.56,.64,1); }
+  6% { opacity: 1; transform: scale(1.1); animation-timing-function: ease-out; }
+  9%, 90% { opacity: 1; transform: scale(1); animation-timing-function: ease-in; }
+  93%, 100% { opacity: 0; transform: scale(0.6); }
+}
+.ob-w-note { animation: obWNote 8s ease-out infinite both; }
+@keyframes obWNoteLine {
+  0%, 5% { stroke-dashoffset: 1; }
+  9%, 100% { stroke-dashoffset: 0; }
+}
+.ob-w-notelines line { stroke-dasharray: 1; animation: obWNoteLine 8s ease-out infinite both; }
+.ob-w-notelines line:nth-child(2) { animation-delay: 60ms; }
+.ob-w-notelines line:nth-child(3) { animation-delay: 120ms; }
+
+@keyframes obWStay {
+  0%, 90% { opacity: 1; }
+  93%, 100% { opacity: 0; }
+}
+.ob-w-timeline, .ob-w-ai { animation: obWStay 8s linear infinite both; }
+
+@keyframes obWTimelineLine {
+  0%, 14% { stroke-dashoffset: 1; }
+  19%, 100% { stroke-dashoffset: 0; }
+}
+.ob-w-timeline-line { stroke-dasharray: 1; animation: obWTimelineLine 8s ease-out infinite both; }
+@keyframes obWDots {
+  0%, 17% { opacity: 0; transform: scale(0.4); animation-timing-function: cubic-bezier(.34,1.56,.64,1); }
+  21% { opacity: 1; transform: scale(1.2); animation-timing-function: ease-out; }
+  23%, 100% { opacity: 1; transform: scale(1); }
+}
+.ob-w-dots circle { animation: obWDots 8s ease-out infinite both; }
+.ob-w-dots circle:nth-child(2) { animation-delay: 60ms; }
+.ob-w-dots circle:nth-child(3) { animation-delay: 120ms; }
+
+@keyframes obWPin {
+  0%, 25% { opacity: 0; transform: translateY(-38px); animation-timing-function: cubic-bezier(.34,1.56,.64,1); }
+  30% { opacity: 1; transform: translateY(4px); animation-timing-function: ease-out; }
+  32%, 90% { opacity: 1; transform: translateY(0); animation-timing-function: ease-in; }
+  93%, 100% { opacity: 0; transform: translateY(-38px); }
+}
+.ob-w-pin { animation: obWPin 8s ease-out infinite both; }
+
+@keyframes obWAiLink {
+  0%, 33% { stroke-dashoffset: 1; }
+  38%, 100% { stroke-dashoffset: 0; }
+}
+.ob-w-ailinks .ob-w-ailink { stroke-dasharray: 1; animation: obWAiLink 8s ease-out infinite both; }
+.ob-w-ailinks .ob-w-ailink:nth-child(2) { animation-delay: 70ms; }
+.ob-w-ailinks .ob-w-ailink:nth-child(3) { animation-delay: 140ms; }
+@keyframes obWAiNode {
+  0%, 36% { opacity: 0; transform: scale(0.4); animation-timing-function: cubic-bezier(.34,1.56,.64,1); }
+  40% { opacity: 1; transform: scale(1.2); animation-timing-function: ease-out; }
+  42%, 100% { opacity: 1; transform: scale(1); }
+}
+.ob-w-ainodes circle { animation: obWAiNode 8s ease-out infinite both; }
+.ob-w-ainodes circle:nth-child(2) { animation-delay: 70ms; }
+.ob-w-ainodes circle:nth-child(3) { animation-delay: 140ms; }
+
+@keyframes obWPerson {
+  0%, 37% { opacity: 0; }
+  42%, 90% { opacity: 1; animation-timing-function: ease-in; }
+  93%, 100% { opacity: 0; }
+}
+.ob-w-person { animation: obWPerson 8s ease-in-out infinite both; }
+
+/* 동글이: 두 번 뛰어(hop) 어깨에 착지 — 클라이맥스. translate 는 착지 위치(292,96) 기준 상대값. */
+@keyframes obWMascot {
+  0%, 43% { opacity: 0; transform: translate(-117px, 24px) scale(0.7); animation-timing-function: cubic-bezier(.34,1.56,.64,1); }
+  46% { opacity: 1; transform: translate(-117px, 24px) scale(0.9); }
+  49% { transform: translate(-72px, -11px) scale(1); animation-timing-function: ease-in-out; }
+  52% { transform: translate(-42px, 9px) scale(0.95); }
+  55% { transform: translate(-17px, -16px) scale(1); }
+  58% { transform: translate(0, 0) scale(1.28, 0.68); animation-timing-function: ease-out; }
+  61%, 90% { opacity: 1; transform: translate(0, 0) scale(1); animation-timing-function: ease-in; }
+  93%, 100% { opacity: 0; transform: translate(-117px, 24px) scale(0.7); }
+}
+.ob-w-mascot { animation: obWMascot 8s ease-out infinite both; }
+@keyframes obWBurst {
+  0%, 58% { opacity: 0; transform: scale(0.6); }
+  63% { opacity: 0.7; transform: scale(1.6); animation-timing-function: ease-out; }
+  70%, 100% { opacity: 0; transform: scale(2.6); }
+}
+.ob-w-burst { opacity: 0; animation: obWBurst 8s ease-out infinite both; }
+
+/* ══ 설정 4쪽 공통 — 4.4초 루프. 컨테이너(책·지도·카드·PC)는 고정해 두고, 움직이는
+   요소만 애니메이션한다. 기본(애니메이션 없음) 상태 = 완성 장면이라 reduced-motion 은
+   그대로 정지 컷이 된다. 등장은 overshoot(cubic-bezier(.34,1.56,.64,1))로 튀어 들어와
+   짧게 머물다 93~100%에 빠르게 걷힌다 — 느린 페이드가 아니다. ══════════════════════ */
+
+/* ── 1/4 내 공간(2026-09-29 재작업): 창이 지금 테마·표면 스타일을 실시간으로 그린다(OnboardingArt.tsx
+   SpaceArt) — 여기 CSS는 그 위 "노트북 성격"만 맡는다: 줄이 쓰이고 → 책갈피가 튕기며 떨어진다
+   (클라이맥스) → 강조 스와치가 한 번 팝+파동. 아크릴↔플랫 전환의 크로스페이드는 루프가 아니라
+   스토어 값이 바뀔 때만 한 번 일어나는 opacity 트랜지션이라 keyframes가 아니라 transition. */
+.ob-sp-pane { transition: opacity calc(var(--dur-med) * 2) ease; }
+
+@keyframes obSpType {
+  0%, 9% { stroke-dashoffset: 1; }
+  13%, 90% { stroke-dashoffset: 0; animation-timing-function: ease-in; }
+  95%, 100% { stroke-dashoffset: 1; }
+}
+.ob-sp-lines .ob-sp-type { stroke-dasharray: 1; animation: obSpType 4.4s ease-out infinite both; }
+.ob-sp-lines .ob-sp-type:nth-child(2) { animation-delay: 90ms; }
+.ob-sp-lines .ob-sp-type:nth-child(3) { animation-delay: 180ms; }
+
+/* 책갈피 — 클라이맥스: 튕기며 떨어진다. 근처 펄스가 같은 박자로 터진다. */
+@keyframes obSpBookmark {
+  0%, 55% { opacity: 0; transform: translateY(-44px); animation-timing-function: cubic-bezier(.34,1.56,.64,1); }
+  61% { opacity: 1; transform: translateY(4px); animation-timing-function: ease-out; }
+  63%, 93% { opacity: 1; transform: translateY(0); animation-timing-function: ease-in; }
+  100% { opacity: 0; transform: translateY(-44px); }
+}
+.ob-sp-bookmark { animation: obSpBookmark 4.4s ease-out infinite both; }
+@keyframes obSpBurst {
+  0%, 62% { opacity: 0; transform: scale(0.5); }
+  67% { opacity: 0.7; transform: scale(1.4); animation-timing-function: ease-out; }
+  74%, 100% { opacity: 0; transform: scale(2.4); }
+}
+.ob-sp-burst { opacity: 0; animation: obSpBurst 4.4s ease-out infinite both; }
+
+/* 강조 스와치 한 알 — 팝 + 파동. */
+@keyframes obSpSwatch {
+  0%, 73% { opacity: 0; transform: scale(0.5); animation-timing-function: cubic-bezier(.34,1.56,.64,1); }
+  78% { opacity: 1; transform: scale(1.18); animation-timing-function: ease-out; }
+  81%, 90% { opacity: 1; transform: scale(1); animation-timing-function: ease-in; }
+  95%, 100% { opacity: 0; transform: scale(0.5); }
+}
+.ob-sp-swatches circle { animation: obSpSwatch 4.4s ease-out infinite both; }
+@keyframes obSpRipple {
+  0%, 80% { opacity: 0; transform: scale(0.8); }
+  85% { opacity: 0.6; transform: scale(1); animation-timing-function: ease-out; }
+  93%, 100% { opacity: 0; transform: scale(2.2); }
+}
+.ob-sp-ripple { opacity: 0; animation: obSpRipple 4.4s ease-out infinite both; }
+
+/* ── 2/4 지역: 핀이 튕기며 지도에 꽂히고 → 파동이 번지고 → 달력 한 칸 + 타임라인 점이
+   같은 박자로 켜지고 → 시계 바늘이 빠르게 돌고 구름 뒤에서 해가 튀어나온다(클라이맥스) ── */
+@keyframes obRgPin {
+  0% { opacity: 0; transform: translateY(-40px); animation-timing-function: cubic-bezier(.34,1.56,.64,1); }
+  6% { opacity: 1; transform: translateY(4px); animation-timing-function: ease-out; }
+  8%, 93% { opacity: 1; transform: translateY(0); animation-timing-function: ease-in; }
+  100% { opacity: 0; transform: translateY(-40px); }
+}
+.ob-rg-pin { animation: obRgPin 4.4s ease-out infinite both; }
+@keyframes obRgRing {
+  0%, 8% { opacity: 0; transform: scale(0.6); }
+  14% { opacity: 0.55; transform: scale(1); animation-timing-function: ease-out; }
+  26%, 100% { opacity: 0; transform: scale(2); }
+}
+.ob-rg-ring { opacity: 0; animation: obRgRing 4.4s ease-out infinite both; }
+.ob-rg-ring2 { animation-delay: 150ms; }
+
+@keyframes obRgPop {
+  0%, 20% { opacity: 0; transform: scale(0.5); animation-timing-function: cubic-bezier(.34,1.56,.64,1); }
+  26% { opacity: 1; transform: scale(1.2); animation-timing-function: ease-out; }
+  29%, 90% { opacity: 1; transform: scale(1); animation-timing-function: ease-in; }
+  95%, 100% { opacity: 0; transform: scale(0.5); }
+}
+.ob-rg-calcell, .ob-rg-tldot { animation: obRgPop 4.4s ease-out infinite both; }
+
+@keyframes obRgHand {
+  0%, 34% { transform: rotate(-260deg); animation-timing-function: ease-in-out; }
+  44%, 93% { transform: rotate(0deg); }
+  100% { transform: rotate(-260deg); }
+}
+.ob-rg-hand { animation: obRgHand 4.4s ease-out infinite both; }
+@keyframes obRgSun {
+  0%, 40% { opacity: 0; transform: translate(15px, 13px) scale(0); animation-timing-function: cubic-bezier(.34,1.56,.64,1); }
+  48% { opacity: 1; transform: translate(0, 0) scale(1.15); animation-timing-function: ease-out; }
+  50%, 93% { opacity: 1; transform: translate(0, 0) scale(1); animation-timing-function: ease-in; }
+  100% { opacity: 0; transform: translate(15px, 13px) scale(0); }
+}
+.ob-rg-sun { animation: obRgSun 4.4s ease-out infinite both; }
+
+/* ── 3/4 AI(2026-09-29 재작업): 노트 카드(OnboardingArt.tsx AiArt의 .ob-ai-card, HTML 래퍼)가
+   실제 보더빔(tokens.css AI-GLOW › BEAM)을 두른다 — 그 색·회전은 여기서 건드리지 않는다.
+   안의 SVG는: 사용자 물음 버블 팝 → 타이핑 점 세 개 → AI 응답 버블이 팝하며 줄을 한 줄씩
+   그리고 → 확인 스탬프가 찍힌다(클라이맥스, "결과는 확인 후 반영") ── */
+.ob-ai-card {
+  width: 100%;
+  height: 260px;
+  max-height: 320px;
+  border-radius: var(--radius-lg);
+  background: var(--surface-sunken, var(--hover));
+  border: 1px solid var(--divider);
+  overflow: hidden;
+}
+
+@keyframes obAiUserBubble {
+  0%, 3% { opacity: 0; transform: scale(0.6); animation-timing-function: cubic-bezier(.34,1.56,.64,1); }
+  8% { opacity: 1; transform: scale(1.08); animation-timing-function: ease-out; }
+  11%, 90% { opacity: 1; transform: scale(1); animation-timing-function: ease-in; }
+  95%, 100% { opacity: 0; transform: scale(0.6); }
+}
+.ob-ai-userbubble { animation: obAiUserBubble 4.4s ease-out infinite both; }
+
+@keyframes obAiTypingShow {
+  0%, 12% { opacity: 0; }
+  16%, 36% { opacity: 1; }
+  40%, 100% { opacity: 0; }
+}
+@keyframes obAiDotBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+.ob-ai-dot { animation: obAiTypingShow 4.4s ease-out infinite both, obAiDotBounce 0.6s ease-in-out infinite; }
+.ob-ai-dot-b { animation-delay: 0s, 150ms; }
+.ob-ai-dot-c { animation-delay: 0s, 300ms; }
+
+@keyframes obAiReplyPop {
+  0%, 38% { opacity: 0; transform: scale(0.6); animation-timing-function: cubic-bezier(.34,1.56,.64,1); }
+  44% { opacity: 1; transform: scale(1.06); animation-timing-function: ease-out; }
+  47%, 90% { opacity: 1; transform: scale(1); animation-timing-function: ease-in; }
+  95%, 100% { opacity: 0; transform: scale(0.6); }
+}
+.ob-ai-reply { animation: obAiReplyPop 4.4s ease-out infinite both; }
+
+@keyframes obAiReplyLine {
+  0%, 47% { stroke-dashoffset: 1; }
+  52%, 90% { stroke-dashoffset: 0; animation-timing-function: ease-in; }
+  95%, 100% { stroke-dashoffset: 1; }
+}
+.ob-ai-reply .ob-ai-replyline { stroke-dasharray: 1; animation: obAiReplyLine 4.4s ease-out infinite both; }
+.ob-ai-reply .ob-ai-replyline:nth-child(3) { animation-delay: 70ms; }
+.ob-ai-reply .ob-ai-replyline:nth-child(4) { animation-delay: 140ms; }
+
+/* 확인 스탬프 — 클라이맥스: 튕기며 찍힌다(사용자 확인). */
+@keyframes obAiStamp {
+  0%, 58% { opacity: 0; transform: scale(0.4); animation-timing-function: cubic-bezier(.34,1.56,.64,1); }
+  64% { opacity: 1; transform: scale(1.2); animation-timing-function: ease-out; }
+  66%, 90% { opacity: 1; transform: scale(1); animation-timing-function: ease-in; }
+  95%, 100% { opacity: 0; transform: scale(0.4); }
+}
+.ob-ai-stamp { animation: obAiStamp 4.4s ease-out infinite both; }
+@keyframes obAiStampRing {
+  0%, 65% { opacity: 0; transform: scale(0.8); }
+  70% { opacity: 0.7; transform: scale(1); animation-timing-function: ease-out; }
+  80%, 100% { opacity: 0; transform: scale(1.7); }
+}
+.ob-ai-stampring { opacity: 0; animation: obAiStampRing 4.4s ease-out infinite both; }
+
+/* ── 4/4 기기 연결: 신호가 PC에서 번지고 → 휴대폰·노트북이 팝하고 → 점선 위로 요청·응답이
+   빠르게 오가고 → 자물쇠 걸쇠가 내려와 찰칵 잠긴다(클라이맥스, 보안). 복제 그림 없음. ── */
+@keyframes obCnRing {
+  0%, 4% { opacity: 0; transform: scale(0.7); }
+  8% { opacity: 0.5; transform: scale(1); animation-timing-function: ease-out; }
+  20%, 100% { opacity: 0; transform: scale(1.8); }
+}
+.ob-cn-ring { opacity: 0; animation: obCnRing 4.4s ease-out infinite both; }
+.ob-cn-ring2 { animation-delay: 150ms; }
+.ob-cn-ring3 { animation-delay: 300ms; }
+
+@keyframes obCnDevice {
+  0%, 2% { opacity: 0; transform: scale(0.5); animation-timing-function: cubic-bezier(.34,1.56,.64,1); }
+  8% { opacity: 1; transform: scale(1.15); animation-timing-function: ease-out; }
+  11%, 93% { opacity: 1; transform: scale(1); animation-timing-function: ease-in; }
+  100% { opacity: 0; transform: scale(0.5); }
+}
+.ob-cn-device { animation: obCnDevice 4.4s ease-out infinite both; }
+.ob-cn-device-b { animation-delay: 100ms; }
+
+@keyframes obCnLinkFade {
+  0%, 9% { opacity: 0; }
+  13%, 93% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes obCnMarch {
+  to { stroke-dashoffset: -18; }
+}
+.ob-cn-linkfade.ob-cn-march { stroke-dasharray: 4 5; animation: obCnLinkFade 4.4s ease-out infinite both, obCnMarch 900ms linear infinite; }
+
+@keyframes obCnPktA {
+  0%, 16% { opacity: 0; transform: translate(0, 0); }
+  20% { opacity: 1; }
+  38% { opacity: 1; transform: translate(28px, -24px); }
+  42%, 100% { opacity: 0; transform: translate(28px, -24px); }
+}
+@keyframes obCnPktB {
+  0%, 26% { opacity: 0; transform: translate(0, 0); }
+  30% { opacity: 1; }
+  48% { opacity: 1; transform: translate(-28px, 24px); }
+  52%, 100% { opacity: 0; transform: translate(-28px, 24px); }
+}
+@keyframes obCnPktC {
+  0%, 20% { opacity: 0; transform: translate(0, 0); }
+  24% { opacity: 1; }
+  42% { opacity: 1; transform: translate(-19px, -13px); }
+  46%, 100% { opacity: 0; transform: translate(-19px, -13px); }
+}
+@keyframes obCnPktD {
+  0%, 30% { opacity: 0; transform: translate(0, 0); }
+  34% { opacity: 1; }
+  52% { opacity: 1; transform: translate(19px, 13px); }
+  56%, 100% { opacity: 0; transform: translate(19px, 13px); }
+}
+.ob-cn-pkt { opacity: 0; }
+.ob-cn-pkt-a { animation: obCnPktA 1.6s ease-in-out infinite; }
+.ob-cn-pkt-b { animation: obCnPktB 1.6s ease-in-out infinite; }
+.ob-cn-pkt-c { animation: obCnPktC 1.6s ease-in-out infinite; }
+.ob-cn-pkt-d { animation: obCnPktD 1.6s ease-in-out infinite; }
+
+/* 자물쇠 — 클라이맥스: 걸쇠가 내려와 찰칵 잠긴다. */
+@keyframes obCnShackle {
+  0%, 44% { transform: translateY(-9px); animation-timing-function: cubic-bezier(.34,1.56,.64,1); }
+  50% { transform: translateY(1px); animation-timing-function: ease-out; }
+  52%, 93% { transform: translateY(0); animation-timing-function: ease-in; }
+  100% { transform: translateY(-9px); }
+}
+.ob-cn-shackle { animation: obCnShackle 4.4s ease-out infinite both; }
+@keyframes obCnLockFlash {
+  0%, 51% { opacity: 0; transform: scale(0.7); }
+  56% { opacity: 0.6; transform: scale(1); animation-timing-function: ease-out; }
+  66%, 100% { opacity: 0; transform: scale(1.5); }
+}
+.ob-cn-lockflash { opacity: 0; animation: obCnLockFlash 4.4s ease-out infinite both; }
+
+/* ── 데이터 관리(DataArt): 사진·문서가 점선 경로를 따라 떨어져 → 폴더가 받아내며 통통 튄다
+   (클라이맥스) → 링이 한 번 번쩍인다. ImportArt의 obImDrop/obImNotebook/obImBurst와 같은 어휘,
+   이름만 Dt로 구분. 책은 정적이라 별도 키프레임 없음. 4.4s 루프 ── */
+@keyframes obDtDrop {
+  0%, 2% { opacity: 0; transform: translateY(-56px) scale(0.7); animation-timing-function: ease-in; }
+  16% { opacity: 1; transform: translateY(2px) scale(1.08); animation-timing-function: cubic-bezier(.34,1.56,.64,1); }
+  19%, 90% { opacity: 1; transform: translateY(0) scale(1); animation-timing-function: ease-in; }
+  95%, 100% { opacity: 0; transform: translateY(-56px) scale(0.7); }
+}
+.ob-dt-drop { animation: obDtDrop 4.4s ease-out infinite both; }
+.ob-dt-drop-b { animation-delay: 130ms; }
+
+@keyframes obDtFolder {
+  0%, 20% { transform: scaleY(1); animation-timing-function: ease-out; }
+  24% { transform: scaleY(0.9); }
+  29%, 90% { transform: scaleY(1); animation-timing-function: ease-in; }
+  100% { transform: scaleY(1); }
+}
+.ob-dt-folder { animation: obDtFolder 4.4s ease-out infinite both; }
+@keyframes obDtBurst {
+  0%, 19% { opacity: 0; transform: scale(0.6); }
+  25% { opacity: 0.7; transform: scale(1.5); animation-timing-function: ease-out; }
+  35%, 100% { opacity: 0; transform: scale(2.4); }
+}
+.ob-dt-burst { opacity: 0; animation: obDtBurst 4.4s ease-out infinite both; }
+
+/* ── 기록 가져오기(ImportArt, export 뷰 좌측): 폴더·zip·Evernote풍 노트가 위에서 떨어져 →
+   노트북에 착지한다(순차) → 표지가 통통 튀며 받아낸다(클라이맥스) → 링이 한 번 번쩍인다.
+   복제 그림 없음, 4.4s 루프 ── */
+@keyframes obImDrop {
+  0%, 2% { opacity: 0; transform: translateY(-72px) scale(0.7); animation-timing-function: ease-in; }
+  16% { opacity: 1; transform: translateY(3px) scale(1.08); animation-timing-function: cubic-bezier(.34,1.56,.64,1); }
+  19%, 90% { opacity: 1; transform: translateY(0) scale(1); animation-timing-function: ease-in; }
+  95%, 100% { opacity: 0; transform: translateY(-72px) scale(0.7); }
+}
+.ob-im-drop { animation: obImDrop 4.4s ease-out infinite both; }
+.ob-im-drop-b { animation-delay: 110ms; }
+.ob-im-drop-c { animation-delay: 220ms; }
+
+/* 노트북 표지 — 클라이맥스: 착지를 받아내며 통통 튄다. */
+@keyframes obImNotebook {
+  0%, 20% { transform: scaleY(1); animation-timing-function: ease-out; }
+  24% { transform: scaleY(0.92); }
+  29%, 90% { transform: scaleY(1); animation-timing-function: ease-in; }
+  100% { transform: scaleY(1); }
+}
+.ob-im-notebook { animation: obImNotebook 4.4s ease-out infinite both; }
+@keyframes obImBurst {
+  0%, 19% { opacity: 0; transform: scale(0.6); }
+  25% { opacity: 0.7; transform: scale(1.5); animation-timing-function: ease-out; }
+  35%, 100% { opacity: 0; transform: scale(2.4); }
+}
+.ob-im-burst { opacity: 0; animation: obImBurst 4.4s ease-out infinite both; }
+
+/* ── 요약 화면(5번째 화면) 진입 축하 장면 — OnboardingWizard.tsx DoneCelebration.
+   글로우 + 체크는 등장, 작은 점들은 사방으로 흩어지며 사라진다. transform/opacity만, 색은
+   토큰(--accent/--muted)만 — 강조색을 바꿔도 그대로 어울린다. */
+@keyframes obDoneGlow {
+  0% { opacity: 0; transform: scale(0.6); }
+  60% { opacity: 1; transform: scale(1.15); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes obDoneCheck {
+  0%, 30% { opacity: 0; transform: scale(0.4); }
+  65% { opacity: 1; transform: scale(1.15); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes obDoneParticle {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.6); }
+  18% { opacity: 1; }
+  100% { opacity: 0; transform: var(--ob-done-p-to) scale(1); }
+}
+.ob-done-scene {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 148px;
+}
+.ob-done-glow {
+  position: absolute;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 35%, transparent) 0%, transparent 70%);
+  animation: obDoneGlow 0.6s ease-out both;
+}
+.ob-done-check {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: var(--btn-primary-fg);
+  animation: obDoneCheck 0.5s 0.15s cubic-bezier(.2,1.6,.4,1) both;
+}
+.ob-done-particle {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: obDoneParticle 0.9s ease-out both;
+}
+.ob-done-particle:nth-child(3n) {
+  background: var(--muted);
+  width: 4px;
+  height: 4px;
+}
+
+/* ── reduced motion: 완성된 정지 장면만 보인다 ───────────────────────────────────
+   모든 아트 클래스는 기본값(애니메이션 없을 때의 initial opacity:1/transform:none, 또는
+   명시적 opacity:0 인 파동·펄스·플래시·틴트류)이 이미 완성 장면이라 animation 만 끄면 된다 —
+   위 각 키프레임 블록의 주석 참고. */
+@media (prefers-reduced-motion: reduce) {
+  .ob-art * {
+    animation: none !important;
+  }
+  .ob-done-glow,
+  .ob-done-check,
+  .ob-done-particle {
+    animation: none !important;
+  }
+  .ob-done-glow,
+  .ob-done-check {
+    opacity: 1 !important;
+    transform: scale(1) !important;
+  }
+  .ob-done-particle {
+    opacity: 0 !important;
+  }
+}

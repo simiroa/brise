@@ -1,0 +1,65 @@
+# 커맨드 계약: note_snapshots — 에디터 자동저장 캐시 (규약: _conventions.yaml)
+# Owner spec (2026-08-01): "에디터에 1분마다 스냅샷처럼 자동저장하고 30분은 저장되도록 하자.
+# 노트가 열린동안만 기록하는 등 합리적으로 관리. 오래된 캐시는 날아가고." — a rolling LOCAL
+# working cache (like a scratch/lint cache), not a version-history feature. All http:false: this
+# is a per-device editor convenience, not user content worth round-tripping through the sync HTTP
+# surface — and it is device-local by design, so it's also excluded from export_all/
+# export_folder_bundle (specs/commands/export.yaml's brise-bundle.json only ever walks
+# notes→sections/sources/attachments; this table is never referenced there). 60s capture cadence
+# lives entirely in the frontend scheduler (stores/notes.ts) — there's no Rust-side timer; every
+# capture call also prunes that note's rows older than 30 minutes in the same transaction
+# (repo/snapshots.rs::capture, SNAPSHOT_WINDOW_MINUTES).
+
+commands:
+  note_snapshot_capture:
+    # 2026-10-07: capture 만 http:true — "PC 가 서버, 폰은 얇은 셸"(PLAN-2026-10-04) 이후 폰의 편집도 PC DB 에
+    # 쓰이므로, 그 편집에도 같은 1분 스냅샷 안전망이 걸려야 한다(폰 본문 덮어쓰기 사고가 2026-10-04·10-07 에
+    # 있었다). 인자는 note_id 하나·결과는 메타뿐이라 본문이 HTTP 로 오가지 않는다. 목록·조회·복원은 여전히
+    # 데스크톱 전용(http:false) — 복원 UI 는 PC 에 있다. 되돌리려면 이 줄을 false 로 + npm run gen.
+    http: true
+    input: { note_id: uuid }
+    output: SnapshotMeta
+    errors: [NOT_FOUND]
+    notes: |
+      Captures the note's current sections (id/name/kind/body_md) as one payload row, then
+      deletes that note's own snapshots older than 30 minutes (prune happens inside this same
+      call — no background job). NOT_FOUND if note_id doesn't exist.
+
+  note_snapshot_list:
+    http: false
+    input: { note_id: uuid }
+    output: "SnapshotListItem[]"
+    notes: |
+      Newest first. Empty array for an unknown/snapshot-less note_id (no NOT_FOUND — same
+      convention as section_create's sibling reads, an empty result is a valid answer here).
+
+  note_snapshot_get:
+    http: false
+    input: { id: uuid }
+    output: SnapshotDetail
+    errors: [NOT_FOUND]
+    notes: Full payload (every captured section's title/kind/body_md) for the modal's preview.
+
+  note_snapshot_restore:
+    http: false
+    input: { id: uuid }
+    output: RestoreResult
+    errors: [NOT_FOUND]
+    notes: |
+      Replaces the note's current section bodies with the snapshot's, matched by section_id:
+      still-existing sections get body_md overwritten in place (name/kind untouched — the user
+      may have renamed the tab since); sections the snapshot had but the note no longer does are
+      recreated (title/kind/body_md as captured, appended at the end); sections the note has now
+      but the snapshot didn't are left alone (only counted, in extra_count). Always captures a
+      safety snapshot of the CURRENT (pre-restore) state first via the same capture path as
+      note_snapshot_capture — so a restore is itself always undoable by restoring
+      safety_snapshot_id. Bumps notes.updated_at and publishes the usual note-write event.
+      Frontend caller must flushAll() (pending body-edit debounce) BEFORE calling this — otherwise
+      a pending edit can land after the restore and silently overwrite it.
+
+shared_types:
+  SnapshotMeta: "{ id: uuid, taken_at: timestamp }"
+  SnapshotListItem: "{ id: uuid, taken_at: timestamp, section_count: integer }"
+  SnapshotSection: "{ section_id: uuid, title: string, kind: string, body_md: string }"
+  SnapshotDetail: "{ id: uuid, note_id: uuid, taken_at: timestamp, sections: SnapshotSection[] }"
+  RestoreResult: "{ note_id: uuid, updated_at: timestamp, restored_count: integer, recreated_count: integer, extra_count: integer, safety_snapshot_id: uuid }"

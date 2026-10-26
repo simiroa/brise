@@ -1,0 +1,162 @@
+# 커맨드 계약: attachments — 규약: _conventions.yaml
+# 파일은 data_dir/attachments/{note_id}/ 로 복사 (원본 참조 아님) — 노트 삭제 시 디렉토리 정리
+commands:
+  attachment_add_file:
+    http: false   # file_path는 데스크톱 파일 다이얼로그가 고른 로컬 경로 — 원격 클라이언트엔 의미 없음
+    input:  { note_id: uuid, file_path: string,    # OS 파일 선택 다이얼로그는 프론트 plugin-dialog 사용
+              mode: "string|omit=copy" }           # "copy" = 보관소로 복사(설정의 저장 방식 적용),
+                                                   # "ref"  = 복사 없이 원본 절대경로만 참조
+    output: Attachment                             # kind는 확장자로 판별 (image/doc/audio)
+    errors: [NOT_FOUND, IO, VALIDATION]            # VALIDATION: 200MB 초과(copy 한정)
+    notes: >
+      mode="ref" 는 원본을 복사하지 않으므로 **크기 상한이 없다**(1GB pptx). 대신 앱이 원본의
+      수명을 보장하지 않는다 — 사용자가 옮기거나 지우면 열기가 NOT_FOUND 로 실패하고, 썸네일도
+      content_hash 도 만들지 않으며, 백업·내보내기 번들에도 담기지 않는다(파일이 앱 폴더 밖).
+      새 커맨드를 만들지 않고 인자를 하나 더한 이유: 노트/이벤트/썸네일 후속 단계가 완전히
+      같아서 커맨드를 쪼개면 그 배선이 통째로 복제된다. 저장 위치는 Attachment.ext_path 로
+      구분한다(참조면 ext_path 가 차고 rel_path 가 NULL).
+
+  attachment_add_bytes:
+    http: false   # 클립보드 붙여넣기(에디터 paste)는 데스크톱 앱 안의 로컬 이벤트 — file_path가
+                  # 없는 raw 바이트라 attachment_add_file과 별도 진입점이 필요하지만, 내부적으로는
+                  # OS temp에 잠깐 스테이징한 뒤 동일한 attachments::add_file 경로를 재사용한다
+                  # (해싱/썸네일/포지션 로직 중복 없음 — sync_server의 원격 업로드 핸들러와 동일 패턴).
+    input:  { note_id: uuid, name: string, data_base64: string }
+    output: Attachment                             # kind는 확장자로 판별 (image/doc/audio) — add_file과 동일
+    errors: [NOT_FOUND, VALIDATION, IO]            # VALIDATION: base64 디코드 실패 / 200MB 초과
+
+  attachment_add_link:
+    input:  { note_id: uuid, name: string, url: string }
+    output: Attachment                             # kind='link'
+    errors: [NOT_FOUND, VALIDATION]                # VALIDATION: URL 형식
+    agent:
+      kind: write
+      description: "노트에 웹 링크 첨부를 추가한다."
+      args:
+        note_id: "첨부를 추가할 대상 노트 id"
+        name: "링크 표시 이름"
+        url: "첨부할 웹 URL"
+
+  attachment_add_footnote:                         # 각주 (Wave 4) — 툴버블 입력창 / 선택 후 우클릭
+    input:  { note_id: uuid, text: string, anchor_text: "string|omit" }
+    output: Attachment                             # kind='footnote'
+    errors: [NOT_FOUND, VALIDATION, IO]            # VALIDATION: 빈 텍스트
+    notes: |
+      본문 쪽 앵커는 TipTap mark 가 이 행의 id 를 들고 있다(본문을 고쳐도 각주가 따라간다).
+      이 커맨드는 "각주 본문"만 만든다 — 앵커를 심는 것은 프런트 에디터의 몫.
+      저장은 attachment_add_note 와 같은 경로를 재사용한다(text 를 .md 로 저장, rel_path 보유).
+      kind 만 'footnote' 로 갈라 첨부 목록·미리보기·내보내기가 각주로 구분해 다룰 수 있게 한다.
+      anchor_text 는 각주를 단 시점의 선택 텍스트 발췌(표시용, url 컬럼) — 본문이 나중에 바뀌어도
+      "무엇에 달았던 각주인지" 를 목록에서 읽을 수 있게 하는 힌트일 뿐, 위치의 근거는 아니다
+      (위치의 근거는 언제나 본문의 mark 다).
+      내보내기는 이 행들을 GFM `[^n]` + 하단 정의로 변환한다 — 저장 형식은 첨부, 교환 형식은 각주.
+
+  attachment_add_internal:
+    input:  { note_id: uuid, target_note_id: string, name: string }
+    output: Attachment                             # kind='internal' (url=대상 note id)
+    errors: [NOT_FOUND, VALIDATION]                # NOT_FOUND: 대상 노트 없음, VALIDATION: 빈 이름
+
+  attachment_add_chart:                            # 시트 차트 라이브 참조 (PLAN-2026-09-20 §2.3, D5)
+    input:  { note_id: uuid, section_id: uuid, chart_id: string, name: string }
+    output: Attachment                             # kind='chart' (url="<section_id>#<chart_id>", 파일 없음)
+    errors: [NOT_FOUND, VALIDATION]                # NOT_FOUND: 노트/섹션/차트 없음, VALIDATION: 빈 이름 ·
+                                                   #   섹션이 sheet 가 아님 · 섹션이 다른 노트 소속(v1 천장)
+    notes: |
+      스냅샷이 아니라 **참조**다 — 프리뷰가 열 때마다 activeNote.sections 의 시트 본문에서 차트를
+      다시 그린다(셀이 바뀌면 값이 따라온다). 같은 url 의 chart 행이 이미 있으면 그 행을 그대로
+      돌려준다(멱등 — 편집기 토글·카드 버튼·어시스트가 한 함수를 부른다, 중복 행 없음).
+      섹션/차트가 지워져도 행은 남는다(D8) — 프리뷰가 "원본 없음" + 삭제 동사를 그린다. 갤러리
+      SQL 은 무변경(전체 탭 `kind <> 'internal'` 이 자동 포함, '차트' 탭은 `kind IN ('chart')`).
+
+  attachment_remove:
+    input:  { id: uuid }
+    output: { deleted: boolean }
+    errors: [NOT_FOUND]
+    notes: 행 삭제 커밋 후 파일 삭제 (실패 시 고아 파일 — 시작 시 청소 루틴이 수거)
+
+  attachment_rename:
+    input:  { id: uuid, name: string }
+    output: Attachment
+    errors: [NOT_FOUND, VALIDATION]                # VALIDATION: 빈 이름 · /  제어문자 · 255자 초과 · 확장자 변경 · 파일 첨부가 아님
+    notes: |
+      **표시 이름(attachments.name)만** 바꾼다 — 저장 파일·참조 원본은 건드리지 않는다(충돌 없음).
+      파일 첨부(image/doc/audio)만, 확장자는 그대로여야 한다(프리뷰 종류가 이름의 확장자로 갈린다).
+      같은 노트에서 옛 이름과 같던 sources.name 도 함께 바꾼다(pptx 첨부↔추출본 이름 결합 유지).
+
+  attachment_open:                # OS 기본 앱으로 열기 / 링크는 브라우저
+    http: false   # 데스크톱 OS 셸(opener)을 여는 명령 — 원격 클라이언트가 서버 머신의 OS UI를 열 수 없음
+    input:  { id: uuid }
+    output: { ok: boolean }
+    errors: [NOT_FOUND, IO]
+
+  attachment_reveal:              # OS 파일 탐색기에서 파일 위치 열기
+    http: false   # attachment_open과 동일 — OS 파일 탐색기를 여는 명령
+    input:  { id: uuid }
+    output: { ok: boolean }
+    errors: [NOT_FOUND, VALIDATION, IO]
+
+
+  attachment_fetch_reader:        # link 미리보기: iframe 대신 Rust 에서 fetch 후 텍스트만 추출
+    input:  { id: uuid }          # kind != 'link' 는 VALIDATION (attachment_open 과 동일한 kind 방어)
+    output: { title: "string|null", text: string, truncated: boolean }
+    errors: [NOT_FOUND, VALIDATION, IO]
+    notes: >
+      명시적 사용자 액션(미리보기 클릭)에서만 호출 — 백그라운드 프리페치 금지(원격 fetch 는
+      프라이버시 민감). 원격 스크립트 실행/서브리소스 로드 없음(HTML 파싱은 순수 텍스트 추출용,
+      추출 결과는 항상 plain text 로만 렌더링). 타임아웃 10s, 응답 5MB 캡, HTML 아닌
+      content-type 은 VALIDATION 으로 거부 — 프론트는 모든 실패를 동일하게 "브라우저에서 열기"
+      폴백 카드로 처리한다.
+
+  attachments_base_dir:
+    input: {}
+    output: { base: string }
+    errors: []
+    notes: For asset protocol convertFileSrc
+
+  attachment_read_text:           # 각주/노트/텍스트 문서(.md/.txt) 본문 읽기
+    input:  { id: uuid }
+    output: { text: string, truncated: boolean }
+    errors: [NOT_FOUND, VALIDATION, IO]
+    notes: >
+      텍스트 프리뷰(각주 목록·DocPreview)는 asset 프로토콜 fetch 로 파일을 읽고 있었는데,
+      Windows 에서 asset scope 가 전면 403 이라 "텍스트를 불러오지 못했습니다"로 죽어 있었다.
+      텍스트 본문은 파일 서빙이 아니라 데이터 조회 — 다른 조회처럼 IPC 로 나른다(브라우저
+      모드에서도 dispatch 경유로 동일 동작). VALIDATION: 텍스트 kind 아님(footnote/note/doc
+      의 .md/.txt 만). 1MB 초과는 **에러가 아니다** — 앞부분만 담고 `truncated: true` 로 알린다.
+      거부하면 2MB 짜리 로그가 첫 화면조차 안 보인다(상한의 목적은 메모리 보호이지 열람 차단이
+      아니다). 잘렸다는 사실을 안 알리면 사용자가 전체를 봤다고 믿으므로 플래그가 계약의 일부다.
+
+  attachment_thumbs:              # 노트 이미지 첨부 썸네일 경로 (없으면 생성, 실패는 목록에서 생략)
+    input:  { note_id: uuid }
+    output: { thumbs: "AttachmentThumb[]" }
+    errors: []
+    notes: >
+      rel_path 는 attachments/ 기준 상대경로(원본과 동일 형태, 관례 `{rel_path}.thumb.jpg`).
+      디코드/인코드는 DB 락 밖에서 수행 — 프론트는 노트 로드를 막지 않고 이 커맨드를 별도로 호출한다.
+      생성 실패·svg·비이미지는 thumbs 에 포함하지 않는다(타일은 플레이스홀더).
+
+  attachment_query:               # Gallery: 워크스페이스 전체 첨부 바운디드 페이지
+    input:
+      kinds: "string[]?"          # omit/[] = internal 제외 전 kind; 그 외 exact kind 필터
+      query: "string?"            # attachments.name 부분 문자열 (LIKE, ESCAPE; FTS 아님)
+      offset: "integer|omit=0"
+      limit: "integer|omit=60"    # 하드 상한 300 (ATTACHMENT_QUERY_MAX_LIMIT)
+      workspace_id: "uuid|omit=active"
+    output: { items: "AttachmentQueryItem[]" }
+    errors: []
+    notes: >
+      total 없음 — UI 는 page.length < limit 일 때까지 페이지. 정렬은 a.created_at DESC, a.id DESC
+      (삽입 최신순; notes 조인은 title/year 용, 정렬 아님). internal 기본 제외. 썸네일 생성 없음 —
+      thumb_rel_path 는 디스크에 이미 있을 때만 Some. 이름 검색은 여기만(notes_fts 확장 금지).
+
+  attachment_thumbs_for_ids:      # Gallery: 화면에 보이는 id 만 썸네일 생성
+    input:  { ids: "uuid[]" }     # 상한 ATTACHMENT_QUERY_MAX_LIMIT (300)
+    output: { thumbs: "AttachmentThumb[]" }
+    errors: []
+    notes: >
+      attachment_thumbs 와 동일 규칙: DB 락은 행 읽기에만, 디코드는 spawn_blocking.
+      노트 스코프 attachment_thumbs 는 AttachmentsBar 용으로 유지.
+
+shared_types:
+  AttachmentThumb: "{ id: uuid, rel_path: string }"
+  AttachmentQueryItem: "{ id: uuid, note_id: uuid, name: string, kind: string, rel_path: string|null, size_bytes: integer|null, created_at: timestamp, title: string, year: integer, thumb_rel_path: string|null }"

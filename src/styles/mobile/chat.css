@@ -1,0 +1,25 @@
+/* mobile/chat.css — chat view touch targets (MobileChatView wraps the desktop SidebarChat) */
+
+/* Chat view (MobileChatView wraps the desktop SidebarChat, built for a mouse sidebar): lift its
+   icon buttons, composer buttons and session-bar buttons to the 48px touch minimum. Visual glyph
+   size is unchanged — only the hit box grows. */
+.mobile-chat .pet-chat__icon-btn,
+.mobile-chat .pet-chat__composer button,
+.mobile-chat .pet-chat__session-bar button,
+.mobile-chat .pet-chat__failure button {
+  min-width: 48px;
+  min-height: 48px;
+}
+/* The wider buttons must not push the composer past the screen edge: let the textarea shrink, and
+   use the phone gutter instead of the desktop --sidebar-pad (pet.css .pet-chat--sidebar …). */
+/* The send/tools column is a fixed 28px with 32px-capped buttons on desktop (pet.css) — widen the
+   column to the touch minimum and lift the cap so the 48px buttons sit inside the field. */
+.mobile-chat .pet-chat__field-actions { width: 48px; }
+.mobile-chat .pet-chat__field-actions .pet-chat__send,
+.mobile-chat .pet-chat__field-actions .pet-chat__icon-btn { max-height: none; }
+.mobile-chat .pet-chat--sidebar .pet-chat__session-bar,
+.mobile-chat .pet-chat--sidebar .pet-chat__list,
+.mobile-chat .pet-chat--sidebar .pet-chat__composer {
+  padding-left: var(--m-gutter);
+  padding-right: var(--m-gutter);
+}

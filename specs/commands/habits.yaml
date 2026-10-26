@@ -1,0 +1,102 @@
+# 커맨드 계약: habits (규약·공용 타입: _conventions.yaml)
+#
+# PLAN-2026-09-30-briefing.md W1 — 브리핑 "오늘의 습관". 시간 없이 날짜별로 체크하는 습관.
+# timeline_routines(반복 일정 블록)·routine_*(노트-연결 반복 체크)와 별개 개념 — SSOT: specs/db/schemas/habits.sql.
+# 날짜는 전부 로컬일 'YYYY-MM-DD' 문자열(서버는 시계를 보지 않는다 — 기준일은 항상 클라이언트가 준다).
+commands:
+  habit_list:
+    http: false   # 로컬 UI 성격 — timeline_routine_* 과 같은 판단.
+    input:
+      workspace_id: "uuid|omit=active"
+    output:
+      habits: "Habit[]"   # 보관(archived)되지 않은 것만, position asc
+    notes: repo::habits::list
+
+  habit_create:
+    http: false
+    input:
+      workspace_id: "uuid|omit=active"
+      title: string
+      icon: "string?"
+      hue: "integer?"
+      weekday_mask: "integer(1..127)|omit=127"
+      time_of_day: "string|omit=any"   # 'any'|'morning'|'evening'
+    output: Habit
+    errors: [VALIDATION]   # 빈 제목, weekday_mask 범위 밖
+    notes: position = 이 노트북 기존 습관 중 MAX+1(맨 뒤 append).
+
+  habit_update:
+    http: false
+    input:
+      id: uuid
+      title: "string|omit"
+      icon: "string?"      # 항상 통째 교체(null=지움) — Tauri 는 생략/null 을 구분하지 못한다(timeline_routine_update 의 color_hue 와 같은 자세).
+      hue: "integer?"
+      weekday_mask: "integer(1..127)|omit"
+      time_of_day: "string|omit"   # 'any'|'morning'|'evening' — 생략=유지
+      archived: "boolean|omit"   # true=보관(목록·집계에서 빠짐, 체크 이력 보존), false=복원
+    output: Habit
+    errors: [NOT_FOUND, VALIDATION]
+    notes: title·weekday_mask·archived 는 제공된 필드만 반영, icon/hue 는 항상 보낸 값으로 교체.
+
+  habit_delete:
+    http: false
+    input: { id: uuid }
+    output: { ok: boolean }
+    notes: "체크 이력까지 CASCADE 삭제. id 가 없어도 { ok: true } (멱등)."
+
+  habit_reorder:
+    http: false
+    input:
+      workspace_id: "uuid|omit=active"
+      ids: "uuid[]"   # 새 순서. 이 노트북 소속이 아닌 id 는 무시.
+    output: { ok: boolean }
+    notes: ids 의 인덱스가 곧 position. 목록에 없는 습관은 뒤로 밀린다(상대 순서 유지).
+
+  habit_check:
+    http: false
+    input:
+      habit_id: uuid
+      day: string   # 'YYYY-MM-DD' 로컬일
+      done: boolean
+    output: { habit_id: uuid, day: string, done: boolean }
+    errors: [NOT_FOUND, VALIDATION]   # 없는 습관, day 형식 오류
+    notes: 멱등 — done=true 를 두 번 보내도 행 하나(최초 done_at 유지), done=false 는 행 삭제.
+
+  habit_week:
+    http: false
+    input:
+      workspace_id: "uuid|omit=active"
+      day: string   # 기준일 'YYYY-MM-DD' 로컬일
+      week_start: "string?"   # 'monday'|'sunday'=기준일이 속한 주 창, null/생략=롤링 7일
+    output: HabitWeek
+    errors: [VALIDATION]
+    notes: |
+      week_start 없으면 기준일로 끝나는 7일(day-6 .. day, 오래된 날 먼저), 있으면 기준일이 속한 주의 첫날..+6일
+      (기준일 이후 칸은 scheduled=false — 분모에서 제외). today=기준일. 위 창을 습관별로 집계한다. 각 날짜는
+      scheduled(그 요일이 weekday_mask 에 든다)·done(체크 행 있음). 습관별 rate = 체크된 scheduled 일 /
+      scheduled 일(scheduled 0 이면 null), 전체 total_* 는 합산. 보관된 습관은 제외.
+      streak = 현재 연속 일수: 기준일부터 거슬러 weekday_mask 에 든 날만 센다(쉬는 요일은 끊지도 더하지도 않음), 기준일이
+      미체크면 어제부터 세어 끊지 않는다, 상한 365일(창 7일 밖 체크도 서버가 집계).
+
+  habit_history:
+    http: false
+    input:
+      workspace_id: "uuid|omit=active"
+      from: string   # 'YYYY-MM-DD' 로컬일
+      to: string     # 'YYYY-MM-DD' 로컬일, from <= to, 양끝 포함 최대 400일
+    output: HabitHistory
+    errors: [VALIDATION]   # 날짜 형식, from > to, 범위 400일 초과
+    notes: |
+      repo::habits::history — 브리핑 "오늘의 습관" 12주 히트맵. from..to 의 모든 날(오래된 날 먼저)을 하루 한 칸으로
+      집계한다. 보관된 습관은 제외. scheduled = 그 요일이 weekday_mask 에 든 습관 수, 단 습관을 만든 날(created_at 을
+      기기 로컬 날짜로) 이전은 세지 않는다 — 생성 전 날을 0% 로 칠하지 않게(habit_week 은 이걸 보지 않는다).
+      done = 그날 scheduled 인 습관 중 체크 행이 있는 수(쉬는 요일·생성 전 체크는 넣지 않아 done <= scheduled).
+
+shared_types:
+  Habit: "{ id: uuid, workspace_id: uuid, title: string, icon: string|null, hue: integer|null, weekday_mask: integer, position: integer, archived_at: timestamp|null, created_at: timestamp, time_of_day: string }"
+  HabitDay: "{ day: string, scheduled: boolean, done: boolean }"
+  HabitWeekRow: "{ habit: Habit, days: HabitDay[], done_count: integer, scheduled_count: integer, rate: number|null, streak: integer }"
+  HabitWeek: "{ from: string, to: string, today: string, rows: HabitWeekRow[], done_count: integer, scheduled_count: integer, rate: number|null }"
+  HabitHistoryDay: "{ day: string, scheduled: integer, done: integer }"
+  HabitHistory: "{ from: string, to: string, days: HabitHistoryDay[] }"

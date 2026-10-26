@@ -1,0 +1,134 @@
+/* mobile/settings.css — Settings tab rows + reminder-sheet chip rows */
+
+/* ── Settings tab ────────────────────────────────────────────────────────────────────────────
+ * Three SPECIES of element, deliberately not interchangeable (the previous pass made all three the
+ * same `.mobile-settings-row`, so nothing told the user what a tap would do):
+ *   (1) `.mobile-settings-row` — tappable control. Label left, current value + chevron right.
+ *   (2) `.mobile-settings-row` inside the AI group — same control shape, pencil affordance, and the
+ *       group carries a `.mobile-settings-section-hint` saying the rows are editable.
+ *   (3) `.mobile-settings-info` — read-only. NOT a button, no hairline, no chevron, muted throughout
+ *       so it can't be mistaken for a control that just happens to not respond.
+ * Groups read as groups via `.mobile-settings-section` (a real gap between blocks), not via a label
+ * whose spacing was barely bigger than the row gap. ─────────────────────────────────────────── */
+
+.mobile-list.mobile-settings { padding: 0 0 env(safe-area-inset-bottom); }
+
+.mobile-settings-section { padding-top: var(--space-7); }
+.mobile-settings-section-label { padding: 0 var(--m-gutter) var(--space-2); color: var(--m-accent-text); }
+.mobile-settings-section-hint {
+  padding: 0 var(--m-gutter) var(--space-3);
+  color: var(--faint);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.mobile-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  width: 100%;
+  min-height: 48px;
+  padding: var(--space-4) var(--m-gutter);
+  border: none;
+  border-bottom: 1px solid var(--divider);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-md);
+  text-align: left;
+  cursor: pointer;
+}
+.mobile-settings-row > span:first-child {
+  flex: 1;
+  min-width: 0;
+  /* Label wraps instead of ellipsizing (plan §3⑦/D9): at 크게 the value column used to squeeze it
+     into a double ellipsis. The VALUE keeps its single ellipsis. */
+  overflow-wrap: anywhere;
+}
+.mobile-settings-row:active { background: var(--hover); }
+.mobile-settings-row--add { color: var(--m-accent-text); font-weight: 600; }
+
+.mobile-settings-row input[type="checkbox"]:not(.mobile-switch) {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  accent-color: var(--accent);
+}
+.mobile-settings-time {
+  flex: none;
+  width: min(9.5rem, 45%);
+}
+.mobile-settings-time:disabled { opacity: 0.45; }
+.mobile-settings-row:disabled { opacity: 0.45; }
+
+/* Right-hand side of a control row: the current value (so the state is readable without opening
+ * anything) and/or the affordance icons. Muted on purpose — the VALUE is the information, the
+ * chevron is only a hint, and neither should shout louder than the setting's own label. */
+.mobile-settings-value {
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--text-md);
+}
+.mobile-settings-value > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mobile-settings-value svg { flex: none; color: var(--faint); }
+
+/* Reminder sheet (docs/PLAN-schedule-system.md §7.7/W5-6) — chip-group rows for repeat frequency /
+ * weekday / offset presets. `.mobile-settings-row` (above) already covers the plain label+control
+ * rows (toggle, time input, interval); this is only for the rows whose control is a WRAPPING set of
+ * options rather than one control, so the label needs its own line above the wrap. Chips reuse the
+ * same flat-pill language as `.mobile-badge` with an added selected state — no native `<select>`
+ * here on purpose (see MobileDiagramAuthoring's shape picker: a native select pops its OS chrome
+ * over this app's dark surface, same reason applies to a handful of text options). */
+.mobile-schedule-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--divider);
+}
+.mobile-schedule-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.mobile-schedule-chip {
+  min-height: 48px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.mobile-schedule-chip[data-selected="true"] {
+  background: var(--accent);
+  color: var(--on-solid);
+  border-color: var(--accent);
+}
+
+.mobile-settings-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-height: 40px;
+  padding: var(--space-2) var(--m-gutter);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.mobile-settings-info span:last-child { color: var(--faint); font-variant-numeric: tabular-nums; }
+
+/* The tab bar is a flex sibling, so it never draws over the list — but with zero bottom padding the
+ * last row's hairline butted straight into the tab bar's own top hairline and read as cut off. */
+.mobile-settings-bottom-space { height: var(--space-8); }

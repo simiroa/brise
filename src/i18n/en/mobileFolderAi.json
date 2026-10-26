@@ -1,0 +1,21 @@
+{
+  "fab_label": "Add note or folder",
+  "dial_folder": "Add folder",
+  "dial_note": "Add note",
+  "dial_ai": "AI",
+  "sheet_title": "AI folder cleanup",
+  "inbox_organize": "Organize Inbox notes",
+  "inbox_hint": "AI reviews each Inbox note and suggests a folder and tags",
+  "inbox_empty": "No notes in the Inbox",
+  "inbox_missing": "This notebook has no Inbox folder",
+  "folder_organize": "Pick a folder to organize",
+  "folder_hint": "AI reviews each note in the chosen folder and suggests changes",
+  "folder_pick_title": "Folder to organize",
+  "folder_no_notes": "This folder has no notes",
+  "plan_desktop_only": "Available in the desktop app only",
+  "loading": "Loading notes…",
+  "more_title": "Notes to organize",
+  "more_hint": "Loaded the {{n}} most recently edited notes. There may be more.",
+  "more_start": "Organize these {{n}}",
+  "more_load": "Load more (up to {{n}})"
+}

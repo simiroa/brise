@@ -1,0 +1,52 @@
+/* mobile/search-history.css — search screen recent-history list (MobileSearch.tsx) */
+
+/* MobileSearch — 최근 검색 이력 목록 (재사용 안내: components/SearchHistoryDropdown.tsx 는
+ * onMouseDown/onMouseEnter 의존이라 여기서 재사용하지 않는다 — 새 마크업). */
+.mobile-search-history-row-wrap { display: flex; align-items: center; }
+.mobile-search-history-row {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-md);
+  text-align: left;
+  cursor: pointer;
+}
+.mobile-search-history-row svg { flex: none; color: var(--faint); }
+.mobile-search-history-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mobile-search-history-remove {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: none;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+}
+.mobile-search-history-clear {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  margin-top: var(--space-2);
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--text-xs);
+  text-align: center;
+  cursor: pointer;
+}

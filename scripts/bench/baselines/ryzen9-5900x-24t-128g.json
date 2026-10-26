@@ -1,0 +1,652 @@
+{
+  "schema": 1,
+  "kind": "wall",
+  "fingerprint": {
+    "machine": "ryzen9-5900x-24t-128g",
+    "os": "10.0.26300"
+  },
+  "toolchains": {
+    "webview2": "154.0.4258.62",
+    "rust": "rustc 1.96.0 (ac68faa20 2026-05-25)"
+  },
+  "updated": {
+    "date": "2026-10-23",
+    "commit": "9f7142dd",
+    "reason": "first baseline (2026-10-23 · run 1 of 3, runs 2-3 must PASS)"
+  },
+  "metrics": {
+    "boot.booted_ms": {
+      "value": 560.9,
+      "unit": "ms",
+      "stat": "median",
+      "runs": 7,
+      "spread": 135.95,
+      "workload": {
+        "notes": 10000,
+        "seed": 1,
+        "seed_year": 2026
+      },
+      "fingerprint_keys": [
+        "machine",
+        "os",
+        "webview2"
+      ],
+      "fingerprint": {
+        "machine": "ryzen9-5900x-24t-128g",
+        "os": "10.0.26300",
+        "webview2": "154.0.4258.62"
+      },
+      "direction": "lower",
+      "tolerance": {
+        "rel": 0.25,
+        "abs": 150
+      },
+      "gate": false
+    },
+    "boot.ipc_before_show": {
+      "value": 34,
+      "unit": "count",
+      "stat": "median",
+      "runs": 7,
+      "spread": 4,
+      "workload": {
+        "notes": 10000,
+        "seed": 1,
+        "seed_year": 2026
+      },
+      "fingerprint_keys": [
+        "machine",
+        "os",
+        "webview2"
+      ],
+      "fingerprint": {
+        "machine": "ryzen9-5900x-24t-128g",
+        "os": "10.0.26300",
+        "webview2": "154.0.4258.62"
+      },
+      "direction": "lower",
+      "tolerance": {
+        "rel": 0,
+        "abs": 3
+      },
+      "gate": false
+    },
+    "boot.js_before_show_kb": {
+      "value": 3220.113281,
+      "unit": "KB",
+      "stat": "median",
+      "runs": 7,
+      "spread": 6.421387,
+      "workload": {
+        "notes": 10000,
+        "seed": 1,
+        "seed_year": 2026
+      },
+      "fingerprint_keys": [
+        "machine",
+        "os",
+        "webview2"
+      ],
+      "fingerprint": {
+        "machine": "ryzen9-5900x-24t-128g",
+        "os": "10.0.26300",
+        "webview2": "154.0.4258.62"
+      },
+      "direction": "lower",
+      "tolerance": {
+        "rel": 0.02,
+        "abs": 10
+      },
+      "gate": false
+    },
+    "boot.nav_to_show_ms": {
+      "value": 365.2,
+      "unit": "ms",
+      "stat": "median",
+      "runs": 7,
+      "spread": 49.8,
+      "workload": {
+        "notes": 10000,
+        "seed": 1,
+        "seed_year": 2026
+      },
+      "fingerprint_keys": [
+        "machine",
+        "os",
+        "webview2"
+      ],
+      "fingerprint": {
+        "machine": "ryzen9-5900x-24t-128g",
+        "os": "10.0.26300",
+        "webview2": "154.0.4258.62"
+      },
+      "direction": "lower",
+      "tolerance": {
+        "rel": 0.1,
+        "abs": 40
+      },
+      "gate": true
+    },
+    "boot.process_to_show_ms": {
+      "value": 868.399902,
+      "unit": "ms",
+      "stat": "median",
+      "runs": 7,
+      "spread": 54.649902,
+      "workload": {
+        "notes": 10000,
+        "seed": 1,
+        "seed_year": 2026
+      },
+      "fingerprint_keys": [
+        "machine",
+        "os",
+        "webview2"
+      ],
+      "fingerprint": {
+        "machine": "ryzen9-5900x-24t-128g",
+        "os": "10.0.26300",
+        "webview2": "154.0.4258.62"
+      },
+      "direction": "lower",
+      "tolerance": {
+        "rel": 0.1,
+        "abs": 60
+      },
+      "gate": true
+    },
+    "boot.rust_setup_ms": {
+      "value": 611,
+      "unit": "ms",
+      "stat": "median",
+      "runs": 7,
+      "spread": 25.5,
+      "workload": {
+        "notes": 10000,
+        "seed": 1,
+        "seed_year": 2026
+      },
+      "fingerprint_keys": [
+        "machine",
+        "os",
+        "webview2"
+      ],
+      "fingerprint": {
+        "machine": "ryzen9-5900x-24t-128g",
+        "os": "10.0.26300",
+        "webview2": "154.0.4258.62"
+      },
+      "direction": "lower",
+      "tolerance": {
+        "rel": 0.2,
+        "abs": 20
+      },
+      "gate": true
+    },
+    "boot.webview_ready_ms": {
+      "value": 503.199951,
+      "unit": "ms",
+      "stat": "median",
+      "runs": 7,
+      "spread": 15.949951,
+      "workload": {
+        "notes": 10000,
+        "seed": 1,
+        "seed_year": 2026
+      },
+      "fingerprint_keys": [
+        "machine",
+        "os",
+        "webview2"
+      ],
+      "fingerprint": {
+        "machine": "ryzen9-5900x-24t-128g",
+        "os": "10.0.26300",
+        "webview2": "154.0.4258.62"
+      },
+      "direction": "lower",
+      "tolerance": null,
+      "gate": false
+    },
+    "export.docx_ms_300img": {
+      "value": 388.3761,
+      "unit": "ms",
+      "stat": "median",
+      "runs": 5,
+      "spread": 1.1455,
+      "workload": {
+        "images": 300,
+        "jpg": 200,
+        "webp": 100
+      },
+      "fingerprint_keys": [
+        "machine",
+        "os",
+        "rust"
+      ],
+      "fingerprint": {
+        "machine": "ryzen9-5900x-24t-128g",
+        "os": "10.0.26300",
+        "rust": "rustc 1.96.0 (ac68faa20 2026-05-25)"
+      },
+      "direction": "lower",
+      "tolerance": {
+        "rel": 0.15,
+        "abs": 40
+      },
+      "gate": true
+    },
+    "export.docx_peak_heap_mb": {
+      "value": 164.747553,
+      "unit": "MB",
+      "stat": "median",
+      "runs": 5,
+      "spread": 0,
+      "workload": {
+        "images": 300,
+        "jpg": 200,
+        "webp": 100
+      },
+      "fingerprint_keys": [
+        "machine",
+        "os",
+        "rust"
+      ],
+      "fingerprint": {
+        "machine": "ryzen9-5900x-24t-128g",
+        "os": "10.0.26300",
+        "rust": "rustc 1.96.0 (ac68faa20 2026-05-25)"
+      },
+      "direction": "lower",
+      "tolerance": {
+        "rel": 0.05,
+        "abs": 8
+      },
+      "gate": true
+    },
+    "export.hwpx_ms_300img": {
+      "value": 397.9209,
+      "unit": "ms",
+      "stat": "median",
+      "runs": 5,
+      "spread": 9.5139,
+      "workload": {
+        "images": 300,
+        "jpg": 200,
+        "webp": 100
+      },
+      "fingerprint_keys": [
+        "machine",
+        "os",
+        "rust"
+      ],
+      "fingerprint": {
+        "machine": "ryzen9-5900x-24t-128g",
+        "os": "10.0.26300",
+        "rust": "rustc 1.96.0 (ac68faa20 2026-05-25)"
+      },
+      "direction": "lower",
+      "tolerance": {
+        "rel": 0.15,
+        "abs": 40
+      },
+      "gate": true
+    },
+    "export.hwpx_peak_heap_mb": {
+      "value": 164.756823,
+      "unit": "MB",
+      "stat": "median",
+      "runs": 5,
+      "spread": 0.315548,
+      "workload": {
+        "images": 300,
+        "jpg": 200,
+        "webp": 100
+      },
+      "fingerprint_keys": [
+        "machine",
+        "os",
+        "rust"
+      ],
+      "fingerprint": {
+        "machine": "ryzen9-5900x-24t-128g",
+        "os": "10.0.26300",
+        "rust": "rustc 1.96.0 (ac68faa20 2026-05-25)"
+      },
+      "direction": "lower",
+      "tolerance": {
+        "rel": 0.05,
+        "abs": 8
+      },
+      "gate": true
+    },
+    "index.bigram_mb_10k": {
+      "value": 1.646592,
+      "unit": "MB",
+      "workload": {
+        "body_scale": 1,
+        "notes": 10000
+      },
+      "fingerprint_keys": [
+        "machine",
+        "os",
+        "rust"
+      ],
+      "fingerprint": {
+        "machine": "ryzen9-5900x-24t-128g",
+        "os": "10.0.26300",
+        "rust": "rustc 1.96.0 (ac68faa20 2026-05-25)"
+      },
+      "direction": "lower",
+      "tolerance": {
+        "rel": 0.03,
+        "abs": 0.05
+      },
+      "gate": true
+    },
+    "index.db_mb_10k": {
+      "value": 38.416384,
+      "unit": "MB",
+      "workload": {
+        "body_scale": 1,
+        "notes": 10000
+      },
+      "fingerprint_keys": [
+        "machine",
+        "os",
+        "rust"
+      ],
+      "fingerprint": {
+        "machine": "ryzen9-5900x-24t-128g",
+        "os": "10.0.26300",
+        "rust": "rustc 1.96.0 (ac68faa20 2026-05-25)"
+      },
+      "direction": "lower",
+      "tolerance": {
+        "rel": 0.03,
+        "abs": 1
+      },
+      "gate": false
+    },
+    "interact.dashboard_tab_ms": {
+      "value": 555.3,
+      "unit": "ms",
+      "stat": "median",
+      "runs": 5,
+      "spread": 20.5,
+      "workload": {
+        "notes": 10000,
+        "seed": 1,
+        "seed_year": 2026
+      },
+      "fingerprint_keys": [
+        "machine",
+        "os",
+        "webview2"
+      ],
+      "fingerprint": {
+        "machine": "ryzen9-5900x-24t-128g",
+        "os": "10.0.26300",
+        "webview2": "154.0.4258.62"
+      },
+      "direction": "lower",
+      "tolerance": {
+        "rel": 0.25,
+        "abs": 10
+      },
+      "gate": false
+    },
+    "interact.dashboard_tab_paint_ms": {
+      "value": 10.8,
+      "unit": "ms",
+      "stat": "median",
+      "runs": 5,
+      "spread": 2.5,
+      "workload": {
+        "notes": 10000,
+        "seed": 1,
+        "seed_year": 2026
+      },
+      "fingerprint_keys": [
+        "machine",
+        "os",
+        "webview2"
+      ],
+      "fingerprint": {
+        "machine": "ryzen9-5900x-24t-128g",
+        "os": "10.0.26300",
+        "webview2": "154.0.4258.62"
+      },
+      "direction": "lower",
+      "tolerance": {
+        "rel": 0.25,
+        "abs": 15
+      },
+      "gate": true
+    },
+    "interact.note_open_ms": {
+      "value": 153.6,
+      "unit": "ms",
+      "stat": "median",
+      "runs": 5,
+      "spread": 1.8,
+      "workload": {
+        "notes": 10000,
+        "seed": 1,
+        "seed_year": 2026
+      },
+      "fingerprint_keys": [
+        "machine",
+        "os",
+        "webview2"
+      ],
+      "fingerprint": {
+        "machine": "ryzen9-5900x-24t-128g",
+        "os": "10.0.26300",
+        "webview2": "154.0.4258.62"
+      },
+      "direction": "lower",
+      "tolerance": {
+        "rel": 0.2,
+        "abs": 15
+      },
+      "gate": true
+    },
+    "interact.search_box_ms": {
+      "value": 302.4,
+      "unit": "ms",
+      "stat": "median",
+      "runs": 5,
+      "spread": 15,
+      "workload": {
+        "notes": 10000,
+        "seed": 1,
+        "seed_year": 2026
+      },
+      "fingerprint_keys": [
+        "machine",
+        "os",
+        "webview2"
+      ],
+      "fingerprint": {
+        "machine": "ryzen9-5900x-24t-128g",
+        "os": "10.0.26300",
+        "webview2": "154.0.4258.62"
+      },
+      "direction": "lower",
+      "tolerance": {
+        "rel": 0.2,
+        "abs": 15
+      },
+      "gate": true
+    },
+    "interact.settings_open_ms": {
+      "value": 340.300049,
+      "unit": "ms",
+      "stat": "median",
+      "runs": 5,
+      "spread": 34.599609,
+      "workload": {
+        "notes": 10000,
+        "seed": 1,
+        "seed_year": 2026
+      },
+      "fingerprint_keys": [
+        "machine",
+        "os",
+        "webview2"
+      ],
+      "fingerprint": {
+        "machine": "ryzen9-5900x-24t-128g",
+        "os": "10.0.26300",
+        "webview2": "154.0.4258.62"
+      },
+      "direction": "lower",
+      "tolerance": {
+        "rel": 0.2,
+        "abs": 20
+      },
+      "gate": true
+    },
+    "search.box_worst_ms": {
+      "value": 71.6873,
+      "unit": "ms",
+      "stat": "median",
+      "runs": 5,
+      "spread": 1.3998,
+      "workload": {
+        "body_scale": 4,
+        "iters": 1,
+        "notes": 10000,
+        "queries": 7
+      },
+      "fingerprint_keys": [
+        "machine",
+        "os",
+        "rust"
+      ],
+      "fingerprint": {
+        "machine": "ryzen9-5900x-24t-128g",
+        "os": "10.0.26300",
+        "rust": "rustc 1.96.0 (ac68faa20 2026-05-25)"
+      },
+      "direction": "lower",
+      "tolerance": {
+        "rel": 0.2,
+        "abs": 2
+      },
+      "gate": true
+    },
+    "search.question_avg_ms": {
+      "value": 13.480671,
+      "unit": "ms",
+      "stat": "median",
+      "runs": 5,
+      "spread": 0.229057,
+      "workload": {
+        "body_scale": 1,
+        "iters": 1,
+        "notes": 10000,
+        "queries": 7
+      },
+      "fingerprint_keys": [
+        "machine",
+        "os",
+        "rust"
+      ],
+      "fingerprint": {
+        "machine": "ryzen9-5900x-24t-128g",
+        "os": "10.0.26300",
+        "rust": "rustc 1.96.0 (ac68faa20 2026-05-25)"
+      },
+      "direction": "lower",
+      "tolerance": {
+        "rel": 0.2,
+        "abs": 1
+      },
+      "gate": true
+    },
+    "search.question_worst_ms": {
+      "value": 18.4333,
+      "unit": "ms",
+      "stat": "median",
+      "runs": 5,
+      "spread": 1.0816,
+      "workload": {
+        "body_scale": 1,
+        "iters": 1,
+        "notes": 10000,
+        "queries": 7
+      },
+      "fingerprint_keys": [
+        "machine",
+        "os",
+        "rust"
+      ],
+      "fingerprint": {
+        "machine": "ryzen9-5900x-24t-128g",
+        "os": "10.0.26300",
+        "rust": "rustc 1.96.0 (ac68faa20 2026-05-25)"
+      },
+      "direction": "lower",
+      "tolerance": {
+        "rel": 0.25,
+        "abs": 2
+      },
+      "gate": true
+    },
+    "write.fts_upsert_10k_ms": {
+      "value": 1.184824,
+      "unit": "ms",
+      "stat": "median",
+      "runs": 5,
+      "spread": 0.076678,
+      "workload": {
+        "body_scale": 4,
+        "iters": 50,
+        "notes": 10000
+      },
+      "fingerprint_keys": [
+        "machine",
+        "os",
+        "rust"
+      ],
+      "fingerprint": {
+        "machine": "ryzen9-5900x-24t-128g",
+        "os": "10.0.26300",
+        "rust": "rustc 1.96.0 (ac68faa20 2026-05-25)"
+      },
+      "direction": "lower",
+      "tolerance": {
+        "rel": 0.25,
+        "abs": 0.5
+      },
+      "gate": true
+    },
+    "write.fts_upsert_1k_ms": {
+      "value": 1.021462,
+      "unit": "ms",
+      "stat": "median",
+      "runs": 5,
+      "spread": 0.037486,
+      "workload": {
+        "body_scale": 4,
+        "iters": 50,
+        "notes": 1000
+      },
+      "fingerprint_keys": [
+        "machine",
+        "os",
+        "rust"
+      ],
+      "fingerprint": {
+        "machine": "ryzen9-5900x-24t-128g",
+        "os": "10.0.26300",
+        "rust": "rustc 1.96.0 (ac68faa20 2026-05-25)"
+      },
+      "direction": "lower",
+      "tolerance": null,
+      "gate": false
+    }
+  }
+}

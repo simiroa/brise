@@ -1,0 +1,33 @@
+# SSaC: search_notes 의사결정 흐름 (계약: commands/search.yaml)
+flows:
+  search_notes:
+    steps:
+      - validate: year_from <= year_to → 아니면 VALIDATION
+      - normalize: query.trim(); FTS 특수문자("*, ^ 등)는 이스케이프하여 리터럴 취급
+      - branch:
+          - if: query == ''
+            then: SELECT notes WHERE year BETWEEN :from AND :to
+          - else: |
+              SELECT n.* FROM notes_fts f JOIN notes n ON n.id = f.note_id
+              WHERE notes_fts MATCH :escaped_query AND n.year BETWEEN :from AND :to
+      - sort: year ASC (디자인 사양)
+      - map: NoteSummary[] (tag_names 포함, has_image = image 첨부 존재)
+    decisions:
+      - "토크나이저 = trigram (migrations.rs V10): 각 공백 구분 토큰을 큰따옴표 리터럴 구문으로
+         MATCH하면 그 자체가 부분 문자열 매치가 되므로(trigram 본질) 더 이상 '*' 접두 연산자를
+         쓰지 않는다 — 3글자 고정 토큰에 접두는 의미가 없다. 다중 토큰은 공백 결합으로 암묵적
+         AND(기존 시맨틱스 보존, 영문 검색 무회귀)"
+      - 검색 스코프는 활성 노트북으로 한정
+      - 빈 결과는 정상 응답 (에러 아님) — UI가 "No notes in this range." 표시
+      - 범위가 전체 스팬(UI 기본 900–1960)과 같으면 year 술어 자체를 생략
+        → 연대가 스팬 밖(BC, 1960 이후)인 노트도 텍스트 검색에는 잡힌다 (엣지: DDL은 -9999..9999 허용)
+      - "CJK 재현율 보강 (R8): trigram MATCH는 3글자 미만 토큰을 원리상 인덱싱할 수 없다 — 쿼리가
+         1~2자이거나 FTS 0건이면 title/body/source_body/tag LIKE '%q%' 결과를 UNION 후 dedupe
+         (본문/출처까지 커버 — title/tag만 보던 과거엔 본문에만 있는 매치를 놓쳤다)"
+
+  fts_upsert:                    # 저장소 계층 내부 함수 — 모든 노트 변경 트랜잭션에서 호출
+    steps:
+      - aggregate: sections.body_md ('\n\n' join), sources.body ('\n\n' join), tags (' ' join)
+      - exec: DELETE FROM notes_fts WHERE note_id = :id; INSERT INTO notes_fts(...)
+    decisions:
+      - 트리거 대신 계층 갱신 (사유: fts.sql 주석) — 누락 시 invariant-fts-sync 테스트가 검출

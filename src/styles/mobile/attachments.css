@@ -1,0 +1,111 @@
+/* mobile/attachments.css — attachments: thumbs, rows, audio, fullscreen viewer */
+
+/* ── Attachments (images/audio/files) — renders inside .mobile-note-body-wrap, below the editor
+ * content, so it scrolls with the note instead of claiming its own fixed strip. In-flow, no
+ * background of its own (SURFACE PRESET CONTRACT) — only the fullscreen image viewer floats, and
+ * that one paints its own scrim directly (a photo viewer needs to go edge-to-edge black regardless
+ * of theme, same posture as the sync QR's always-light card, see SyncSection.tsx). ─────────────── */
+
+.mobile-attach-section {
+  margin-top: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.mobile-attach-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+
+.mobile-attach-thumb {
+  aspect-ratio: 1;
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.mobile-attach-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mobile-attach-thumb--pending { cursor: default; border-style: dashed; }
+
+.mobile-attach-pending-badge {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  text-align: center;
+  padding: var(--space-2);
+}
+
+.mobile-attach-retry {
+  border: none;
+  background: transparent;
+  color: var(--danger);
+  font: inherit;
+  font-size: var(--text-xs);
+  text-align: center;
+  padding: var(--space-2);
+  min-height: 48px;
+  min-width: 48px;
+  cursor: pointer;
+}
+
+.mobile-attach-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 48px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-sm);
+}
+.mobile-attach-row-main { flex: 1; min-width: 0; }
+.mobile-attach-row-name {
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mobile-attach-row-meta { font-size: var(--text-xs); color: var(--muted); margin-top: var(--space-2xs); }
+.mobile-attach-audio { display: block; width: 100%; margin-top: var(--space-2); }
+.mobile-attach-download {
+  flex: none;
+  color: var(--m-accent-text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: none;
+  padding: 0 var(--space-3);
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.mobile-attach-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mobile-attach-viewer-img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.mobile-attach-viewer-close {
+  position: absolute;
+  top: calc(var(--space-4) + env(safe-area-inset-top));
+  right: var(--space-4);
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  font-size: var(--m-title);
+  line-height: 1;
+  cursor: pointer;
+}

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- S1-4c 실측(2026-10-04, S22): cleartext 를 localhost 로만 좁히면 프록시→PC 구간과 연결 테스트(HttpURLConnection)가
+     "Cleartext HTTP traffic to 100.x not permitted" 로 죽는다 — NSC 는 앱 코드의 HttpURLConnection 에도 적용된다.
+     NSC 는 CIDR 을 못 쓰고 도메인은 설정으로 받을 수 없으므로(타깃 IP 는 런타임 입력) 앱 전체 cleartext 를 허용하고,
+     WebView 쪽 제한은 ShellWebClient.kt 의 ShellWebViewClient(shouldOverrideUrlLoading / shouldInterceptRequest)가 맡는다
+     (http 는 프록시 origin http://localhost:<port> 로만 나갈 수 있음).
+     ponytail: 천장 — 앱 코드의 다른 HttpURLConnection 은 이 설정으로 보호되지 않는다. 지금은 프록시 업스트림(고정 origin)과
+     연결 테스트뿐. 더 조이려면 업스트림을 raw Socket 으로 다시 짜면 NSC 를 피해 localhost 로 좁힐 수 있다. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

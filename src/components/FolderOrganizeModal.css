@@ -1,0 +1,172 @@
+/* 2단: 왼쪽 = 폴더 속성, 오른쪽 = 노트 목록 + 그 목록에 거는 AI 동작.
+   좁아지면(작은 창·큰 --fs) 한 단으로 접힌다 — 카드는 maxWidth:100% 라 실제로 좁아진다. */
+.folder-organize-grid {
+  display: grid;
+  /* 정확히 반반. 구분선이 모달의 한가운데에 서려면 **열 사이 간격이 0** 이어야 한다 —
+     column-gap 이 있으면 두 번째 열은 중앙에서 gap/2 만큼 오른쪽에서 시작하고, 그 왼쪽
+     테두리가 곧 구분선이라 그만큼 밀려 보인다. 그래서 숨 쉴 자리는 gap 대신 두 열이 각자
+     안쪽 padding 으로 갖는다(왼쪽 padding-right, 오른쪽 padding-left). 카드의 좌우 여백은
+     22px 로 대칭이므로 그리드 내용 상자의 한가운데 = 모달의 한가운데다. */
+  grid-template-columns: 1fr 1fr;
+  column-gap: 0;
+  row-gap: var(--space-7);
+  /* stretch: 노트 상자가 왼쪽 열 높이만큼 늘어나 두 단의 아래끝이 같이 떨어진다.
+     높이는 **왼쪽 열이 정한다** — 노트 개수는 상자 안에서만 흡수되므로(아래 .folder-organize-notes
+     의 flex-basis 0) 노트가 3개든 200개든 모달 높이가 같다. min-height 는 바닥값이다: 미분류
+     폴더는 제외 스위치가 없어 왼쪽 열이 짧고, 그대로 두면 목록이 두 줄만 보인다. */
+  align-items: stretch;
+  min-height: 300px;
+}
+/* 오른쪽은 테두리 상자라 내용이 padding 만큼 안으로 들어간다 — 왼쪽에 같은 값을 줘야 두 열의
+   첫 줄이 같은 높이에서 시작한다(이게 없으면 10px 씩 어긋난다). */
+.folder-organize-main { padding-top: var(--space-4); padding-right: var(--space-7); }
+@media (max-width: 720px) {
+  .folder-organize-grid { grid-template-columns: minmax(0, 1fr); }
+  .folder-organize-main { padding-right: 0; }
+  .folder-organize-notes-pane {
+    border-left: 0;
+    padding-left: 0;
+    border-top: 1px solid var(--line);
+    padding-top: var(--space-6);
+  }
+}
+
+.folder-organize-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.folder-organize-hint {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  margin: 0;
+}
+
+/* 이름·아이콘·색 한 줄. 아이콘 버튼이 현재 색으로 칠해져 있어 색 미리보기를 겸하고,
+   누르면 색·아이콘 팝오버가 함께 열린다. */
+.folder-organize-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+/* 왼쪽 열 자체가 이름칸에 맞춰 좁아졌으므로(모달 폭 660) 입력칸은 그냥 열을 채운다 —
+   고정 260px 로 잡아두면 열보다 짧아 오른쪽에 설명 없는 여백이 남는다. */
+.folder-organize-identity .field { flex: 1 1 auto; min-width: 0; }
+/* .icon-swatch 의 기본 38px 은 팔레트 격자용이다. 여기서는 옆의 .field/.btn 과 같은 줄에 서므로
+   같은 컨트롤 높이를 쓴다 — 3px 차이가 두 열의 첫 줄을 어긋나 보이게 했다. */
+.folder-organize-identity .icon-swatch { min-height: var(--ctrl-h-lg); }
+.folder-organize-swatches { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.folder-organize-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--divider);
+  padding: 0;
+  cursor: pointer;
+  background: transparent;
+}
+.folder-organize-swatch[data-on="true"] {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* 제외 스위치 두 줄을 한 그리드로 묶는다 — 라벨 열은 max-content, 스위치는 그 바로 뒤.
+   행마다 space-between 으로 벌리던 예전 방식은 열이 넓어질수록 라벨과 스위치가 멀어져서
+   짝이 안 읽혔다. 여기서는 두 스위치가 가장 긴 라벨 뒤에 서로 맞춰 서고, 라벨 길이가 다른
+   로케일에서도 매직 넘버 없이 성립한다. */
+.folder-organize-switches {
+  display: grid;
+  grid-template-columns: max-content auto;
+  align-items: center;
+  gap: var(--space-3) var(--space-5);
+  margin-bottom: var(--space-5);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+/* 라벨 + "?" 는 한 덩어리로 붙어 있어야 어느 항목의 설명인지가 읽힌다. */
+.folder-organize-field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.folder-organize-help {
+  display: inline-flex;
+  align-items: center;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: var(--muted);
+  opacity: 0.7;
+  filter: none;
+  cursor: help;
+  transition: color var(--dur-fast), filter var(--dur-fast), opacity var(--dur-fast);
+}
+.folder-organize-help:hover {
+  color: var(--text);
+  opacity: 1;
+  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--accent) 45%, transparent));
+}
+
+/* 노트 쪽은 상자가 아니라 세로 구분선으로만 갈린다 — 상자는 테두리와 안쪽 여백만큼 폭을
+   먹으면서 "여기부터 저기까지"를 이미 말하는 선의 일을 두 번 한다. 선 하나면 오른쪽 폭을
+   전부 목록과 버튼에 줄 수 있다. */
+.folder-organize-notes-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-left: 1px solid var(--line);
+  padding-left: var(--space-7);
+}
+/* 헤더는 상자 위에 고정, 액션은 아래에 고정, 목록만 그 사이에서 늘어나며 스스로 스크롤한다.
+   max-height 가 있어야 노트가 많아도 모달 전체가 길어지지 않고 상자 안에서 스크롤된다. */
+.folder-organize-pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex: none;
+  margin-bottom: var(--space-3);
+}
+.folder-organize-notes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  /* flex-basis 0 이 핵심이다 — auto 였을 때는 목록의 내용 높이가 상자를 밀어 올려서, 노트가
+     많아지면 상자(=모달)가 통째로 길어지고 max-height 에 닿아서야 스크롤이 시작됐다.
+     0 이면 목록은 자기 내용 높이를 주장하지 않고 남는 자리만 채우므로, 높이는 항상 상자가
+     정하고 넘치는 만큼은 여기서 스크롤된다. */
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+}
+/* 행 모양·hover·선택 배경은 tokens.css 의 .menu-row / .menu-item 이 소유한다(트리·메뉴와 같은
+   것). 여기서는 목록 안에서 쓰기 위한 폭과 정렬만 얹는다. */
+.folder-organize-notes li .menu-row {
+  gap: var(--space-3);
+  padding: 0 var(--space-3);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+.folder-organize-notes span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 고르는 곳 바로 아래에 실행 버튼 — 예전엔 모달 푸터라 목록에서 멀었다. 둘은 한 줄에 반씩
+   나눠 선다. 좁은 로케일에서는 버튼 안에서 두 줄로 접히게 두고 줄을 깨지 않는다. */
+.folder-organize-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex: none;
+  margin-top: var(--space-4);
+}
+.folder-organize-actions .btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
+}

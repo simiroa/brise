@@ -1,0 +1,140 @@
+/* 브리핑 창(#/briefing) — PLAN-2026-10-19 재작성. 토큰만 사용. 굵기 400/600, 위계는 크기(--text-title·--text-section·--text-clock).
+   표면(R1-B·C): 바깥 래퍼 = 메인 창과 같은 틴트 `.content-canvas`, 안의 스크롤러 = `.brf-root`. 카드 = 공용 `.card`(칠 없음).
+   in-flow 컨트롤은 바탕을 칠하지 않는다 — 호버만 --hover. 떠 있는 것은 축·달력 쪽 기존 .overlay 를 그대로 쓴다. */
+
+.brf-canvas { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.brf-root { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: var(--space-5); padding: var(--space-6) var(--space-7) var(--space-5); overflow: hidden; color: var(--text); }
+
+/* 2열: 왼쪽 오늘 축 ≈58%(남은 높이를 다 쓴다), 오른쪽 ≈42%(자기 스크롤). */
+.brf-cols { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 58fr) minmax(0, 42fr); gap: var(--space-6); }
+.brf-side { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-5); padding-right: var(--space-1); }
+
+/* 좁은 창(<640px, §3.2): 한 열 · 문서 전체가 구른다 · 축은 화면 높이의 대부분. */
+@media (max-width: 639px) {
+  .brf-root { overflow-y: auto; padding: var(--space-5); }
+  .brf-cols { flex: none; grid-template-columns: minmax(0, 1fr); }
+  .brf-today { height: 72vh; min-height: 420px; }
+  .brf-side { overflow: visible; padding-right: 0; }
+}
+
+/* 카드 — 공용 .card 위에 안쪽 여백과 머리만. */
+.brf-card { padding: var(--space-5) var(--space-6); display: flex; flex-direction: column; gap: var(--space-3); }
+.brf-card-head { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.brf-card-title { margin: 0; font-family: var(--font-heading); font-size: var(--text-section); font-weight: 600; color: var(--text); }
+.brf-card-aside { margin-left: auto; display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--text-muted); }
+.brf-gear { opacity: 0.4; transition: opacity var(--dur-fast) ease-out; }
+.brf-card:hover .brf-gear, .brf-gear:focus-visible { opacity: 1; }
+.brf-collapse-head { width: 100%; border: 0; background: transparent; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; }
+.brf-state { font-size: var(--text-sm); color: var(--text-muted); display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); }
+.brf-link-btn { border: 0; background: transparent; color: var(--accent-text); font: inherit; font-size: var(--text-sm); cursor: pointer; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
+.brf-link-btn:hover { color: var(--text); }
+.brf-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* 머리줄 A — 날짜 · 시각 · 날씨 · 인사 */
+.brf-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--space-3) var(--space-7); min-width: 0; }
+.brf-head-date { font-family: var(--font-heading); font-size: var(--text-title); font-weight: 600; }
+.brf-head-clock { font-size: var(--text-clock); font-variant-numeric: tabular-nums; color: var(--text); line-height: var(--lh-tight); }
+.brf-head-weather { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-md); color: var(--text); }
+.brf-head-weather svg { align-self: center; }
+.brf-head-temp { font-size: var(--text-lg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.brf-head-range { font-variant-numeric: tabular-nums; }
+.brf-head-rain { font-size: var(--text-sm); color: var(--text-muted); }
+.brf-muted { color: var(--text-muted); }
+.brf-head-greeting { margin-left: auto; font-size: var(--text-md); color: var(--text-muted); min-width: 0; }
+
+/* 머리줄 B — 문구 */
+.brf-quote { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--space-2) var(--space-4); min-width: 0; margin-top: calc(-1 * var(--space-2)); }
+.brf-quote-text { margin: 0; flex: 1 1 320px; min-width: 0; font-family: var(--font-editor); font-size: var(--text-md); font-style: italic; color: var(--text); line-height: 1.45; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.brf-quote-muted { font-style: normal; color: var(--text-muted); font-size: var(--text-sm); }
+.brf-quote-meta { display: inline-flex; align-items: center; gap: var(--space-2); flex: none; }
+.brf-quote-source { font-size: var(--text-xs); color: var(--text-tertiary); text-decoration: none; }
+.brf-quote-meta .icon-btn { opacity: 0.5; }
+.brf-quote:hover .brf-quote-meta .icon-btn, .brf-quote-meta .icon-btn:focus-visible { opacity: 1; }
+
+/* 왼쪽 — 오늘 축 */
+.brf-today { min-height: 0; }
+.brf-today:focus { outline: none; } /* tabIndex=-1 — 포커스 받이일 뿐, 링은 안의 버튼·칩이 그린다 */
+.brf-nav { display: flex; align-items: center; gap: var(--space-2); flex: none; min-width: 0; }
+.brf-nav-day { margin: 0; display: inline-flex; align-items: baseline; gap: var(--space-3); font-family: var(--font-heading); font-size: var(--text-section); font-weight: 600; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.brf-nav-rel { font-size: var(--text-sm); color: var(--accent-text); }
+.brf-nav-today { margin-left: var(--space-2); min-height: var(--ctrl-h); padding: 0 var(--space-4); font-size: var(--text-sm); }
+.brf-nav-add { margin-left: auto; min-height: var(--ctrl-h); padding: 0 var(--space-4); font-size: var(--text-sm); }
+.brf-hourly { display: flex; gap: var(--space-5); flex: none; overflow: hidden; font-size: var(--text-xs); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.brf-hourly-cell { display: inline-flex; align-items: center; gap: var(--space-1); }
+.brf-hourly-h { color: var(--text-tertiary); }
+.brf-draft { display: flex; align-items: center; gap: var(--space-3); flex: none; padding: var(--space-2) var(--space-3); border: 1px dashed var(--accent); border-radius: var(--radius-sm); }
+.brf-draft-range { font-size: var(--text-sm); color: var(--accent-text); font-variant-numeric: tabular-nums; flex: none; }
+.brf-draft-input { flex: 1 1 auto; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--text-md); outline: none; }
+.brf-draft-hint { font-size: var(--text-2xs); color: var(--text-tertiary); flex: none; }
+@media (max-width: 639px) { .brf-draft-hint { display: none; } }
+
+/* 오른쪽 — 작은 월 달력 */
+.brf-cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--space-2xs); }
+.brf-cal-head { text-align: center; font-size: var(--text-2xs); color: var(--text-tertiary); padding-bottom: var(--space-1); }
+/* 칸 높이 압축(가로:세로 2:1, 달력 전체 ≈220px). 아래 여백(--space-2)이 점 자리 — 칸이 아무리 좁아져도
+   숫자 상자(line-height 1)와 점(bottom 1px, 4px)이 겹치지 않는다: aspect-ratio 는 내용보다 작아지지 않는다. */
+.brf-cal-day { position: relative; aspect-ratio: 2; padding: 0 0 var(--space-2); display: grid; place-items: center; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text); font: inherit; font-size: var(--text-xs); line-height: 1; font-variant-numeric: tabular-nums; cursor: pointer; }
+.brf-cal-day:hover { background: var(--hover); }
+.brf-cal-day:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+.brf-cal-day.is-holiday { color: var(--danger); }
+.brf-cal-day.is-today { color: var(--accent-text); font-weight: 600; }
+.brf-cal-day.is-selected { background: var(--sel); }
+.brf-cal-dot { position: absolute; bottom: 1px; left: 50%; width: 4px; height: 4px; transform: translateX(-50%); border-radius: var(--radius-pill); background: var(--accent); }
+
+/* 오른쪽 — 습관 */
+.brf-habit-nudge { font-size: var(--text-sm); color: var(--accent-text); }
+.brf-habit-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.brf-habit-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto 2.5em; align-items: center; gap: var(--space-3); padding: var(--space-2) 0; border-top: 1px solid var(--line); }
+.brf-habit-row:first-child { border-top: 0; }
+.brf-habit-row.is-compact { grid-template-columns: auto minmax(0, 1fr); }
+.brf-habit-title { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; font-size: var(--text-md); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brf-habit-icon { flex: none; }
+.brf-habit-box { width: 18px; height: 18px; display: grid; place-items: center; padding: 0; border: 1.5px solid var(--divider); border-radius: var(--radius-xs); background: transparent; color: var(--on-accent); cursor: pointer; }
+.brf-habit-box.is-done { background: var(--accent); border-color: var(--accent); }
+.brf-habit-box:disabled { opacity: 0.35; cursor: default; }
+.brf-habit-dots { display: inline-flex; gap: var(--space-1); }
+.brf-dot { width: 10px; height: 10px; border-radius: var(--radius-pill); border: 1.5px solid var(--divider); background: transparent; padding: 0; cursor: pointer; transition: background var(--dur-fast) ease-out; }
+.brf-dot.is-done { background: var(--habit-color, var(--accent)); border-color: var(--habit-color, var(--accent)); }
+.brf-dot.is-off { opacity: 0.35; border-style: dashed; cursor: default; }
+.brf-habit-streak { display: inline-flex; align-items: center; justify-content: flex-end; gap: var(--space-2xs); font-size: var(--text-xs); color: var(--accent-text); font-variant-numeric: tabular-nums; }
+.brf-habit-add-btn { display: inline-flex; align-items: center; gap: var(--space-1); align-self: flex-start; text-decoration: none; }
+.brf-habit-add-input { align-self: stretch; min-width: 0; padding: var(--space-1) var(--space-2); border: 1px solid var(--line); border-radius: var(--radius-sm); background: transparent; color: var(--text); font: inherit; font-size: var(--text-sm); outline: none; }
+.brf-habit-add-input:focus-visible { border-color: var(--accent); }
+.brf-state .brf-habit-add-input { flex: 1 1 100%; }
+
+/* 습관 12주 히트맵 — 7행(주 시작 요일부터) × 12열. 진하기 = 그날 끝낸 비율, 강조색 한 색의 단계(color-mix).
+   빈칸(그날 해당 습관 없음) = 테두리만, 미래 칸 = 자리만 지키고 안 보임, 오늘 = 윤곽선. */
+.brf-heat { --heat-cell: 12px; display: flex; flex-direction: column; gap: var(--space-2); padding-top: var(--space-2); }
+.brf-heat-body { display: flex; gap: var(--space-1); }
+.brf-heat-rows { display: grid; grid-template-rows: repeat(7, var(--heat-cell)); row-gap: var(--space-2xs); }
+.brf-heat-rowlabel { font-size: var(--text-2xs); line-height: var(--heat-cell); color: var(--text-tertiary); white-space: nowrap; }
+.brf-heat-grid { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, var(--heat-cell)); grid-auto-columns: var(--heat-cell); gap: var(--space-2xs); }
+.brf-heat-cell { display: inline-block; width: var(--heat-cell); height: var(--heat-cell); border-radius: 2px; box-sizing: border-box; }
+.brf-heat-cell.is-loff { border: 1px solid var(--line); background: transparent; }
+.brf-heat-cell.is-l0 { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.brf-heat-cell.is-l1 { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.brf-heat-cell.is-l2 { background: color-mix(in srgb, var(--accent) 60%, transparent); }
+.brf-heat-cell.is-l3 { background: color-mix(in srgb, var(--accent) 80%, transparent); }
+.brf-heat-cell.is-l4 { background: var(--accent); }
+.brf-heat-cell.is-future { visibility: hidden; }
+.brf-heat-cell.is-today { outline: 1.5px solid var(--text); outline-offset: 1px; }
+.brf-heat-legend { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--text-2xs); color: var(--text-tertiary); }
+.brf-heat-legend .brf-heat-cell { width: 10px; height: 10px; }
+
+/* 오른쪽 — 지난 알림 · 저녁 정리 */
+.brf-overdue-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.brf-overdue-row { display: flex; align-items: center; gap: var(--space-2); }
+.brf-overdue-main { flex: 1 1 auto; min-width: 0; display: flex; align-items: baseline; gap: var(--space-3); border: 0; background: transparent; padding: var(--space-2) var(--space-1); border-radius: var(--radius-sm); font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.brf-overdue-main:hover { background: var(--hover); }
+.brf-overdue-time { font-size: var(--text-xs); color: var(--text-tertiary); font-variant-numeric: tabular-nums; flex: none; }
+.brf-overdue-title { font-size: var(--text-md); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brf-overdue-row.is-overdue .brf-overdue-time { color: var(--accent-text); }
+/* 최근 작업 노트 — 지난 알림과 같은 행 틀. 제목이 줄고(말줄임) 폴더·상대 시각은 흐린 글씨로 오른쪽에 붙는다. */
+.brf-recent-notes .brf-overdue-title { flex: 1 1 auto; min-width: 0; }
+.brf-recent-folder { flex: 0 1 auto; min-width: 0; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-xs); color: var(--text-tertiary); }
+.brf-recent-when { flex: none; font-size: var(--text-xs); color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.brf-recap-line { font-size: var(--text-md); }
+.brf-recap-sub { font-size: var(--text-sm); color: var(--text-muted); margin-top: var(--space-2); }
+
+/* 바닥 한 줄 */
+.brf-foot { flex: none; display: flex; justify-content: flex-end; }

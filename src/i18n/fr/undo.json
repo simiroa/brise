@@ -1,0 +1,9 @@
+{
+  "action": "Annuler",
+  "deleted_named": "« {{name}} » supprimé",
+  "link_removed": "Lien « {{name}} » retiré",
+  "note_moved": "« {{note}} » déplacé vers « {{folder}} »",
+  "metadata_applied": "IA appliquée à « {{note}} »",
+  "metadata_applied_partial": "IA appliquée à « {{note}} » ({{fields}} non annulable(s))",
+  "edit_conflict_skipped": "« {{note}} » a été modifiée après l'application, elle n'a pas été annulée"
+}

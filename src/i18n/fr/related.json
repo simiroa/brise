@@ -1,0 +1,12 @@
+{
+  "title": "Notes liées",
+  "empty_hint": "Aucune note liée. Glissez une note depuis l'arborescence ou cliquez sur + pour lier une note existante.",
+  "add_hint": "Lier une note existante",
+  "manual_label": "Lien manuel",
+  "auto_label": "Suggestion automatique",
+  "restore_hidden": "Restaurer {{count}} note(s) liée(s) masquée(s)",
+  "smart_link_suggest": "Suggestion de lien intelligent",
+  "smart_link_tooltip": "Suggestion de chevauchement IA : cliquez pour lier immédiatement.",
+  "smart_link_badge": "Suggéré par l'IA",
+  "connected_notice": "Lié à la note « {{name}} »."
+}

@@ -1,0 +1,145 @@
+# 자동화 규칙 시나리오 — TDD 의 "먼저 쓰는 테스트" (PLAN-2026-10-08 §5 R1~R17, §10 장면·엣지)
+#
+# 규칙: 각 웨이브의 **첫 커밋**은 자기 웨이브 행을 도는 표 주도 테스트(빨강)이고, 구현이 그걸 초록으로 만든다.
+#   - given/expect 는 구조화된 값이다(사람이 읽는 산문 아님). 노트는 corpus.json 의 id(n01, h05 …)로 가리킨다.
+#   - test: 처음엔 null. 웨이브가 테스트를 쓰면 Rust `fn 이름` 또는 vitest it("제목") 을 적는다.
+#   - status: planned → red(테스트 있음, 실패) → green(통과). green 인데 test 가 없거나 못 찾으면 검사 실패.
+#   - 검사: scripts/check-automation-scenarios.mjs (보고 모드 — 구조 오류·green 누락만 실패)
+#   - 시계: R5·R7·R8·R10 은 주입 가능한 시계가 필요하다(W1·W4 에서 `now` 를 인자로 받는다). 시각은 corpus 의 reference_now 기준 offset.
+#   - 이 파일은 specs/features/ 가 아니다 — check:features 는 존재하는 테스트만 받기 때문에, 구현 전 시나리오는 여기 두고
+#     웨이브가 초록이 되면 specs/features/automation.yaml 케이스로 옮긴다.
+
+version: 1
+scenarios:
+
+  # ── R1 허용 단계: 원본·목적지 둘 다 본다 ─────────────────────────────────────
+  - { id: R1-propose-all-queue,      rule: R1, wave: W6, status: planned, test: null, given: { level: propose, action: set_meta, note: n01 }, expect: { route: queue } }
+  - { id: R1-add-meta-direct,        rule: R1, wave: W6, status: planned, test: null, given: { level: add, action: set_meta, tags_mode: add, note: n01 }, expect: { route: direct } }
+  - { id: R1-add-tag-remove-queue,   rule: R1, wave: W6, status: planned, test: null, given: { level: add, action: set_meta, tags_mode: replace, note: n01 }, expect: { route: queue } }
+  - { id: R1-add-append-direct,      rule: R1, wave: W6, status: planned, test: null, given: { level: add, action: append_to_section, note: n22, text: "- [ ] 보험 서류 챙기기" }, expect: { route: direct } }
+  - { id: R1-add-move-both-add,      rule: R1, wave: W6, status: planned, test: null, given: { source_level: add, dest_level: add, action: move_note, note: n01, dest: insight }, expect: { route: direct } }
+  - { id: R1-add-move-dest-propose,  rule: R1, wave: W6, status: planned, test: null, given: { source_level: add, dest_level: propose, action: move_note, note: n01, dest: insight }, expect: { route: queue } }
+  - { id: R1-add-update-queue,       rule: R1, wave: W6, status: planned, test: null, given: { level: add, action: update_section, section_ai_origin: automation }, expect: { route: queue } }
+  - { id: R1-add-trash-queue,        rule: R1, wave: W6, status: planned, test: null, given: { level: add, action: trash, note: n31 }, expect: { route: queue } }
+  - { id: R1-co-update-ai-direct,    rule: R1, wave: W6, status: planned, test: null, given: { level: co, action: update_section, note: n35, section: 요약 }, expect: { route: direct } }
+  - { id: R1-full-update-human,      rule: R1, wave: W6, status: planned, test: null, given: { level: full, action: update_section, note: n36, section: 요약 }, expect: { route: direct, ai_origin_after: automation } }
+  - { id: R1-ai-excluded-dest,       rule: R1, wave: W1, status: planned, test: null, given: { dest_ai_excluded: true, action: move_note, note: n01 }, expect: { route: rejected, error: VALIDATION } }
+
+  # ── R2 사람 글 판정 ─────────────────────────────────────────────────────────
+  - { id: R2-co-update-human-queue,  rule: R2, wave: W6, status: planned, test: null, given: { level: co, action: update_section, note: n36, section: 요약 }, expect: { route: queue, reason: human_text } }
+  - { id: R2-co-merge-mixed-queue,   rule: R2, wave: W6, status: planned, test: null, given: { level: co, action: merge, sources: [n35, n01] }, expect: { route: queue, reason: human_text } }
+  - { id: R2-co-merge-ai-only,       rule: R2, wave: W6, status: planned, test: null, given: { level: co, action: merge, sources_all_ai: true }, expect: { route: direct } }
+  - { id: R2-co-trash-human-queue,   rule: R2, wave: W6, status: planned, test: null, given: { level: co, action: trash, note: n01 }, expect: { route: queue, reason: human_text } }
+  - { id: R2-co-append-to-human-log, rule: R2, wave: W6, status: planned, test: null, given: { level: co, action: append_to_section, note: n36, section: 기록 }, expect: { route: direct } }
+
+  # ── R3 파괴 상한 ────────────────────────────────────────────────────────────
+  - { id: R3-three-direct,           rule: R3, wave: W6, status: planned, test: null, given: { level: co, direct_destructive: 3 }, expect: { run_route: direct } }
+  - { id: R3-four-whole-run-queue,   rule: R3, wave: W6, status: planned, test: null, given: { level: co, direct_destructive: 4 }, expect: { run_route: queue } }
+  - { id: R3-locked-self-rewrite,    rule: R3, wave: W11, status: planned, test: null, given: { folder: knowledge, level: full, user_locked: true, ai_self_rewrites: 6 }, expect: { run_route: direct } }
+  - { id: R3-locked-trash-counts,    rule: R3, wave: W11, status: planned, test: null, given: { folder: knowledge, level: full, user_locked: true, trash: 4 }, expect: { run_route: queue } }
+
+  # ── R4 오염 ────────────────────────────────────────────────────────────────
+  - { id: R4-taint-before-w8-queue,  rule: R4, wave: W6, status: planned, test: null, given: { level: co, notes: [n07], isolation: absent }, expect: { run_route: queue, reason: tainted } }
+  - { id: R4-suspicious-queue,       rule: R4, wave: W8, status: planned, test: null, given: { level: co, notes: [n10], isolation: present }, expect: { run_route: queue, reason: suspicious } }
+  - { id: R4-taint-sources,          rule: R4, wave: W8, status: planned, test: null, given: { origins: [collect, ledger, clipboard, capture] }, expect: { taint: collected } }
+  - { id: R4-taint-derived,          rule: R4, wave: W8, status: planned, test: null, given: { action: merge, sources: [n07, n08] }, expect: { result_taint: derived } }
+
+  # ── R5 도착 ────────────────────────────────────────────────────────────────
+  - { id: R5-old-note-arrives,       rule: R5, wave: W4, status: planned, test: null, given: { note: n01, ledger: absent }, expect: { arrival: true } }
+  - { id: R5-editing-not-yet,        rule: R5, wave: W4, status: planned, test: null, given: { note: n06 }, expect: { arrival: false, reason: not_settled } }
+  - { id: R5-baseline-on-enable,     rule: R5, wave: W4, status: planned, test: null, given: { enable_at: reference_now, note: n01 }, expect: { arrival: false, ledger_status: baseline } }
+  - { id: R5-def-change-baseline,    rule: R5, wave: W4, status: planned, test: null, given: { def_changed: true, note: n05 }, expect: { arrival: false, ledger_status: baseline } }
+  - { id: R5-recent-day-option,      rule: R5, wave: W4, status: planned, test: null, given: { option_recent_day: true, note: n27 }, expect: { arrival: false, ledger_status: baseline } }
+  - { id: R5-batch-boundary,         rule: R5, wave: W4, status: planned, test: null, given: { last_arrival_min_ago: 4, pending: 3 }, expect: { run: false } }
+  - { id: R5-batch-30-full,          rule: R5, wave: W4, status: planned, test: null, given: { last_arrival_min_ago: 1, pending: 30 }, expect: { run: true } }
+  - { id: R5-growing-once,           rule: R5, wave: W4, status: planned, test: null, given: { note: n24, processed_before: true, grew_after: true }, expect: { arrival: false } }
+
+  # ── R6 연쇄 · 정적 린트 ───────────────────────────────────────────────────
+  - { id: R6-lint-two-cycle,         rule: R6, wave: W3, status: planned, test: null, given: { edges: [[inbox, insight], [insight, inbox]] }, expect: { save: rejected, cycle_path: [inbox, insight, inbox] } }
+  - { id: R6-lint-three-cycle,       rule: R6, wave: W3, status: planned, test: null, given: { edges: [[inbox, insight], [insight, knowledge], [knowledge, inbox]] }, expect: { save: rejected } }
+  - { id: R6-lint-home-as-dest-ok,   rule: R6, wave: W3, status: planned, test: null, given: { edges: [[knowledge, knowledge]] }, expect: { save: accepted, note: "제자리 동작(요약 갱신·병합)은 순환이 아니다" } }
+  - { id: R6-lint-dest-excluded,     rule: R6, wave: W3, status: planned, test: null, given: { edges: [[inbox, collect_ai]], collect_ai_excluded: true }, expect: { save: accepted, warning: dest_ai_excluded } }
+  - { id: R6-trail-same-day-skip,    rule: R6, wave: W4, status: planned, test: null, given: { note: n01, trail_today: [A] , next: A }, expect: { skip: true } }
+  - { id: R6-trail-fourth-hop,       rule: R6, wave: W4, status: planned, test: null, given: { note: n01, trail_today: [A, B, C], next: D }, expect: { skip: true } }
+
+  # ── R7 천천히 모드 ─────────────────────────────────────────────────────────
+  - { id: R7-backlog-slow,           rule: R7, wave: W4, status: planned, test: null, given: { pending_arrivals: 200 }, expect: { status: slow, batch: 10, interval_min: 30, notice: start } }
+  - { id: R7-drained-normal,         rule: R7, wave: W4, status: planned, test: null, given: { status: slow, pending_arrivals: 5 }, expect: { status: ok, notice: end } }
+  - { id: R7-repeat-note-skip-only,  rule: R7, wave: W4, status: planned, test: null, given: { note: n01, touched_today: 3, other_notes: 5 }, expect: { skipped: [n01], automation_status: ok, log: skip_loop } }
+
+  # ── R8 실패 ────────────────────────────────────────────────────────────────
+  - { id: R8-backoff-ladder,         rule: R8, wave: W4, status: planned, test: null, given: { consecutive_failures: [1, 2, 3, 4] }, expect: { next_try_min: [1, 5, 30, 120] } }
+  - { id: R8-fifth-pauses,           rule: R8, wave: W4, status: planned, test: null, given: { consecutive_failures: 5 }, expect: { status: paused, notices: 1 } }
+  - { id: R8-not-counted,            rule: R8, wave: W4, status: planned, test: null, given: { failed_runs: 30 }, expect: { daily_cap_used: 0, ledger_rows: 0 } }
+  - { id: R8-resume-on-settings,     rule: R8, wave: W4, status: planned, test: null, given: { status: paused, event: ai_settings_changed }, expect: { status: ok } }
+
+  # ── R9 지식 노트 섹션 ─────────────────────────────────────────────────────
+  - { id: R9-log-append-ok,          rule: R9, wave: W11, status: planned, test: null, given: { note: n35, section: 기록, new_body: "<현재 본문>\n- 10-08 \"카페인 오후 컷 3주차\" → h01" }, expect: { write: accepted } }
+  - { id: R9-log-rewrite-rejected,   rule: R9, wave: W11, status: planned, test: null, given: { note: n35, section: 기록, new_body: "- 정리된 기록 1줄" }, expect: { write: rejected } }
+  - { id: R9-log-redact-exception,   rule: R9, wave: W11, status: planned, test: null, given: { note: n35, section: 기록, by: code, replace_line_with: "[가림]" }, expect: { write: accepted } }
+  - { id: R9-quote-must-be-substring, rule: R9, wave: W8, status: planned, test: null, given: { note: n07, quote: "CRDT는 언제나 정답이다" }, expect: { quote: rejected, reason: not_in_source } }
+  - { id: R9-invented-link-removed,  rule: R9, wave: W11, status: planned, test: null, given: { summary_links: [n01, "없는노트"] }, expect: { kept_links: [n01] } }
+  - { id: R9-contradiction-kept,     rule: R9, wave: W11, status: planned, test: null, given: { topic: T_sleep, sources: [n03, n04] }, expect: { summary_has: "엇갈림", evidence: [n03, n04] } }
+  - { id: R9-index-by-code,          rule: R9, wave: W11, status: planned, test: null, given: { topics: 300 }, expect: { ai_calls_for_index: 0, deterministic: true } }
+  - { id: R9-refine-changed-only,    rule: R9, wave: W11, status: planned, test: null, given: { topics: 10, topics_with_new_log: 2 }, expect: { topics_read: 2 } }
+  - { id: R9-released-not-recreated, rule: R9, wave: W11, status: planned, test: null, given: { released_topic: T_reading, new_note: h12 }, expect: { new_topic_note: false, link_to_released: true } }
+
+  # ── R10 검토함 ─────────────────────────────────────────────────────────────
+  - { id: R10-fourth-pending,        rule: R10, wave: W4, status: planned, test: null, given: { pending_runs: 3, new_review_needed: [n36], new_direct: [n01] }, expect: { status: review_full, applied: [n01], deferred: [n36], ledger_has: [n01] } }
+  - { id: R10-expire-7d,             rule: R10, wave: W4, status: planned, test: null, given: { queued_age_days: 7.1 }, expect: { status: expired, ledger_status: expired, reproposed: false } }
+  - { id: R10-approve-stale,         rule: R10, wave: W5, status: planned, test: null, given: { queued: [n01, n02], edited_after_queue: [n02] }, expect: { applied: [n01], conflict_skipped: [n02] } }
+
+  # ── R11 잠금 연동 ─────────────────────────────────────────────────────────
+  - { id: R11-unlock-lowers,         rule: R11, wave: W11, status: planned, test: null, given: { folder: knowledge, level: full, action: unlock }, expect: { level_after: co, notice: true } }
+  - { id: R11-relock-keeps,          rule: R11, wave: W11, status: planned, test: null, given: { folder: knowledge, level: co, action: lock }, expect: { level_after: co } }
+  - { id: R11-imported-lock-banner,  rule: R11, wave: W11, status: planned, test: null, given: { imported: true, user_locked: true, local_level: propose }, expect: { banner: true } }
+  - { id: R11-user-can-take-out,     rule: R11, wave: W11, status: planned, test: null, given: { folder: knowledge, user_locked: true, user_action: move_out, note: n35 }, expect: { allowed: true, released_logged: true } }
+
+  # ── R12 비밀값 · 사생활 ───────────────────────────────────────────────────
+  - { id: R12-redact-n28,            rule: R12, wave: W4, status: planned, test: null, given: { note: n28, provider: cloud }, expect: { redactions: 3, outbound_contains_secret: false } }
+  - { id: R12-redact-h09,            rule: R12, wave: W4, status: planned, test: null, given: { note: h09, provider: cloud }, expect: { redactions: 1 } }
+  - { id: R12-local-no-redact,       rule: R12, wave: W4, status: planned, test: null, given: { note: n28, provider: ollama }, expect: { redactions: 0 } }
+  - { id: R12-ai-chat-folder-excluded, rule: R12, wave: W4, status: planned, test: null, given: { create: collect_import_local_ai }, expect: { ai_excluded: true, search_excluded: true } }
+  - { id: R12-isolation-input-cap,   rule: R12, wave: W8, status: planned, test: null, given: { note: n34 }, expect: { isolation_input_max_chars: 8000 } }
+
+  # ── R13 실행 자리 ─────────────────────────────────────────────────────────
+  - { id: R13-single-run,            rule: R13, wave: W4, status: planned, test: null, given: { running: A, request: run_now_A }, expect: { concurrent_runs_of_A: 1, request: queued } }
+  - { id: R13-stale-lock,            rule: R13, wave: W4, status: planned, test: null, given: { running_since_min: 11 }, expect: { lock: released } }
+  - { id: R13-wake-nonblocking,      rule: R13, wave: W4, status: planned, test: null, given: { channel_full: true, caller: ipc_holding_db_lock }, expect: { blocked: false } }
+
+  # ── R14 되돌리기 ─────────────────────────────────────────────────────────
+  - { id: R14-undo-kinds,            rule: R14, wave: W6, status: planned, test: null, given: { run_actions: [move_note, set_meta, update_section, trash, append_section] }, expect: { restored: all } }
+  - { id: R14-undo-skip-changed,     rule: R14, wave: W6, status: planned, test: null, given: { run_actions: [update_section], user_edited_after: true }, expect: { skipped: 1, reported: true } }
+  - { id: R14-undo-purged,           rule: R14, wave: W6, status: planned, test: null, given: { run_actions: [trash], trash_emptied: true }, expect: { unrecoverable: 1, message: "복원 불가" } }
+  - { id: R14-undo-no-reprocess,     rule: R14, wave: W6, status: planned, test: null, given: { undone_notes: [n01], next_run: true }, expect: { reprocessed: [] } }
+
+  # ── R15 쓰기 위생 ─────────────────────────────────────────────────────────
+  - { id: R15-origin-automation,     rule: R15, wave: W1, status: planned, test: null, given: { writer: worker_thread }, expect: { event_origin: automation, desktop_refresh: true } }
+  - { id: R15-usage-not-history,     rule: R15, wave: W1, status: planned, test: null, given: { automation_calls: 60 }, expect: { ai_history_rows_added: 0, ai_usage_incremented: 60 } }
+  - { id: R15-gate-own-notebook,     rule: R15, wave: W1, status: planned, test: null, given: { active_notebook_ai_enabled: true, automation_notebook_ai_enabled: false }, expect: { run: denied } }
+  - { id: R15-activity-actor-split,  rule: R15, wave: W6, status: planned, test: null, given: { automation_activity_rows: 3000, user_activity_rows: 50 }, expect: { user_rows_kept: 50 } }
+
+  # ── R16 기존 노트로 채우기 ───────────────────────────────────────────────
+  - { id: R16-newest-first,          rule: R16, wave: W11, status: planned, test: null, given: { baseline_notes: [n03, n01, n05] }, expect: { order: [n05, n01, n03] } }
+  - { id: R16-estimate-first,        rule: R16, wave: W11, status: planned, test: null, given: { baseline_count: 34 }, expect: { estimate_shown_before_start: true } }
+  - { id: R16-pause-resume,          rule: R16, wave: W11, status: planned, test: null, given: { processed: 10, paused: true, resumed: true }, expect: { resumes_at: 11 } }
+
+  # ── R17 수습 기간 (⚠️ 오너 확인 대기) ─────────────────────────────────────
+  - { id: R17-first-20-queue,        rule: R17, wave: W11, status: planned, test: null, given: { created_by: knowledge_switch, actions_so_far: 12 }, expect: { route: queue } }
+  - { id: R17-graduate,              rule: R17, wave: W11, status: planned, test: null, given: { actions_so_far: 20, approval_rate: 0.95 }, expect: { mode_after: direct, notice: true } }
+  - { id: R17-extend,                rule: R17, wave: W11, status: planned, test: null, given: { actions_so_far: 20, approval_rate: 0.7 }, expect: { mode_after: probation, suggest: refine_instruction } }
+
+  # ── S 등록·채팅 (지금 검증 가능 — 코퍼스 + 기존 API) ─────────────────────
+  - { id: S-date-on-timeline,        rule: S, wave: WS, status: green, test: gold_metadata_registers_on_insight_surfaces, given: { notes_with_gold_date: [n16, n22, n23, h05, h07] }, expect: { on_timeline: all, on_calendar_month: all } }
+  - { id: S-region-on-map,           rule: S, wave: WS, status: green, test: gold_metadata_registers_on_insight_surfaces, given: { notes_with_gold_region: [n16, n17, n19, h05, h06, h14] }, expect: { region_listed: all } }
+  - { id: S-links-on-graph,          rule: S, wave: WS, status: green, test: gold_metadata_registers_on_insight_surfaces, given: { gold_links: from_corpus }, expect: { graph_edge: all } }
+  - { id: S-chat-keyword-hit,        rule: S, wave: WS, status: green, test: chat_retrieval_finds_exact_keyword_note, given: { query: "치과" }, expect: { hit: n22 } }
+  - { id: S-chat-baseline-measured,  rule: S, wave: WS, status: green, test: chat_retrieval_baseline_report, given: { qa: all, organized: false }, expect: { recorded: true }, note: "2026-10-08 실측 dev 0/22 · holdout 0/9 — 숫자는 단언하지 않고 기록만" }
+  - { id: S-chat-raw-floor,          rule: S, wave: WS, status: green, test: chat_retrieval_question_recall_floor, given: { qa: answerable, organized: false }, expect: { recall_dev: ">=9/22", recall_holdout: ">=6/9", homonym_violations: 0, unanswerable_hits: 0 }, note: "2026-10-08 질문 검색(repo/question_search.rs) 래칫 — 수정 전 0/31" }
+  - { id: S-chat-organized-target,   rule: S, wave: W12, status: planned, test: null, given: { qa: answerable, organized: true, knowledge_notes: present }, expect: { evidence_hit_dev: ">=0.8", evidence_hit_holdout: ">=0.7" }, note: "지식 노트 인용을 정답으로 센다 — 정답 태그만으로 18/31, 남은 차이는 어휘" }
+  - { id: S-map-needs-coords,        rule: S, wave: W1, status: planned, test: null, given: { note: n16, set_meta: { region: 부산 } }, expect: { lat_lng_set: true, on_map: true }, note: "F23 — 이름만으론 지도에 안 뜬다" }
+  - { id: S-date-replaces-primary,   rule: S, wave: W1, status: planned, test: null, given: { note: n22, set_meta: { date: "2026-10-08 15:00" } }, expect: { calendar_entries_for_note: 1 }, note: "F24 — 추가하면 작성일과 두 번 뜬다" }
+  - { id: S-chat-excluded-folder,    rule: S, wave: W12, status: planned, test: null, given: { qa: q07, knowledge_notes: present }, expect: { cites: [n27_topic_note] }, note: "기준선에선 검색 제외 폴더라 못 찾는다 — 지식 노트가 생기면 찾아야 한다" }
+  - { id: S-chat-homonym,            rule: S, wave: W12, status: planned, test: null, given: { qa: q05 }, expect: { not_cited: [n07, n09] } }
+  - { id: S-chat-unanswerable,       rule: S, wave: W12, status: planned, test: null, given: { qa: [q09, q16] }, expect: { says_not_found: true } }
+  - { id: S-chat-contradiction,      rule: S, wave: W12, status: planned, test: null, given: { qa: [q02, q15] }, expect: { mentions_both_sides: true } }

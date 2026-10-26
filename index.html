@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
+    <title>Brise</title>
+    <script>
+      // Browser mode (sync server serves this build under /app, no trailing slash — see
+      // src-tauri/src/sync_server/handlers/web_client.rs::app_index/app_asset): vite.config.ts uses a
+      // relative asset base ("./assets/...") so the SAME build also works unmodified inside the
+      // Tauri webview (which serves from its own root, not /app/). A relative URL resolves
+      // against the *directory* of the current document — with no trailing slash, "/app" itself
+      // is treated as the "file", so "./assets/x.js" would resolve to "/assets/x.js" (404, no
+      // such route) instead of "/app/assets/x.js". Must run before the built module script tag
+      // below (which is why this stays inline, first in <head>, not a separate deferred file) —
+      // by the time that tag's src attribute resolves, this <base> has to already be in place.
+      (function () {
+        var p = window.location.pathname;
+        if (p === "/app") {
+          var base = document.createElement("base");
+          base.href = p + "/";
+          document.head.appendChild(base);
+        }
+      })();
+    </script>
+    <script>
+      // W15: 부팅 첫 페인트(이 <html>이 그려지는 순간)부터 첫 스타일시트(tokens.css, App/pet/aux
+      // 창 어느 쪽이든 동적 청크 뒤에 온다)가 도착하기까지 배경이 흰 화면 → 실제 테마색으로 튀는
+      // 문제를 없앤다. src/lib/appearance.ts::loadAppearanceSeed 가 하는 일의 아주 작은
+      // 부분집합(테마 + 배경 톤/딤으로 계산되는 배경색 하나)만 여기서 손으로 다시 계산한다 —
+      // 이 파일은 TS 를 import 할 수 없어 그 함수를 그대로 재사용하지 못한다.
+      //
+      // 여기서 흉내내지 않는 것: accent(은은한 배경 글로우 2장, 6~9% 알파라 이 틈에서는 안 보임),
+      // surfaceStyle(acrylic). acrylic 은 일부러 안 건드린다 — 네이티브 Acrylic 재질은
+      // stores/settings.ts::applySurfaceEffectAfterShow 가 **창이 뜬 뒤에야** 붙이므로, 이 스크립트가
+      // 실행되는 시점(그보다 훨씬 이르다)에는 아직 재질이 없다. 여기서 배경을 투명으로 뚫으면 재질 없는
+      // 진짜 구멍(또는 검은 창)이 잠깐 남는다 — tokens.css 의 SINGLE-SHEET ACRYLIC CONTRACT 참고.
+      // 대신 항상 불투명 surface-base 근사값을 칠하고, data-surface 는 React 부팅 이후
+      // applySavedAppearanceSeed()(Part 3: 지난 부팅의 실측 surfaceEffectApplied)가 정한다.
+      //
+      // ⚠️ 드리프트 주의: 아래 STORAGE_KEY·CANVAS_BASE·THEME_COLOR·DEFAULT_THEME·DEFAULT_BG_TONE·
+      // DEFAULT_BG_DIM·DEFAULT_BG_SAT·BG_TONE_MIN/MAX 는 src/lib/appearance.ts 의
+      // APPEARANCE_SEED_STORAGE_KEY·CANVAS_BASE·THEME_COLOR·DEFAULT_APPEARANCE_SEED·
+      // BG_TONE_MIN/MAX 와 값이 반드시 같아야 하고, 아래 bootCanvasColor() 는 같은 이름의 TS
+      // 함수와 **출력이 한 글자도 달라선 안 된다** — src/lib/appearanceSeedDrift.test.ts 가 이
+      // 파일을 직접 읽어 상수를 대조하고, 그 함수는 **꺼내 실행해** 두 구현의 출력을 맞춰 본다.
+      (function () {
+        try {
+          var STORAGE_KEY = "brise_appearance_seed_v1";
+          var CANVAS_BASE = { dark: "#171b1a", light: "#f4efe3" };
+          // 테마색(PLAN-2026-09-12 §2/E1) — 배경 채도가 향하는 색. tokens.css 의 --theme 과 같다.
+          var THEME_COLOR = { dark: "#9cc5a4", light: "#33573a" };
+          var DEFAULT_THEME = "dark";
+          var DEFAULT_BG_TONE = 0;
+          var DEFAULT_BG_DIM = 0;
+          var DEFAULT_BG_SAT = 0;
+          var BG_TONE_MIN = -10;
+          var BG_TONE_MAX = 10;
+
+          // E5-a: 신규 설치 기본값이 "시스템 따름"이라, 시드가 없는 첫 실행은 OS 밝기가
+          // 첫 페인트를 정한다(안 그러면 라이트 모드 OS 에서 어둠으로 한 번 번쩍인다).
+          // matchMedia 가 없으면 DEFAULT_THEME 로 떨어진다 — 위 CSS var(--boot-bg) 폴백과 같은 값.
+          var theme = window.matchMedia
+            ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+            : DEFAULT_THEME;
+          var bgTone = DEFAULT_BG_TONE;
+          var bgDim = DEFAULT_BG_DIM;
+          var bgSat = DEFAULT_BG_SAT;
+          var themeHex = null;
+          var acrylicLive = false;
+          var sheetAlpha = 0.85;
+
+          if (typeof localStorage !== "undefined") {
+            var raw = localStorage.getItem(STORAGE_KEY);
+            if (raw) {
+              var parsed = JSON.parse(raw);
+              if (parsed && typeof parsed === "object") {
+                var pref = parsed.themePref || parsed.theme;
+                if (pref === "system") {
+                  theme = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+                } else if (pref === "light") {
+                  theme = "light";
+                } else {
+                  theme = "dark";
+                }
+                if (typeof parsed.bgTone === "number" && !isNaN(parsed.bgTone)) {
+                  bgTone = Math.min(BG_TONE_MAX, Math.max(BG_TONE_MIN, parsed.bgTone));
+                }
+                if (typeof parsed.bgDim === "number" && !isNaN(parsed.bgDim)) {
+                  bgDim = Math.min(100, Math.max(0, parsed.bgDim));
+                }
+                if (typeof parsed.bgSat === "number" && !isNaN(parsed.bgSat)) {
+                  bgSat = Math.min(100, Math.max(0, parsed.bgSat));
+                }
+                // 실제 --theme(강조색에서 계산된 값)을 시드가 들고 있다 — 저장할 때와 같은 테마일 때만 쓴다.
+                if (parsed.theme === theme && typeof parsed.themeHex === "string" && /^#[0-9a-f]{6}$/i.test(parsed.themeHex)) {
+                  themeHex = parsed.themeHex;
+                }
+                // 지난번에 아크릴이 실제로 걸렸다 — 아래 참고.
+                acrylicLive = parsed.surfaceStyle === "acrylic" && parsed.surfaceEffectApplied === true;
+                if (typeof parsed.sheetAlpha === "number" && !isNaN(parsed.sheetAlpha)) {
+                  sheetAlpha = Math.min(1, Math.max(0, parsed.sheetAlpha));
+                }
+              }
+            }
+          }
+
+          // src/lib/appearance.ts::bootCanvasColor 의 손 복제본. **자기완결**이어야 한다 —
+          // 드리프트 가드 테스트가 이 함수만 통째로 꺼내 eval 해서 TS 쪽과 출력을 대조한다.
+          // 세 단계: 밝기(tintCanvas) → 채도(saturateCanvas, 테마색 쪽으로) → 어둡기(mixHex).
+          // 채도 0 이면 가운데 단계가 입력을 그대로 돌려주므로 기본값 사용자에겐 무연산이다.
+          function bootCanvasColor(canvasHex, themeHex, bgTone, bgDim, bgSat) {
+            var BG_SAT_MAX_CHROMA = 0.0226;
+            function hexToRgb(h) {
+              var n = parseInt(h.slice(1), 16);
+              return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+            }
+            function hx(v) {
+              return ("0" + Math.min(255, Math.max(0, Math.round(v * 255))).toString(16)).slice(-2);
+            }
+            function s2l(c) { return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+            function l2s(c) { return c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055; }
+            function oklabFromRgb(rgb) {
+              var R = s2l(rgb[0]), G = s2l(rgb[1]), B = s2l(rgb[2]);
+              var l = Math.cbrt(0.4122214708 * R + 0.5363325363 * G + 0.0514459929 * B);
+              var m = Math.cbrt(0.2119034982 * R + 0.6806995451 * G + 0.1073969566 * B);
+              var s = Math.cbrt(0.0883024619 * R + 0.2817188376 * G + 0.6299787005 * B);
+              return [
+                0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+                1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+                0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s
+              ];
+            }
+            function rgbFromOklab(L, A, B) {
+              var l_ = L + 0.3963377774 * A + 0.2158037573 * B;
+              var m_ = L - 0.1055613458 * A - 0.0638541728 * B;
+              var s_ = L - 0.0894841775 * A - 1.291485548 * B;
+              var l = l_ * l_ * l_, m = m_ * m_ * m_, s = s_ * s_ * s_;
+              return [
+                l2s(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+                l2s(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+                l2s(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s)
+              ];
+            }
+            function lchToRgb(L, C, H) {
+              var h = (H * Math.PI) / 180;
+              return rgbFromOklab(L, C * Math.cos(h), C * Math.sin(h));
+            }
+            function inGamut(rgb) {
+              for (var i = 0; i < 3; i++) { if (!(rgb[i] >= -1e-4 && rgb[i] <= 1 + 1e-4)) return false; }
+              return true;
+            }
+            function maxChromaFor(L, H) {
+              var lo = 0, hi = 0.4;
+              for (var i = 0; i < 40; i++) {
+                var mid = (lo + hi) / 2;
+                if (inGamut(lchToRgb(L, mid, H))) lo = mid; else hi = mid;
+              }
+              return lo;
+            }
+            function oklchToHex(L, C, H) {
+              var hue = ((H % 360) + 360) % 360;
+              var chroma = C > 0 && !inGamut(lchToRgb(L, C, hue)) ? maxChromaFor(L, hue) : Math.max(0, C);
+              var rgb = lchToRgb(L, chroma, hue);
+              return "#" + hx(rgb[0]) + hx(rgb[1]) + hx(rgb[2]);
+            }
+            function hexToOklch(h) {
+              var lab = oklabFromRgb(hexToRgb(h));
+              var H = (Math.atan2(lab[2], lab[1]) * 180) / Math.PI;
+              if (H < 0) H += 360;
+              return { L: lab[0], C: Math.sqrt(lab[1] * lab[1] + lab[2] * lab[2]), H: H };
+            }
+            function tintCanvas(hex, tonePct) {
+              var n = parseInt(hex.slice(1), 16);
+              var r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+              var toward = tonePct >= 0 ? 255 : 0;
+              var t = Math.min(100, Math.abs(tonePct)) / 100;
+              function mix(c) { return Math.round(c * (1 - t) + toward * t); }
+              function h2(c) { return ("0" + c.toString(16)).slice(-2); }
+              return "#" + h2(mix(r)) + h2(mix(g)) + h2(mix(b));
+            }
+            function saturateCanvas(hex, satPct, themeHex) {
+              var t = Math.max(0, Math.min(100, satPct)) / 100;
+              if (t <= 0) return hex;
+              var base = hexToOklch(hex), th = hexToOklch(themeHex), rad = Math.PI / 180;
+              // appearance.ts::saturateCanvas 와 같은 이유의 같은 가드 — 사본이라 드리프트
+              // 테스트가 둘을 대조한다.
+              if (th.C < 0.005) return hex;
+              var a0 = base.C * Math.cos(base.H * rad), b0 = base.C * Math.sin(base.H * rad);
+              var a1 = BG_SAT_MAX_CHROMA * Math.cos(th.H * rad);
+              var b1 = BG_SAT_MAX_CHROMA * Math.sin(th.H * rad);
+              var a = a0 + (a1 - a0) * t, b = b0 + (b1 - b0) * t;
+              return oklchToHex(base.L, Math.sqrt(a * a + b * b), (Math.atan2(b, a) * 180) / Math.PI);
+            }
+            // tokens.css 의 --surface-base: color-mix(in srgb, var(--app-canvas) calc(100% -
+            // var(--bg-dim)), black) 와 같은 식 — 검정 쪽으로 bgDim% 섞는다.
+            function mixHex(base, over, t) {
+              var A = hexToRgb(base), B = hexToRgb(over);
+              var k = Math.min(1, Math.max(0, t));
+              return "#" + hx(A[0] * (1 - k) + B[0] * k) + hx(A[1] * (1 - k) + B[1] * k) + hx(A[2] * (1 - k) + B[2] * k);
+            }
+            return mixHex(saturateCanvas(tintCanvas(canvasHex, bgTone), bgSat, themeHex), "#000000", bgDim / 100);
+          }
+
+          var bg = bootCanvasColor(CANVAS_BASE[theme], themeHex || THEME_COLOR[theme], bgTone, bgDim, bgSat);
+          // 아크릴 사용자는 처음부터 `.app` 시트와 같은 반투명(surface-base × sheet-alpha, tokens.css 의
+          // acrylic --bg)으로 칠한다. 창은 이제 다 그려진 뒤에야 보이므로(본 창 bootWindow.ts, 보조 창
+          // AuxWindowChrome + aux_window.rs) 이 색이 보이는 경우는 **이미 아크릴이 걸린 창의 새로고침
+          // (Ctrl+R)** 뿐이다 — 불투명 블록(그것도 고정 세이지로 물든 색)이 번쩍이다가 반투명으로 뒤집히던
+          // 것을 없앤다. 완전 투명으로 두면 그 사이 아크릴 기본 틴트(중립 회색)가 보인다(2026-10-22 캡처).
+          // 첫 실행·아크릴 실패 시드는 위 불투명 계산값 그대로다(SINGLE-SHEET ACRYLIC CONTRACT 의 "구멍" 방지).
+          // ponytail: JS 가 죽어 failsafe 가 창을 강제로 띄우면 아크릴 없이 반투명하다 — 어차피 빈 창이다.
+          if (acrylicLive) {
+            var n = parseInt(bg.slice(1), 16);
+            bg = "rgba(" + ((n >> 16) & 255) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + sheetAlpha + ")";
+          }
+
+          var root = document.documentElement;
+          root.setAttribute("data-theme", theme);
+          root.style.setProperty("--boot-bg", bg);
+        } catch (e) {
+          // localStorage 접근 불가/파싱 실패 — 아무것도 안 하면 아래 <style> 의 다크 기본값
+          // 폴백이 그린다. 여기서 앱을 못 뜨게 만들면 안 되므로 무조건 삼킨다.
+        }
+      })();
+    </script>
+    <style>
+      /* W15: 위 스크립트가 세팅한 data-theme/--boot-bg 를 첫 페인트에 즉시 반영한다.
+         color-scheme 은 tokens.css 의 :root[data-theme='light'] 규칙과 같은 신호를 그 스크립트
+         실행 이전에도 보장한다(폼 컨트롤/스크롤바가 처음부터 맞는 라이트/다크로 뜬다).
+         폴백 색(#171b1a)은 DEFAULT_APPEARANCE_SEED(다크)와 반드시 같아야 한다 — 위 드리프트 주석. */
+      :root { color-scheme: dark; }
+      :root[data-theme='light'] { color-scheme: light; }
+      html, body { background-color: var(--boot-bg, #171b1a); }
+      /* 부팅 중엔 전환 효과를 끈다 — 시드 → 저장값 → 아크릴 확정으로 CSS 변수가 몇 번 바뀌는데,
+         버튼·칩 수십 곳의 transition(background/color/border) 이 그때마다 화면 전체를 짧게 페이드시켜
+         "스타일이 입혀지는" 것처럼 보였다. 해제는 stores/settings.ts::applySurfaceEffectAfterShow
+         (모든 창이 거치는 마지막 외형 확정 지점)가 두 프레임 뒤에 한다. 그 지점을 안 거치는 창(펫·
+         브라우저 모드)은 아래 3초 안전장치가 푼다. 애니메이션(@keyframes)은 건드리지 않는다. */
+      html.booting *, html.booting *::before, html.booting *::after { transition: none !important; }
+    </style>
+    <script>
+      document.documentElement.classList.add("booting");
+      setTimeout(function () { document.documentElement.classList.remove("booting"); }, 3000);
+    </script>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script>
+      // 부팅 실패 안내(2026-10-07) — 모듈 링크 오류(SyntaxError: "does not provide an export named …")는
+      // React 가 뜨기 전에 터져 #root 가 빈 채로 남고, Rust 의 5초 failsafe(lib.rs window_force_shown)가
+      // 빈 창을 띄운다. 원인이 화면 어디에도 안 남아 "앱이 안 보인다"로만 보였다. 8초 뒤에도 main.tsx 가 root.render 직후 세우는
+      // window.__briseBooted 가 없으면(펫 말풍선처럼 #root 가 정상적으로 빈 창이 있어 children 으론 판정 못 한다) 첫 오류 문구를 그대로 그린다. 개발 중 대부분은 HMR 스테일(CLAUDE.md 함정 6) —
+      // Ctrl+R, 그래도 같으면 해당 파일을 저장(touch)하거나 vite 를 재시작한다.
+      (function () {
+        var first = null;
+        window.addEventListener("error", function (e) {
+          if (!first) first = (e && (e.message || (e.error && String(e.error)))) || "unknown error";
+        });
+        window.addEventListener("unhandledrejection", function (e) {
+          if (!first) first = String((e && e.reason) || "unhandled rejection");
+        });
+        setTimeout(function () {
+          var root = document.getElementById("root");
+          if (!root || window.__briseBooted || !first) return;
+          var box = document.createElement("pre");
+          box.setAttribute("data-testid", "boot-failure");
+          box.style.cssText = "margin:24px;padding:16px;white-space:pre-wrap;font:13px/1.5 monospace;color:#f4efe3;background:#3a2020;border-radius:8px";
+          box.textContent = "Brise 를 시작하지 못했습니다 / Brise failed to start\n\n" + first + "\n\nCtrl+R";
+          root.appendChild(box);
+        }, 8000);
+      })();
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,882 @@
+# 기능 카탈로그: 대시보드 (상태 칸반 / 달력 / 타임라인 / 관계). 공간(space)과 구분.
+features:
+  - id: F-D01
+    name: 대시보드 탭 셸
+    status: shipped
+    commands: commands/dashboard.yaml
+    verify:
+      rust: src-tauri/src/repo/dashboard
+      vitest:
+        - src/components/home/HomeTab.test.tsx
+        - src/components/home/HomeHeader.test.tsx
+        - src/components/settings/DashboardTabsSection.test.tsx
+      smoke: boot
+    cases:
+      - id: default-inner-tab-order
+        given:
+          dashboardTabs: default enabled order
+        expect:
+          first: "board"
+          second: "calendar"
+          third: "timeline"
+          fourth: "map"
+          fifth: "graph"
+          sixth: "space"
+          pane: "board"
+        covered_by: "renders header (date/time) + six inner tabs + board pane by default"
+
+      - id: customized-dashboard-tabs-order
+        given:
+          dashboardTabs:
+            - timeline
+            - map
+            - board
+            - space
+            - calendar
+            - graph
+        expect:
+          first: "timeline"
+          last: "graph"
+        covered_by: "renders inner tab buttons in customized dashboardTabs order (W7 §7.3)"
+
+      - id: disabled-tab-hidden-fallback
+        given:
+          homeInnerTab: map
+          dashboardTabs: map enabled=false
+        expect:
+          hidden: "map"
+          fallback: "board"
+        covered_by: "hides disabled dashboard tabs and falls back homeInnerTab to the first enabled (W23-a)"
+
+      - id: shared-search-survives-tab-switch
+        given:
+          query: "hello"
+          switch_to: timeline
+        expect:
+          query: "hello"
+        covered_by: "query and inner-tab switching don't reset each other — the store persists across tab switches"
+
+      - id: search-hits-cycle-reveal
+        given:
+          query: "test"
+          hits: ["note-1", "note-2", "note-3"]
+        expect:
+          next: "note-2"
+          wrap: "note-1"
+        covered_by: "cycles search hits with < > buttons in right column and triggers dashboardReveal"
+
+      - id: folder-filter-clear-chip
+        given:
+          dashboardFolderFilter: f1
+          folders: ["Folder 1", "Folder 2"]
+        expect:
+          chip: "Folder 1"
+        covered_by: "shows clear chip when a folder filter is active and clicking it clears filter"
+
+      - id: settings-arrow-right-swaps-tab-order
+        given:
+          focus: board chip
+          key: ArrowRight
+        expect:
+          first: "calendar"
+          command: settings_set
+          key: dashboard_tabs
+        covered_by: "ArrowRight on a chip swaps tab order and persists"
+
+      - id: settings-click-disables-tab
+        given:
+          click: map chip
+        expect:
+          command: settings_set
+          key: dashboard_tabs
+        covered_by: "clicking a chip disables that tab and persists"
+
+      - id: header-clock-hierarchy
+        given:
+          header: HomeHeader
+        expect:
+          date: "var(--text-md)"
+          time: "var(--text-clock)"
+          tick: "home-clock-tick"
+        covered_by: "time is the largest, date secondary (W6-c hierarchy)"
+
+      - id: inner-tabs-three-col-grid
+        given:
+          nav: home-inner-tabs
+        expect:
+          columns: "minmax(0, 1fr) minmax(0, 220px) minmax(0, 1fr)"
+          inset: "var(--content-inset)"
+        covered_by: "inner-tabs row is a 3-col grid with search in center and right controls (Wave F)"
+
+  - id: F-D02
+    name: 달력
+    status: shipped
+    commands: commands/dashboard.yaml
+    verify:
+      rust: src-tauri/src/repo/dashboard/calendar.rs
+      vitest:
+        - src/components/home/CalendarTab.test.tsx
+        - src/components/home/calendarLayout.test.ts
+    cases:
+      - id: clip-span-across-month-boundary
+        given:
+          start: [1794, 12, 20]
+          end: [1795, 1, 10]
+        expect:
+          kind: span
+          dec_start: "1794-12-20"
+          dec_end: "1794-12-31"
+          jan_start: "1795-01-01"
+          jan_end: "1795-01-10"
+        covered_by: calendar_clips_span_across_month_boundary
+
+      - id: year-only-fills-queried-month
+        given:
+          start: [1500, null, null]
+          query: 1500-07
+        expect:
+          span_start: "1500-07-01"
+          span_end: "1500-07-31"
+        covered_by: calendar_year_only_note_hits_every_month
+
+      - id: end-triple-no-separate-due-item
+        given:
+          start: [2026, 7, 1]
+          end: [2026, 7, 15]
+        expect:
+          kind: span
+          span_start: "2026-07-01"
+          span_end: "2026-07-15"
+        covered_by: calendar_end_triple_no_longer_produces_a_separate_due_item
+
+      - id: weekly-rrule-expands-to-event-occurrences
+        given:
+          start: [2026, 8, 3]
+          rrule: "FREQ=WEEKLY;BYDAY=MO,WE"
+        expect:
+          kind: event
+          start_time: "10:00"
+          rrule: "FREQ=WEEKLY;BYDAY=MO,WE"
+          d1: "2026-08-03"
+          d2: "2026-08-05"
+          d3: "2026-08-10"
+          last: "2026-08-31"
+        covered_by: calendar_expands_repeats_into_one_item_per_occurrence
+
+      - id: occurrence-seed-years-earlier
+        given:
+          seed: [2016, 1, 15]
+          rrule: "FREQ=MONTHLY"
+          query: 2026-08
+        expect:
+          span_start: "2026-08-15"
+          rrule: "FREQ=MONTHLY"
+        covered_by: calendar_finds_occurrences_whose_seed_month_is_years_earlier
+
+      - id: multi-day-occurrence-widen-clip
+        given:
+          seed: [2026, 7, 30]
+          end: [2026, 8, 1]
+          rrule: "FREQ=MONTHLY"
+        expect:
+          kind: span
+          aug_head: "2026-08-01"
+          aug_tail_start: "2026-08-30"
+          aug_tail_end: "2026-08-31"
+          sep_head: "2026-09-01"
+          sep_tail: "2026-09-30"
+        covered_by: calendar_clips_a_multi_day_occurrence_that_starts_in_the_previous_month
+
+      - id: until-stops-and-hourly-ignored
+        given:
+          daily_until: "FREQ=DAILY;UNTIL=20260803"
+          broken: "FREQ=HOURLY"
+        expect:
+          until: "FREQ=DAILY;UNTIL=20260803"
+          until_msg: "UNTIL 은 포함 경계 (8/1·8/2·8/3)"
+          broken: "FREQ=HOURLY"
+        covered_by: calendar_repeat_stops_at_until_and_ignores_a_corrupt_rule
+
+      - id: timed-fields-on-non-repeat
+        given:
+          start_time: "09:00"
+          end_time: "10:30"
+        expect:
+          start_time: "09:00"
+          end_time: "10:30"
+        covered_by: calendar_carries_the_time_fields_and_leaves_is_occurrence_unset
+
+      - id: inclusive-span-covers-day
+        given:
+          kind: span
+          span: ["2026-07-12", "2026-07-15"]
+        expect:
+          start: "2026-07-12"
+          end: "2026-07-15"
+          before: "2026-07-11"
+          after: "2026-07-16"
+        covered_by: "itemCoversDay uses inclusive span"
+
+      - id: spans-before-events-no-due-kind
+        given:
+          items: "[event, span] on 2026-07-12"
+        expect:
+          first: span
+          second: event
+        covered_by: "buildCellLines orders spans → events (due_at retired 2026-08-01 — no separate 'due' kind)"
+
+      # 2026-09-08 연간 뷰 — 세로 무한 스크롤, viewYear±1 창. 새 커맨드 없이 월 쿼리 36번 + 기록축 창 1번 (docs/DASHBOARD.md §3.3).
+      - id: year-view-three-year-window-and-drill-down
+        given:
+          click: cal-view-year
+          then_click: home-cal-yday-2026-03-10
+        expect:
+          calendar_calls: 36
+          histogram_from: "2025-01-01"
+          histogram_to: "2027-12-31"
+          label: "2026"
+          drilled_label: "March 2026"
+        covered_by: "year view: toggle fetches the 3-year window, dedupes the detail list, and a day click drills back into month view with that day selected"
+
+      # 2026-09-08 알림 표시 — 제목 있는 곳은 벨 뱃지, 연간(제목 없음)은 폴더색 점.
+      # 2026-09-10: 배지는 **접힘** 카드에만 있다 — 카드를 펼치면 박스 안 행의 벨 버튼이 그 자리를
+      # 대신한다(벨이 둘이면 조작 가능한 쪽이 흐려진다). 접힘이 기본이라 표면은 다시 둘이다.
+      - id: remind-badge-follows-the-title
+        given:
+          item: ev1 remind=true
+        expect:
+          surfaces: 2
+          none_for: sp1
+        covered_by: "remind-flagged items show a bell after the title in the month chip and the collapsed detail card (2026-09-10)"
+
+      # 2026-09-08 공휴일 — 설정 holiday_region, 정적 표 src/lib/holidays.ts.
+      - id: holiday-region-kr-paints-both-grids
+        given:
+          holiday_region: kr
+          month: 2026-08
+        expect:
+          aug15: "광복절"
+          mar1: "삼일절"
+        covered_by: "holiday_region=kr paints public holidays in both grids; none hides them"
+
+  - id: F-D03
+    name: 타임라인
+    status: shipped
+    commands: commands/dashboard.yaml
+    verify:
+      rust: src-tauri/src/repo/dashboard/timeline.rs
+      vitest: src/components/home/timeline
+    cases:
+      - id: points-bars-eras
+        given:
+          point: [1800, 6, 1]
+          bar: [1794, 1796]
+          era: Revolutionary 1789-1799
+        expect:
+          point: point
+          bar_kind: bar
+          era: "Revolutionary"
+        covered_by: timeline_points_and_bars_and_eras
+
+      - id: capped-downgrades-to-year-buckets
+        given:
+          cap: 3
+          matches: 4
+        expect:
+          empty_items: "캡 초과면 실아이템은 싣지 않는다"
+          total: "캡이 아니라 전체 매치 수"
+          no_empty_folder: "범위 안에 행이 없는 폴더는 나타나지 않는다"
+        covered_by: timeline_capped_downgrades_to_folder_year_buckets
+
+      - id: items-query-walks-year-index
+        given:
+          query: ITEMS_SQL
+        expect:
+          index: "idx_notes_year_alive"
+        covered_by: timeline_items_query_walks_the_year_index
+
+      - id: bar-counted-only-at-start-year
+        given:
+          bar: [1794, 1830]
+          point: 1800
+        expect:
+          reason: "다년 bar 는 시작 연도에만 1 — 종료 연도나 중간 연도에는 세지 않는다."
+        covered_by: timeline_capped_bar_counts_only_at_its_start_year
+
+      - id: end-year-forces-bar-kind
+        given:
+          kind: point
+          end_year: 3
+        expect:
+          kind: bar
+          input_kind: point
+        covered_by: "assigns kind=bar when end_year is set even if kind string is wrong"
+
+      - id: unresolvable-folder-falls-back-to-accent
+        given:
+          folder_id: unresolvable-folder
+        expect:
+          fallback: "var(--accent)"
+        covered_by: "bars/points paint in their folder's color; an unresolvable folder falls back to accent (2026-08-09)"
+
+      - id: capped-mode-merges-same-year-buckets
+        given:
+          year_buckets:
+            - { folder_id: fA, year: 1592, count: 40 }
+            - { folder_id: fB, year: 1592, count: 12 }
+        expect:
+          title: "1592: 52"
+        covered_by: "capped mode sums counts from different folders landing on the same year into one bucket"
+
+      - id: empty-workspace-empty-state
+        given:
+          items: []
+          total_matched: 0
+        expect:
+          empty: "timeline-empty"
+        covered_by: "empty workspace shows empty state"
+
+      - id: move-writes-start-and-end-in-one-call
+        given:
+          current: 1794..1796 (year-only bar)
+          delta: shift forward, duration preserved
+        expect:
+          command: note_date_update
+        # PLAN-2026-09-08-dates-rebuild.md W4: the old three-command sequence (note_update /
+        # note_set_event_precision / note_set_event_end) needed a careful write order to dodge a
+        # transient start>end validation failure — timelineOps.ts existed only for that. It's
+        # deleted: lib/primaryDate.ts::replacePrimaryDate writes the row's final target values in
+        # one atomic add+promote, so there's no intermediate state to order around any more.
+        covered_by: "dragging a bar's BODY moves the whole note (duration preserved) and does not open it"
+
+  - id: F-D04
+    name: 상태 칸반 (내부 식별자 board)
+    status: shipped
+    commands: commands/dashboard.yaml
+    verify:
+      rust: src-tauri/src/repo/dashboard/board.rs
+      vitest: src/components/home/BoardPane.test.tsx
+    cases:
+      - id: groups-by-status-and-parses-items
+        given:
+          notes:
+            - { title: "Todo note", status: in_progress, body: "- [ ] buy milk" }
+            - { title: "Done note", status: done }
+        expect:
+          in_progress: "in_progress"
+          done: "done"
+          item: "buy milk"
+          skipped_diagram: "not a real"
+        covered_by: board_groups_by_status_and_parses_items
+
+      - id: parse-gfm-nested-indent
+        given:
+          body: nested GFM checkboxes
+        expect:
+          top: top
+          nested: "nested child"
+          checked: "also checked"
+          star: "star bullet"
+        covered_by: parse_gfm_nested_indent_and_checked
+
+      - id: toggle-gfm-round-trip
+        given:
+          body: '- [ ] one\n- [x] two\n'
+        expect:
+          checked: "- [x] one"
+          unchecked: "- [ ] one"
+        covered_by: toggle_gfm_round_trip
+
+      - id: pin-requires-remind-not-done
+        given:
+          remind: true
+          end: [2026, 7, 1]
+          column: done
+        expect:
+          exempt: done
+        covered_by: is_pinned_requires_remind_full_precision_past_and_not_done_column
+
+      - id: sort-pin-then-open-checkbox
+        given:
+          notes: [recent, sched, open_cb, pin]
+        expect:
+          first: pin
+          second: "open_cb"
+          third: sched
+          last: recent
+        covered_by: board_sort_pin_then_open_checkbox_then_schedule_then_recent
+
+      - id: invalid-end-date-not-overdue
+        given:
+          end: [2024, 2, 30]
+          remind: true
+        expect:
+          reason: "calendar-invalid end date must not surface as an overdue pin"
+        covered_by: invalid_stored_end_date_does_not_panic_board_or_due_reminders
+
+      - id: ui-column-status-ids
+        given:
+          columns: [null, in_progress, exported, done]
+        expect:
+          none: "__none__"
+          in_progress: "in_progress"
+          none_note: "n-none"
+          ip_note: "n-ip"
+        covered_by: "loads dashboard_board for the active workspace and renders columns × cards"
+
+      - id: pin-dot-not-in-done-column
+        given:
+          in_progress: { id: n-overdue, remind: true, end: 2026-07-30 }
+          done: { id: n-overdue-done, remind: true, end: 2026-07-30 }
+        expect:
+          pin: "n-overdue"
+          done_title: "Overdue but done"
+        covered_by: "pin dot renders on a remind-flagged past-end card but not in the done column; date text always shows"
+
+      - id: empty-column-ghost-sets-status
+        given:
+          column: in_progress
+          notes: []
+        expect:
+          status: "in_progress"
+          add: "board-column-empty-add"
+        covered_by: "empty column ghost add button invokes newNote and setStatus with column status"
+
+  - id: F-D05
+    name: 관계 그래프
+    status: shipped
+    commands: commands/dashboard.yaml
+    verify:
+      rust: src-tauri/src/repo/dashboard/graph.rs
+      vitest: src/components/home/graph
+    cases:
+      - id: scoped-archived-backlink
+        given:
+          notes: [A, B, archived]
+          link: A→B
+        expect:
+          kind: backlink
+        covered_by: graph_is_scoped_and_filters_archived_notes
+
+      - id: related-without-backlink-duplicates
+        given:
+          backlink: A→B
+          related_candidate: C same year
+        expect:
+          backlink: backlink
+          related: related
+        covered_by: graph_caps_nodes_and_returns_related_without_backlink_duplicates
+
+      - id: related-sql-score-pairs
+        given:
+          pairs:
+            - same year
+            - shared tag+attachment
+            - shared tag only
+            - already backlinked
+        expect:
+          kind: related
+          tag: "shared1"
+          backlink: backlink
+        covered_by: related_sql_scores_pairs_by_date_tag_and_attachment_overlap
+
+      - id: related-feeds-overlap-suggestions
+        given:
+          same_year_pair: [A, B]
+        expect:
+          status: pending
+          kind: overlap
+        covered_by: graph_related_edges_feed_pending_overlap_suggestions_without_duplicates
+
+      - id: ego-keeps-neighbours-and-edge-kinds
+        given:
+          center: b
+          edges: [a-b backlink, b-c related, c-d related]
+        expect:
+          backlink: backlink
+          related: related
+        covered_by: "keeps only the centre, its direct neighbours, and their connecting edges"
+
+      - id: snippet-html-to-panel-text
+        given:
+          html: "<p>첫 문단</p><p><strong>둘째</strong>&nbsp;문단</p>"
+        expect:
+          text: "첫 문단 둘째 문단"
+        covered_by: "turns the stored Tiptap HTML snippet into panel text"
+
+      - id: related-edge-no-cut
+        given:
+          kind: related
+        expect:
+          kind: related
+          hint: "graph-edge-related-hint"
+        covered_by: "related edge does not have cut button on hover and shows related hint"
+
+      - id: cut-backlink-removes-internal
+        given:
+          kind: backlink
+          attachment: att-internal-1
+        expect:
+          kind: backlink
+          get: "note_get"
+          remove: "attachment_remove"
+          id: "att-internal-1"
+        covered_by: "cuts a backlink edge: calls note_get, attachment_remove, and showUndoToast"
+
+  - id: F-D06
+    name: 달력의 알림 강화 — 관련 날짜 시각/반복, 생성 팝오버, 카드 조작
+    status: shipped
+    commands: [commands/dashboard.yaml, commands/notes.yaml]
+    db: [db/schemas/notes.sql]
+    verify:
+      rust: src-tauri/src/repo/dashboard/calendar.rs
+      vitest:
+        - src/components/titlebar/DatesPanel.test.tsx
+        - src/components/titlebar/scheduleRrule.test.ts
+        - src/components/home/calendar/DayDetailPanel.test.tsx
+        - src/components/home/CalendarTab.test.tsx
+        # 축의 픽셀↔분 산수와 드롭 판정은 순수 함수로 나가 있다(계산을 컴포넌트에 흩뿌리지 않는다).
+        - src/components/home/calendarLayout.test.ts
+    cases:
+      - id: related-date-carries-its-own-time
+        given:
+          related_date: "치과, 08-15 14:30-15:00, 알림 10분 전"
+        expect:
+          start_time: "14:30"
+        covered_by: calendar_related_date_carries_its_own_times
+
+      - id: related-date-spans-its-own-end-triple
+        given:
+          related_date: "여행, 08-28 ~ 09-03 (기간)"
+        expect:
+          span_end: "2026-08-31"
+        covered_by: calendar_related_date_spans_its_own_end_triple
+
+      - id: related-date-partial-precision-covers-its-unit
+        given:
+          related_date: "연표, 연 정밀도 1999 + 월 정밀도 2026-08"
+        expect:
+          year_span_end: "1999-07-31"
+        covered_by: calendar_related_date_with_partial_precision_covers_its_unit
+
+      - id: related-date-rrule-expands-into-occurrences
+        given:
+          related_date: "스케일링, 매주 화 08-04 시작"
+        expect:
+          rrule: "FREQ=WEEKLY;BYDAY=TU"
+        covered_by: calendar_expands_a_related_dates_rrule
+
+      - id: dates-panel-edits-selected-row-primary-included
+        given:
+          panel: "노트 id 하나만 받는 DatesPanel, 대표 행 선택"
+        expect:
+          command: "note_date_update"
+        covered_by: 달력 편집이 선택된 행의 note_date_update 로 간다 — 대표 행도 예외가 아니다
+
+      - id: schedule-summary-orders-time-offset-repeat
+        given:
+          row: "09:00-10:00, 알림 on, 10분 전, 매주 화"
+        expect:
+          summary: "09:00–10:00 · 10분 전 · 매주 화"
+        covered_by: 벨 on — 시각·알림시점·반복을 그 순서로 잇는다 (ko)
+
+      # 2026-09-10 오너 결정: 접힘이 기본이다. 알림이 켜져 있어도 포커스 전에는 메타 줄과 벨
+      # 배지가 그대로다 — 시각은 시간축이 이미 말하므로 항상 펼칠 값이 없다.
+      - id: card-with-remind-stays-collapsed
+        given:
+          item: "09:00 시작, 알림 on, 알림시점 10분 전, 포커스 아님"
+        expect:
+          shows: "09:00"
+        covered_by: 알림이 켜져 있어도 포커스 전엔 접힘 — 메타 줄과 벨 배지가 그대로다
+
+      - id: card-without-remind-keeps-meta-line
+        given:
+          item: "09:00 시작, 알림 off, 포커스 아님"
+        expect:
+          shows: "09:00"
+        covered_by: 벨 꺼짐이고 포커스도 아니면 메타 줄이 그대로 — 벨 없이 시각만
+
+      # 2026-09-10 오너 결정: 날짜가 선택되면 헤더가 이미 그 날을 말한다 → 카드는 한 줄.
+      # 월 모드는 헤더가 "2026년 8월"까지만 말해 항목별 날짜가 유일한 단서라 둘째 줄이 남는다.
+      # 2026-09-10 타임축 직접 조작 — 칩을 끌어 시각을 바꾸고, 빈 곳을 끌어 만들고, 종일 노트를
+      # 축으로 떨어뜨려 시각을 얹는다. 셋 다 note_date_update 가 **행 전체를 교체**하므로,
+      # 페이로드의 날짜는 화면 항목이 아니라 note_dates_list 로 읽은 **DB 행**에서 온다
+      # (화면 항목의 날짜는 반복 회차·월 클리핑을 거친 값이다).
+      # 2026-09-11 W14 — 종일 목록이 세로 카드에서 가로 스트립으로. 원인: "3개 이상이면 접힘,
+      # 펼치면 축을 대체"라는 옛 구조가 3번째 이후 노트를 어느 상태로도 드래그 못 하게 막고
+      # 있었다(접히면 안 보이고 펼치면 축이 사라진다). 고정 한 줄 스트립은 그 딜레마 자체를
+      # 없앤다 — 몇 개든 가로 스크롤로 다 닿고 다 끌린다.
+      - id: allday-strip-is-horizontal
+        given:
+          notes: 5
+        expect:
+          testid: "cal-detail-allday"
+        covered_by: 그릇이 가로 한 줄이다 — row · nowrap · overflowX auto
+
+      - id: allday-third-pill-still-draggable
+        given:
+          notes: 5
+        expect:
+          reaches: "axis"
+        covered_by: "노트 5개인 날: 3번째 칸의 그립에서 시작한 드래그가 축까지 닿는다 (W14 ①)"
+
+      - id: allday-pill-click-does-not-open-panel
+        given:
+          click: "칸 제목"
+        expect:
+          testid: "cal-detail-settings-f"
+        covered_by: 포커스만으로는 펼침 패널이 열리지 않는다 — 설정 아이콘이 연다 (W14 ③)
+
+      - id: month-mode-keeps-vertical-cards
+        given:
+          selectedDay: "none"
+        expect:
+          layout: "column"
+        covered_by: 월 모드는 그대로 세로 카드 목록이다 (W14 ④)
+
+      - id: chip-resize-writes-db-row-date
+        given:
+          chip: "반복 회차, 화면 날짜 ≠ DB 행 날짜"
+        expect:
+          payload_from: "note_dates_list"
+        covered_by: 반복 회차의 끝을 끌어도 페이로드의 year/month/day 는 DB 행의 값이다
+
+      # 2026-09-11 그릴 D4·D5·D6 — 반복 편집은 초안→적용→확인, 회차 Delete 는 반복이면 확인,
+      # 축 칩 배경은 이 자리만 관례 예외(평소 반투명, 호버·포커스 불투명).
+      - id: repeat-edit-is-draft-until-apply
+        given:
+          action: "요일 체크박스 토글"
+        expect:
+          command: "note_date_update"
+        covered_by: 반복 변경은 초안일 뿐 — 고르는 것만으로는 저장되지 않는다 (D4)
+
+      - id: repeat-apply-drops-from-today-notifies
+        given:
+          after_apply: "오늘 목록에서 빠짐"
+        expect:
+          toast: "Removed from today's list"
+        covered_by: 적용 뒤 오늘 목록에서 빠지면 '빠졌다' 안내로 대체된다(토스트는 하나뿐) (D4)
+
+      - id: delete-repeating-chip-asks-first
+        given:
+          chip: "rrule 있음"
+        expect:
+          testid: "modal-shell"
+        covered_by: D5 — 반복(rrule) 있는 칩의 Delete 는 확인 후에만 지운다
+
+      - id: axis-chip-translucent-at-rest
+        given:
+          chip: "축, 평소"
+        expect:
+          background: "var(--hover)"
+        covered_by: ① 축 칩은 평소 반투명(--hover), 호버·포커스에서 불투명(--surface-base) — D6
+
+      - id: multi-day-span-has-no-end-handle
+        given:
+          row: "span_start != span_end"
+        expect:
+          cursor: "grab"
+          never: "ns-resize"
+        covered_by: 여러 날 span 에는 손잡이 자체가 없다 — 몸통을 끌어도 이동이다
+
+      # 회귀: 예전엔 "끝이 시작보다 이르면 0" 이라는 숫자 비교로 여러 날 여부를 추측했는데,
+      # 09:00 → 18:00 은 gap 이 +540 이라 첫날 칩을 옮기면 마지막 날 끝 시각이 같이 밀렸다.
+      - id: multi-day-move-never-shifts-last-day-end
+        given:
+          row: "여러 날, 09:00 → 18:00"
+        expect:
+          duration: 0
+        covered_by: 여러 날 span 은 순서가 멀쩡해도 길이가 0 이다 — 마지막 날 끝 시각을 밀지 않는다
+
+      # 2026-09-10 오너: 정밀도가 낮다고 드롭을 거부하지 않는다 — 특정 날의 축에 놓았다는
+      # 제스처 자체가 "이 날 이 시각"이라, 정밀도는 이 동작이 만들어 주는 것이다.
+      - id: allday-drop-gives-low-precision-row-a-date
+        given:
+          row: "month 또는 day 가 null"
+        expect:
+          command: "note_date_update"
+        covered_by: 정밀도 낮은 행 → 놓은 날로 날짜가 확정되고 종료 트리플이 비워진다
+
+      # 2026-09-11 그릴(GRILL-2026-09-11-day-panel-date-model) D2 — 결과가 다른 날(첫날)에
+      # 나타나는 조작이라 이제 즉시 쓰지 않고 다이얼로그로 고르게 한다.
+      - id: allday-drop-keeps-span-range
+        given:
+          row: "여러 날 span, 놓은 날이 첫날 아님"
+        expect:
+          testid: "modal-shell"
+        covered_by: 중간 날(8/9)에 놓으면 즉시 쓰지 않고 다이얼로그로 고르게 한다
+
+      - id: axis-empty-drag-creates-note
+        given:
+          drag: "축의 빈 곳"
+        expect:
+          preview: "cal-time-new-range"
+        covered_by: 빈 곳을 끌면 (날짜, 시작분, 끝분) 으로 한 번만 불린다
+
+      - id: now-line-only-today
+        given:
+          day: "오늘이 아님"
+        expect:
+          testid: "cal-time-now"
+        covered_by: 오늘이 아니면 눈금도 라벨도 없다
+
+      # 2026-09-11 오너 실기 W11 — 요약 아래 구분선, 시각 라벨 대비/틱모양, 칩 3줄, 설정 인라인 편집.
+      - id: briefing-divider-only-when-day-picked
+        given:
+          selectedDay: "picked"
+        expect:
+          testid: "cal-briefing-divider"
+        covered_by: 날짜를 고르면 브리핑 바로 아래·나머지 위에 선 하나
+
+      - id: tick-labels-share-mask-class
+        given:
+          labels: "hour ruler + now-line"
+        expect:
+          class: "cal-tick-label"
+        covered_by: 24시간 눈금 라벨이 선을 끊는 배경 클래스를 쓰고 한 단 커졌다
+
+      - id: chip-shows-time-title-excerpt
+        given:
+          item: "시각 있는 항목, 발췌 있음"
+        expect:
+          lines: 3
+        covered_by: 시각·반복 / 제목 / 발췌 첫 줄이 각각 한 줄로 뜬다
+
+      - id: chip-settings-opens-inline-time-repeat
+        given:
+          click: "cal-chip-settings"
+        expect:
+          via: "commitDateRow"
+        covered_by: 시각 입력이 note_dates_list → note_date_update 한 길을 지난다 (DB 행 기준 페이로드)
+
+      - id: expanded-chip-not-draggable
+        given:
+          chip: "설정 펼침"
+        expect:
+          command: "note_date_update"
+        covered_by: 펼쳐진 칩은 끌리지 않는다 — 접으면 드래그가 그대로 돌아온다
+
+      - id: day-picked-card-is-one-line
+        given:
+          selectedDay: "2026-08-09"
+        expect:
+          hides: "2026.08.09"
+        covered_by: 날짜가 선택되면 카드는 한 줄 — 둘째 줄의 날짜 메타가 사라진다
+
+      - id: month-mode-card-keeps-second-line
+        given:
+          selectedDay: "none"
+        expect:
+          shows: "2026.08.09"
+        covered_by: 월 모드에서는 둘째 줄(날짜/일정 메타)이 남는다 — 요약이 빈 줄이면 안 된다
+
+      - id: card-expanded-adds-this-date-button
+        given:
+          card: "포커스된 카드, 선택된 날 2026-08-09"
+        expect:
+          command: "cal-detail-add-date-a"
+        covered_by: "'+ 이 날짜 추가'가 선택된 날로 note_date_add 를 부르고 달력 축을 bump 한다"
+
+      - id: card-expanded-excerpt-from-note-get
+        given:
+          note: "첫 text 섹션 본문 두 줄"
+        expect:
+          excerpt: "다음 주 스케일링 예약"
+        covered_by: "발췌는 첫 text 섹션 본문의 앞 두 줄 — 추가 IPC 없이 인라인 할 일과 같은 note_get_many 에서 온다"
+
+      - id: drag-create-makes-note-first-then-title-and-folder
+        given:
+          drag: "8/10 ~ 8/12 드래그 → 놓음"
+        expect:
+          command: "note_create"
+        covered_by: "drag-create makes the note on drop, then 만들기 applies title + folder (no note tab opens)"
+
+      - id: cancel-drag-create-purges-the-orphan-note
+        given:
+          popover: "제목 입력 없이 취소"
+        expect:
+          command: "note_purge"
+        covered_by: cancelling the drag-create popover purges the note it made
+
+  # PLAN-2026-09-11-sidebar-day-panel — 대시보드 우측 패널 본체(DayDetailBody, F-D06)를
+  # 사이드바 달력 아래에도 이식. 본체는 하나, 껍데기(DayDetailPanel aside)와 사이드바 탭
+  # 셸이 각자 감싼다 — 두 번째 구현이 아니라 같은 컴포넌트의 두 번째 자리다.
+  - id: F-D07
+    name: 사이드바 달력 아래 "오늘 할 일 / 월간 일정" 탭 — DayDetailBody 이식 + 경계 fetch
+    status: shipped
+    commands: [commands/dashboard.yaml, commands/notes.yaml]
+    db: [db/schemas/notes.sql]
+    verify:
+      vitest:
+        - src/components/leftpanel/expanded/CalendarExpanded.test.tsx
+        - src/components/leftpanel/expanded/calendarGrid.test.ts
+    cases:
+      - id: today-tab-is-default
+        given:
+          open: "사이드바 달력, 날짜 미선택"
+        expect:
+          tab: "calendar-tab-today"
+          briefing: "cal-day-briefing"
+        covered_by: "defaults to the today tab: briefing shows today, month fetched once, no old header row"
+
+      - id: pick-day-toggles-briefing
+        given:
+          click: "미니 달력의 다른 날, 다시 같은 날 클릭"
+        expect:
+          testid: "cal-briefing-day"
+        covered_by: "picking a day moves the briefing to that day; picking it again returns to today"
+
+      - id: month-tab-ignores-picked-day
+        given:
+          tab: "월간 일정, 날짜 선택 여부와 무관"
+        expect:
+          text: "Reminders this month"
+        covered_by: "month tab lists the month's reminders and ignores the picked day"
+
+      - id: today-tab-shows-now-line
+        given:
+          open: "사이드바 오늘 할 일 탭, 20:00(08:00~14:00 기본 스크롤 창 밖)"
+        expect:
+          testid: "cal-time-now"
+          label: "20:00"
+        covered_by: "오늘 할 일 탭에 현재 시각 눈금이 뜬다"
+
+      - id: boundary-fetch-when-today-outside-viewed-month
+        given:
+          nav: "다른 달로 넘기고 날짜 미선택 — 오늘은 보는 달 밖"
+        expect:
+          command: "dashboard_calendar"
+        covered_by: "D6: navigating to another month with no pick fetches the viewed month plus today's month"
+
+      - id: tab-switch-does-not-refetch
+        given:
+          action: "탭만 전환, 데이터는 그대로 items 를 공유"
+        expect:
+          assertion: "toHaveLength(0)"
+        covered_by: "switching tabs does not refetch"
+
+      - id: day-fetch-month-is-pure
+        given:
+          call: "dayFetchMonth(선택된 날, 보는 연, 보는 월)"
+        expect:
+          same_month: "toBeNull"
+          other_month: "year: 2026, month: 7"
+        covered_by: "dayFetchMonth: same month → null, other month → that month"
+
+      # 2026-09-12 오너 요청 — 미니 달력 드래그로 여러 날에 걸친 노트 생성. 대시보드 월 그리드와
+      # 같은 훅(useCalendarDrag)·같은 팝오버(CreateRangePopover, F-D06 에서 분리) 재사용 —
+      # 두 번째 구현이 아니라 같은 컴포넌트의 두 번째 자리(F-D07 헤더 주석과 같은 원칙).
+      - id: drag-creates-via-shared-popover
+        given:
+          drag: "미니 달력 셀 하나에서 다른 셀로, 다시 시작 셀로"
+        expect:
+          testid: "cal-create-pop"
+          command: "note_create"
+        covered_by: "드래그하면 CreateRangePopover 가 뜨고 노트를 즉시 만든다"
+
+      - id: drag-create-cancel-purges
+        given:
+          action: "팝오버 취소"
+        expect:
+          command: "note_purge"
+        covered_by: "취소하면 만든 노트를 purge 한다"

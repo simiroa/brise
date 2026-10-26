@@ -1,0 +1,7 @@
+{
+  "_comment": "\"내년 봄\"(h05)의 월을 4월로 지어냄 — 정답은 {year:2027, month:null}. 날짜 채점기가 h05 를 잡아야 한다(holdout 노트라 split=all 로 돈다).",
+  "expect": { "scorer": "date", "ids": ["h05"] },
+  "split": "all",
+  "target": { "prompt": "classify", "note_id": "h05" },
+  "response": { "folder": "travel", "tags": ["여행", "제주"], "date": { "year": 2027, "month": 4, "day": null, "time": null, "end": null }, "region": "제주", "todos": ["렌터카 알아보기"], "topic_hint": null, "suspicious_instructions": false }
+}

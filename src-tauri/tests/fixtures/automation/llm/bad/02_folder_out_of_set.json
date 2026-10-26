@@ -1,0 +1,7 @@
+{
+  "_comment": "폴더를 닫힌 목록 밖의 key(\"books\")로 냄 — 스키마 채점기가 folder_out_of_set 으로 n15 를 잡아야 한다(폴더 정확도도 오답).",
+  "expect": { "scorer": "schema", "ids": ["n15"] },
+  "split": "dev",
+  "target": { "prompt": "classify", "note_id": "n15" },
+  "response": { "folder": "books", "tags": ["독서"], "date": null, "region": null, "todos": [], "topic_hint": "독서 습관", "suspicious_instructions": false }
+}

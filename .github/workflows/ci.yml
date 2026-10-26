@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  frontend:
+    name: Frontend (typecheck, static checks, tests)
+    runs-on: ubuntu-latest
+    env:
+      # tsc --noEmit 이 Node 기본 힙(~2GB)에서 메모리 부족으로 죽었다(exit 134) — 2026-07-27 이후 CI 가 빨간 원인 하나.
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Node 버전은 저장소 루트 .nvmrc 한 곳에서 — 개발 PC 와 CI 가 같은 메이저를 쓴다. 예전엔 여기 20 이 박혀
+      # 개발(24)과 어긋났고, CLI 가 쓰는 node:sqlite 를 모르는 20 에서 테스트가 실패했다(2026-10-23).
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck (tsc --noEmit)
+        run: npx tsc --noEmit
+
+      # 커밋 전 게이트와 같은 정적 검사 전부(CLAUDE.md "개별 스크립트를 골라 돌리지 마라") — 예전엔 i18n·설정 키 둘만 돌아
+      # 표면 계약·CSS 변수·무음 삼킴 래칫 등은 CI 가 보지 않았다.
+      - name: Static checks (npm run check)
+        run: npm run check
+
+      # 부팅 번들 크기 래칫(docs/PLAN-2026-10-23-perf-baselines.md §3). 빌드의 bundleGraph 플러그인이 청크 그래프를 dist 밖
+      # .eval/bundle/graph.json 에 남기고, check:bundle 이 scripts/bench/baselines/bundle.json 의 부팅 집합 크기와 비교한다.
+      # npm run check 에 넣지 않은 이유: 새 빌드가 필요하다(check:served 를 뺀 것과 같은 이유).
+      # vite build 만 — npm run build 는 tsc 를 한 번 더 돌린다(바로 위 Typecheck 스텝과 중복).
+      - name: Build (vite build)
+        run: npx vite build
+
+      - name: Boot bundle size ratchet (npm run check:bundle)
+        run: npm run check:bundle
+
+      - name: Run tests (vitest)
+        run: npx vitest run
+
+  rust:
+    name: Rust (cargo test)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo (src-tauri)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install Tauri v2 Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            librsvg2-dev \
+            libasound2-dev \
+            patchelf \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev
+
+      # --no-fail-fast: lib 테스트 하나가 실패하면 cargo 가 거기서 멈춰 src-tauri/tests/ 통합 테스트가 Linux 에서 한 번도 안 돌았다.
+      - name: Run cargo test (default features only)
+        run: cargo test --manifest-path src-tauri/Cargo.toml --no-fail-fast
+
+      # 개발 도구 seed_corpus 는 dev-tools 기능 뒤에 있어(설치 파일에서 빼려고) 기본 빌드·테스트가 컴파일하지 않는다 —
+      # 여기서 따로 타입체크해 조용히 썩지 않게 한다(CLAUDE.md "--lib 만 돌리다 통합 테스트가 썩은" 교훈과 같은 이유).
+      - name: Check dev tools (seed_corpus)
+        run: cargo check --manifest-path src-tauri/Cargo.toml --features dev-tools --bin seed_corpus

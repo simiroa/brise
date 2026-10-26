@@ -1,0 +1,155 @@
+# 기능 카탈로그: AI
+features:
+  - id: F-AI01
+    name: AI 정리 · 번역 · 프라이버시 게이트 · 히스토리
+    status: shipped
+    commands: commands/ai.yaml
+    service: service/ai.yaml
+    verify:
+      rust:
+        - src-tauri/src/repo/ai
+        - src-tauri/tests/invariant_ai_organize.rs
+        - src-tauri/tests/invariant_ai_privacy_gate.rs
+        - src-tauri/tests/invariant_ai_apply_integrity.rs
+        - src-tauri/tests/invariant_ai_translate.rs
+        - src-tauri/tests/invariant_ai_history_audit.rs
+      vitest:
+        - src/components/settings/AiProviderSection.test.tsx
+        # W4(2026-08-30): AI 액션 편집기가 설정에서 프리셋 관리 모달로 옮겨갔다
+        # (AiActionsSection.test.tsx → 아래 경로). docs/PLAN-2026-08-30-ai-surface-and-clients.md §3 W4.
+        - src/components/presets/AiActionEditor.test.tsx
+        - src/components/settings/AiPermissionsSection.test.tsx
+        - src/lib/aiCapabilities.test.ts
+        - src/stores/runAiAction.test.ts
+        - src/components/diagram/diagramSchema.test.ts
+    cases:
+      - id: privacy-gate-local-ollama-exception
+        given:
+          ai_enabled: false
+        expect:
+          cloud: "https://api.openai.com/v1"
+          local: "http://localhost:11434"
+          remote: "https://ollama.example.com"
+          reason: "local ollama must not require ai_enabled"
+        covered_by: privacy_gate_cloud_requires_enabled_local_ollama_does_not
+
+      - id: cleanup-cloud-blocked-without-ai-enabled
+        given:
+          provider: openai
+          ai_enabled: false
+        expect:
+          leaked: "should not be reached"
+          body: "secret note body"
+        covered_by: test_invariant_cleanup_cloud_blocked_without_ai_enabled
+
+      - id: cleanup-local-ollama-allowed
+        given:
+          provider: ollama
+          endpoint: loopback
+          ai_enabled: false
+        expect:
+          cleaned: "cleaned body"
+        covered_by: test_invariant_cleanup_local_ollama_allowed_without_ai_enabled
+
+      - id: remote-ollama-requires-ai-enabled
+        given:
+          provider: ollama
+          endpoint: "http://192.168.1.50:11434"
+          ai_enabled: false
+        expect:
+          endpoint: "http://192.168.1.50:11434"
+        covered_by: test_invariant_cleanup_remote_ollama_requires_ai_enabled
+
+      - id: organize-propose-only-leaves-db
+        given:
+          note: { title: "Old", year: 1900, tags: ["x"] }
+          proposal: { title: "New", year: 1443, tags: ["hangul"], confidence: 0.9 }
+        expect:
+          tag: "hangul"
+          reason: "propose must not commit — DB should still hold the pre-proposal value"
+        covered_by: test_invariant_ai_organize
+
+      - id: organize-folder-propose-only-then-apply-moves
+        given:
+          proposed_folder: "Archive"
+        expect:
+          folder: "Archive"
+          propose: "propose must not move the note"
+          apply: "apply must move the note to the resolved folder"
+        covered_by: test_folder_inference_propose_resolves_and_apply_moves_via_shared_update_path
+
+      - id: apply-organize-all-or-nothing
+        given:
+          invalid_lat: 91.0
+          title: "After"
+        expect:
+          kept: "Before"
+          rejected: "After"
+          url: "https://example.test/source"
+        covered_by: apply_organize_rolls_back_every_field_when_any_field_is_invalid
+
+      - id: apply-organize-late-failure-rollback
+        given:
+          late_sql: attachment insert abort
+        expect:
+          kept: "Original"
+          rejected: "Must not persist"
+          url: "https://example.test/late-failure"
+        covered_by: organize_late_attachment_failure_rolls_back_prior_metadata
+
+      - id: stale-plan-does-not-overwrite
+        given:
+          note_edited_after_review: "User changed this"
+        expect:
+          user: "User changed this"
+          stale: "stale"
+          rejected: "AI overwrite"
+        covered_by: stale_plan_update_is_failed_without_overwriting_the_note
+
+      - id: history-does-not-store-output-body
+        given:
+          action: cleanup
+        expect:
+          action: "cleanup.succeeded"
+          body: "private cleaned note body that must not enter audit history"
+        covered_by: cleanup_success_is_audited_without_storing_the_output_body
+
+      - id: history-keeps-private-content-out
+        given:
+          operations: [translate, generate, organize]
+        expect:
+          organize: "organize.proposed"
+          title: "private proposed title"
+          key: "sk-1234567890abcdef"
+        covered_by: every_ai_operation_uses_a_terminal_event_and_keeps_content_out_of_history
+
+      - id: diagram-progress-preserves-structure
+        given:
+          preset: diagram_progress
+          structure_change: false
+        expect:
+          state_updated: true
+          structure_preserved: true
+          rejected_on_structural_change: true
+        covered_by: test_diagram_progress_preserves_structure_and_rejects_change
+
+      - id: diagram-ai-validation-repair-loop
+        given:
+          attempts: 3
+          broken_responses: 2
+        expect:
+          retries: 2
+          total_attempts: 3
+          eventual_success: true
+        covered_by: test_diagram_ai_validation_and_repair_loop
+
+      - id: diagram-ai-referential-integrity
+        given:
+          from_missing: true
+          group_missing: true
+          state_out_of_bounds: true
+        expect:
+          valid: false
+          errors_detected: 3
+        covered_by: test_diagram_validation_referential_integrity
+

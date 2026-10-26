@@ -1,0 +1,351 @@
+# 커맨드 계약: AI (Wave 2 신규) — 규약: _conventions.yaml
+# 결정: AI 정리 = 노트의 본문(섹션들)을 LLM에 보내 표준 front-matter를 채워 다시 넣는다.
+#       "프론트매터 정리" 의미: tags, year(연대 보정), title 정제. 본문은 손대지 않는다.
+#       안전: 모든 LLM 호출은 노트 본문 길이 제한(8KB), 부분 실패는 무효화(원본 보존).
+# P0-2(propose/apply 분리): ai_organize_note는 제안만 하고 DB에 절대 쓰지 않는다 — "확인" 모달의
+#       Cancel이 실제로 아무것도 되돌릴 필요가 없어야 하기 때문(예전엔 여기서 곧장 커밋한 뒤
+#       모달을 보여줘서 Cancel을 눌러도 이미 반영된 상태였다). 사용자가 모달에서 Apply를 눌러야만
+#       ai_apply_organize가 커밋한다.
+commands:
+  ai_organize_note:
+    input:
+      id: uuid
+      fields: "string[]?"
+      provider: "'ollama'|'openai'|'claude'|'gemini'|'minimax'|'openrouter'"   # settings.ai_provider 기본값 사용 가능 (omit 시 fallback)
+      endpoint: "string|omit=settings.ai_endpoint"
+      api_key: "string|omit"                                   # 호스트 환경변수(Ollama=없음) 또는 settings 우선
+      model: "string|omit"                                    # 프로바이더 기본 모델 사용 가능
+      custom_prompt: "string|omit"                             # Wave(EDITABLE METADATA PROMPT): settings의 "메타데이터" 프리셋
+                                                                 # 프롬프트. 없으면 백엔드 고정 OUTPUT CONTRACT만 전송(하위호환).
+                                                                 # 있으면 guidance로만 합성 — JSON 스키마는 이 값으로 못 바꾼다.
+      origin: "string|omit"                                    # 호출 출처 감사 배선. 생략 또는 omit=일반 노트 메뉴 호출(organize.proposed/
+                                                                 # failed 그대로). "collect_post_process"만 허용 — 수집 후처리 카드 수락 경로가
+                                                                 # 이 값으로 넘기면 ai_history/ai_usage에 action_type='collect_post_process'로
+                                                                 # 기록되어 collect_get_stats 통계 카드와 AiHistoryPanel 라벨에 집계된다.
+                                                                 # 그 외 값은 VALIDATION.
+      request_id: "string|omit"                                # AUDIT-2026-09-05-ai-guard-friction §2-4(권장 6): 배치 정리
+                                                                 # (AiBatchOrganizeModal)가 한 배치를 하나의 request_id로 묶어 [중단] 시
+                                                                 # ai_cancel_call{request_id}로 진행 중 호출을 실제로 끊을 수 있게 한다.
+                                                                 # ai_translate_text/ai_cleanup_text/ai_generate_from_prompt와 동일한 계약 —
+                                                                 # 생략하면 이전과 동일(request_id 없이 기록, id로만 취소 가능).
+    output:
+      title: "string?"                                    # 정제된 제목 (서버 응답 그대로, 아직 미반영)
+      year: "integer?"
+      tag_names: "string[]?"                                # 정규화·중복제거·소문자화는 서버 측
+      region: "string?"
+      folder_id: "string?"                                  # Wave(FOLDER INFERENCE): 워크스페이스 기존 폴더 중 하나로 해석된 id.
+                                                              # 모델이 목록 밖 이름을 냈거나 아무 폴더도 안 골랐으면 omit(= 제안 없음).
+      folder_name: "string?"                                # 표시용 정식 이름(후보 목록의 원문, resolve된 값) — folder_id와 항상 함께 있거나 함께 없다.
+      lat: "number?"
+      lng: "number?"
+      source_urls: "string[]?"
+      confidence: number                                       # 0.0~1.0 — 프론트가 낮은 확신도를 사용자에게 경고하는 용도(더 이상 백엔드 auto-apply 게이트가 아님)
+    errors: [NOT_FOUND, VALIDATION, IO]                        # VALIDATION: 프라이버시 게이트 거부 / 본문 8KB 초과 / 응답 JSON 파싱 실패 / 알 수 없는 origin
+    notes: |
+      흐름(propose-only — 어떤 DB 쓰기도 하지 않는다):
+      1. 프라이버시 게이트(R11, ai_translate_text/ai_cleanup_text와 동일 판정): provider=ollama
+         AND 엔드포인트가 loopback이면 ai_enabled 없이도 허용, 그 외(클라우드 또는 원격 ollama)는
+         settings.ai_enabled=true가 아니면 VALIDATION으로 즉시 거부 — 이 검사가 없으면
+         ai_enabled=false여도 노트 본문이 클라우드로 나간다(P0-1, 프론트 메뉴 비활성화만으로는
+         부족 — devtools의 invoke(...) 등 커맨드가 웹뷰 전체에 노출되어 있어 서버 사이드 강제 필요).
+      2. 노트 로드 → sections.body_md 합치기 (8KB cap, 초과 시 잘라내 + "…[truncated]" 마킹)
+      3. 노트가 속한 워크스페이스의 폴더 전체(id+name)를 후보로 조회 — 시스템 프롬프트에 이름
+         목록을 박아 모델이 그 중 하나만(또는 아무것도) 고르게 한다.
+      3b. 같은 워크스페이스(노트북)의 태그 사용 빈도 상위 50개(AI_TAG_VOCAB_CAP; 동률은 이름
+         오름차순)를 후보 어휘로 조회(notes::tag_counts + ai::tag_vocabulary_top) — 시스템
+         프롬프트에 넣어 기존 태그를 우선 재사용하게 하고, 맞는 것이 없을 때만 신규 태그를
+         최대 3개까지 허용(최종 총 ≤6). 빈 노트북이면 어휘 없이 "invent only what fits" 규칙.
+      4. 시스템 프롬프트 = 백엔드 고정 OUTPUT CONTRACT(+동적 폴더·태그 후보 목록) + custom_prompt(있으면,
+         guidance로만) — repo::ai::compose_organize_system_prompt. provider별 어댑터로 전송.
+      5. JSON 응답 파싱 → {title,year,tags,region,folder,source_urls,confidence} 검증. folder는
+         원문 그대로(모델이 낸 이름) → repo::ai::resolve_folder_name으로 3번의 후보 목록과 대조해
+         id로 해석(정확 일치 → 대소문자/공백 무시 일치 → 그래도 없으면 omit, 절대 지어내지 않음).
+      6. 결과를 그대로 반환한다 — note_update/note_set_tags 등 어떤 쓰기도 하지 않는다. 실제
+         커밋은 사용자가 프론트의 확인 모달에서 Apply를 누를 때만 ai_apply_organize가 한다.
+         (과다 마찰: 제안 태그가 10개 초과면 확인 UI가 "태그가 너무 많습니다" 경고 + 초과분
+         기본 미선택 — 강제 차단 아님.)
+      보안:
+      - 네트워크 egress는 사용자 환경 → Tauri proxy 없음. 프롬프트에 사용자 노트가 그대로 노출되므로
+        endpoint는 신뢰된 호스트만 허용 (Ollama localhost 기본 OK, 클라우드는 사용자 책임).
+      - 응답은 JSON only 가정. 파싱 실패 시 VALIDATION. 입력 검증 안 함 (LLM 결과를 신뢰하되
+        confidence는 표시용 — 게이팅에는 더 이상 쓰지 않는다. 결정은 사용자가 모달에서 내린다).
+      흐름 상세: service/ai.yaml
+
+  ai_apply_organize:                                           # AiConfirmModal "Apply" — 신규 (P0-2)
+    input:
+      id: uuid
+      title: "string?"
+      year: "integer?"
+      tag_names: "string[]?"
+      region: "string?"
+      lat: "number?"
+      lng: "number?"
+      source_urls: "string[]?"
+      folder_id: "string?"                                     # Wave(FOLDER INFERENCE): ai_organize_note가 이미 해석한 id 그대로 전달(재해석 없음)
+      clear_fields: "string[]|omit"                            # PLAN-2026-09-05 §5-8 업그레이드 경로 — "location"|"region"|"year"만 허용,
+                                                                 # 그 외 문자열은 VALIDATION. 같은 필드가 clear_fields에도 있고 값 입력에도
+                                                                 # 있으면(예: clear_fields=["region"] + region="Seoul") VALIDATION.
+                                                                 # "title"은 여기 없다 — apply_ai_organize_in_tx가 title을 정규화 없이 그대로
+                                                                 # 저장해 title:"" 을 그냥 보내면 이미 지워진다(clear 시맨틱 불필요). "source_urls"도
+                                                                 # 없다 — "전부 지움"이 아니라 "이 URL들만 지움"이 필요해 remove_source_urls로 분리.
+      remove_source_urls: "string[]|omit"                      # add_link_if_absent_tx의 짝 — 정확한 URL 일치로 링크 첨부를 제거한다.
+                                                                 # source_urls(추가)와 같은 URL을 동시에 담으면 VALIDATION.
+    output:
+      applied: "string[]"                                      # 실제 변경된 필드 목록 ('title'|'year'|'tags'|'region'|'folder'|'location'|'attachments'
+                                                                 # |'location_cleared'|'region_cleared'|'year_cleared'|'attachments_removed') —
+                                                                 # 값이 기존과 같거나 이미 비어 있으면 빠짐(clear/remove도 no-op이면 빠진다)
+    errors: [NOT_FOUND, VALIDATION]                             # VALIDATION: year 범위 초과 (YEAR_MIN..=YEAR_MAX) / folder_id가 존재하지 않는 폴더(NOT_FOUND)
+                                                                 # / clear_fields에 알 수 없는 값 / clear_fields와 값 입력의 충돌 /
+                                                                 # source_urls와 remove_source_urls의 URL 중복
+    notes: |
+      ai_organize_note가 반환한 제안(title/year/tag_names/region/lat/lng/source_urls/folder_id)을 사용자가 모달에서 Apply를 누른
+      시점에만 커밋한다 — repo::notes::apply_ai_organize(title/year/tags) + repo::notes::update(folder_id?, 데스크톱
+      "폴더로 이동"과 완전히 같은 경로 — note_update가 호출하는 그 함수를 그대로 재사용해 tombstone/updated_at/
+      트리 새로고침 시맨틱이 갈라지지 않게 한다) + set_region/set_location + add_link(source_urls).
+      Cancel(프론트 clearProposal)은 이 커맨드를 호출하지 않는다.
+      clear_fields/remove_source_urls는 같은 트랜잭션 안에서 처리된다(apply_ai_organize_in_tx
+      흐름 유지) — "빈 값에서 채운 좌표"와 "추가된 출처 링크"를 되돌릴 방법이 없던 되돌리기 결함의
+      업그레이드 경로(§5-8). location clear는 lat/lng를 함께 NULL로, year clear는 "비어 있음" 관례
+      (year===0, 프런트 aiProposalDiff.ts와 동일 판정)를 따른다.
+      흐름 상세: service/ai.yaml
+
+  ai_apply_plan:
+    http: false                                               # user-reviewed local execution; never sync-HTTP exposed
+    input:
+      workspace_id: uuid                                      # app-owned active workspace at review time
+      scope: AiPlanScope                                      # app-hydrated revisions/folders, never model JSON
+      execution_id: string                                    # app-generated opaque id; never model-generated
+      actions: "AiPlanAction[]"
+    output: "AiPlanActionResult[]"
+    errors: [VALIDATION, NOT_FOUND, CONFLICT]
+    notes: |
+      User-approved agent plan mutation boundary. Each action is atomic and has a durable
+      (execution_id, action_id) receipt. Repeating an applied pair returns already_applied;
+      a failed receipt is retryable only when the identical payload is retried after an external
+      or transient cause is removed; a corrected plan must use a new action id. The backend validates
+      all referenced notes/folders inside the mutation transaction and merge creates the
+      destination before soft-deleting any source. A changed receipt payload is CONFLICT;
+      stale note revisions are returned as a per-action failed result.
+
+  ai_test_connection:                                          # SettingsModal의 "Test connection" 버튼
+    input:
+      provider: "'ollama'|'openai'|'claude'|'gemini'|'minimax'|'openrouter'"
+      endpoint: "string|omit=provider default"
+      api_key: "string|omit"
+    output: { ok: boolean, latency_ms: integer, models: "string[]|omit" }
+    errors: [IO, VALIDATION]                                   # VALIDATION: provider 미지원
+    notes: ollama는 GET /api/tags로 모델 목록까지 함께, 다른 프로바이더는 단방향 ping.
+
+  ai_test_connection_before_enable:                            # 온보딩 3/4 AI의 "연결 테스트" 버튼
+    http: false   # ai_test_connection 의 ai_enabled 게이트는 원격(동기화 토큰) 호출자의 SSRF 를 막는다.
+                  # 이 커맨드는 그 게이트를 건너뛰므로 데스크톱 IPC 에만 둔다.
+    input:
+      provider: "'ollama'|'openai'|'claude'|'gemini'|'minimax'|'openrouter'"
+      endpoint: "string|omit=provider default"
+      api_key: "string|omit"
+    output: { ok: boolean, latency_ms: integer, models: "string[]|omit" }
+    errors: [IO, VALIDATION]
+    notes: |
+      PLAN-2026-09-28-onboarding-rebuild §2 3/4 — "연결을 확인한 뒤에 AI 를 켠다". ai_test_connection
+      은 ai_enabled 가 꺼져 있으면 클라우드를 거부해서, 켜기 전 테스트가 불가능했다("AI 를 켜려면
+      먼저 AI 를 켜야 하는" 잠금 — ai_openrouter_connect 와 같은 논리). 연결 확인은 노트 내용을
+      보내지 않는다. 키는 설정에서 읽지 않고 인자로만 받는다.
+
+  ai_openrouter_connect:                                       # 설정 → AI 프로바이더의 "OpenRouter 로그인" 버튼
+    http: false   # OS 브라우저를 열고 이 기기의 loopback 포트를 잠깐 연다 — 원격 클라이언트가
+                  # 서버 머신의 브라우저를 띄우게 할 수 없어야 한다(_conventions.yaml 의
+                  # "OS UI를 여는 커맨드" + "서버 머신 로컬 상태 부수효과" 둘 다 해당).
+    input:  {}
+    output: { api_key: string }
+    errors: [IO]                                               # 브라우저 실행 실패 / 승인 미완료(3분) / 코드 교환 실패
+    notes: |
+      OAuth PKCE(S256). 127.0.0.1:0 에 **원샷** axum 리스너를 띄우고 브라우저를
+      openrouter.ai/auth 로 보낸 뒤, 돌아온 code 를 /api/v1/auth/keys 에서 사용자 소유 API 키로
+      교환해 그대로 반환한다. 설정에 쓰지 않는다 — 프런트가 ai_provider/ai_endpoint/ai_api_key 를
+      기존 settings_set 으로 저장한다(입력칸 상태도 같이 갱신해야 하므로 어차피 값을 알아야 함).
+      리스너는 코드 수신 또는 180초 중 먼저 오는 쪽에서 abort 된다.
+      키의 보관 위치·보안 등급은 손으로 붙여넣던 때와 같다(settings.ai_api_key 평문) — UX만 다르다.
+      다른 프로바이더에 같은 커맨드가 없는 이유는 src-tauri/src/repo/ai/oauth.rs 헤더 참고
+      (Anthropic·Google은 약관으로 금지, OpenAI는 서드파티 클라이언트 등록 경로 없음).
+
+  ai_translate_text:                                           # 에디터 툴바 번역 토글(읽기전용 뷰) — 신규
+    input:
+      text: string                                             # 현재 섹션의 평문(에디터 doc.textContent), 8KB cap
+      target_lang: "'fr'|'en'|'ko'"
+      provider: "'ollama'|'openai'|'claude'|'gemini'|'minimax'|'openrouter'"       # 필수 — Rust는 provider: String
+                                                                 # (Option 아님)이라 서버 쪽 settings.ai_provider 폴백이 없다.
+                                                                 # 프론트는 stores/ai.ts::aiCreds()로 채워 보낸다(AUDIT-2026-09-26
+                                                                 # §3 G6 required_drift 정정 — 예전엔 omit=settings.ai_provider로
+                                                                 # 적어 두고 실제로는 폴백이 없었다).
+      endpoint: "string|omit=settings.ai_endpoint"
+      api_key: "string|omit"
+      model: "string|omit"
+      request_id: "string|omit"                                # PLAN-2026-09-05 §3 C-2: call_log 항목에 그대로 실려
+                                                                 # ai_cancel_call(request_id=...)이 이 호출을 찾아 취소할 수 있게 한다.
+                                                                 # 생략하면 이전과 동일(request_id 없이 기록, id로만 취소 가능).
+    output: { translated: string }
+    errors: [VALIDATION, IO]                                   # VALIDATION: 미지원 provider, 또는 프라이버시 게이트 거부
+    notes: |
+      ai_organize_note 와 동일한 프로바이더 어댑터를 쓰지만 응답은 JSON 이 아니라 평문 —
+      "Translate into {target_lang}, output ONLY the translated text" 시스템 프롬프트.
+      본문은 절대 수정하지 않는다 — 이 커맨드는 note_update/section 관련 쓰기를 전혀 하지 않고
+      translated 문자열만 반환한다(프론트는 이를 별도 읽기전용 뷰에만 렌더링, 에디터 본문에는
+      쓰지 않음).
+      프라이버시 게이트(R11 재사용, resolve_embed_config 의 R15 규칙과 동일): provider=ollama
+      AND 엔드포인트가 loopback(localhost/127.0.0.1/::1/0.0.0.0)이면 ai_enabled 없이도 허용.
+      그 외(클라우드 또는 원격 ollama)는 settings.ai_enabled=true 가 아니면 VALIDATION.
+      본문 8192자 초과 시 잘라내(ai_organize_note와 동일 cap, 에러 아님).
+      흐름 상세: service/ai.yaml
+
+  ai_cleanup_text:                                              # AI 드롭다운 "에디터 내용 정리" — 신규
+    input:
+      text: string                                              # 현재 섹션의 body_md 전체, 8192자 cap
+      provider: "'ollama'|'openai'|'claude'|'gemini'|'minimax'|'openrouter'"       # 필수 — ai_translate_text와 동일 이유(위 참고).
+      endpoint: "string|omit=settings.ai_endpoint"
+      api_key: "string|omit"
+      model: "string|omit"
+      request_id: "string|omit"                                 # PLAN-2026-09-05 §3 C-2 — ai_translate_text와 동일한 계약.
+    output: { cleaned: string }
+    errors: [VALIDATION, IO]                                    # VALIDATION: 미지원 provider, 또는 프라이버시 게이트 거부
+    notes: |
+      ai_translate_text 와 동일한 어댑터 세트 + 동일한 프라이버시 게이트를 쓰지만, 시스템
+      프롬프트가 "번역"이 아니라 "정리"(문법/오탈자 교정, 문단·목록 정리, 사실 보존, 새 정보
+      추가 금지) — 결과는 평문(마크다운 허용).
+      **본문을 절대 덮어쓰지 않는다**: 이 커맨드는 note_update/section_update 등 어떤 쓰기도
+      하지 않고 cleaned 문자열만 반환한다. 프론트는 이 결과를 section_create_with_body로 새
+      탭에 넣는다 — 원본 섹션은 그대로 둔다(Brise 전역 불변식: AI 결과는 항상 새 탭, 절대
+      덮어쓰기 없음).
+      프라이버시 게이트: ai_translate_text 와 완전히 동일한 규칙(provider=ollama + loopback
+      이면 예외, 그 외는 ai_enabled=true 필수) — repo::ai::cleanup_text_inner 가
+      translate_inner 와 같은 판정 로직을 공유한다.
+      본문 8192자 초과 시 잘라내(에러 아님). 잘라낸 후 공백만 남으면 cleaned="" 반환(빈 섹션 방지는 프론트 책임).
+      흐름 상세: service/ai.yaml
+
+  ai_generate_from_prompt:                                      # AI 드롭다운 "프롬프트 박스" — 신규
+    input:
+      prompt: string                                            # 사용자가 입력한 자유 텍스트 요청
+      context_text: "string|omit"                               # 현재 섹션의 body_md(선택적 배경 — flush 후 프론트가 채움)
+      provider: "'ollama'|'openai'|'claude'|'gemini'|'minimax'|'openrouter'"       # 필수 — ai_translate_text와 동일 이유(위 참고).
+      endpoint: "string|omit=settings.ai_endpoint"
+      api_key: "string|omit"
+      model: "string|omit"
+      request_id: "string|omit"                                 # PLAN-2026-09-05 §3 C-2 — ai_translate_text와 동일한 계약.
+      preset_id: "string|omit"                                  # AUDIT-2026-09-22 W1 — call_log CallCtx 배선용 프리셋 식별자.
+      purpose: "'transform'|'generate'|'json'|omit"            # AUDIT-2026-09-22 W2 — 시스템 프롬프트 목적 분기 (기본값 'generate').
+    output: { generated: string }
+    errors: [VALIDATION, IO]                                    # VALIDATION: prompt 공백, 미지원 provider, 또는 프라이버시 게이트 거부
+    notes: |
+      ai_cleanup_text 와 같은 어댑터·게이트를 재사용하되 시스템 프롬프트가 다르다: 사용자의
+      prompt+context_text 합계는 32000자 cap이며 초과하면 무음 절단 없이 VALIDATION. prompt로 새 콘텐츠를 작성하고, context_text가 있으면 "관련 있을 때만 참고할 배경"으로
+      취급한다(무조건 반영 강제 아님) — 노트에 없는 내용을 새로 만들어도 된다는 점이
+      ai_cleanup_text/ai_organize_note와의 핵심 차이.
+      **본문을 절대 덮어쓰지 않는다**: cleaned와 마찬가지로 generated 문자열만 반환, DB 쓰기
+      없음. 프론트가 section_create_with_body로 새 탭에 넣는다.
+      prompt가 공백뿐이면 VALIDATION(빈 요청으로 호출 자체를 막음 — cap-then-empty를
+      no-op 처리하는 cleanup/translate와 달리, 여기는 입력이 곧 유일한 지시문이라 비어 있으면
+      의미 있는 호출이 아예 불가능하기 때문).
+      흐름 상세: service/ai.yaml
+
+  ai_get_history:                                              # Wave 9: AI 히스토리 조회
+    input:
+      workspace_id: uuid
+      limit: "integer|omit"
+    output:
+      items: "AiHistoryItem[]"
+    errors: [VALIDATION]
+
+  ai_get_usage:                                                # P3 수집 v2: AI 호출수 통계 조회
+    input:
+      workspace_id: "uuid|omit=active"
+      since: "string?|omit"
+    output:
+      rows: "AiUsageRow[]"
+    errors: [VALIDATION]
+    notes: |
+      ai_usage 테이블에서 workspace_id와 since(YYYY-MM-DD 이후) 기준 호출수 통계를 조회한다.
+
+  ai_calls_active:                                             # PLAN-2026-09-05 §3 C-4: 진행 중인 AI 호출 목록
+    http: false                                                # 프로세스 전역 메모리 상태 조회 — 원격 sync 클라이언트엔 의미 없음(ai_apply_plan과 동일 표기)
+    input: {}
+    output:
+      items: "CallLogEntry[]"
+    errors: []
+    notes: |
+      RealTextTransport::send_text / RealVisionTransport::send_vision 두 지점에서만 기록되는
+      프로세스 전역 링 버퍼(repo::ai::call_log, 상한 300) 중 아직 끝나지 않은(outcome 없음)
+      항목만 반환한다. 진행 표시/취소 UI(AiResultModal, ai-history 창 "호출 로그" 탭)가 폴링한다.
+      DB 접근 없음 — 순수 메모리 조회.
+
+  ai_calls_recent:                                             # PLAN-2026-09-05 §3 C-4: 최근 종료된 AI 호출 목록
+    http: false                                                # 위와 동일 이유
+    input:
+      limit: "integer|omit"                                    # 생략 시 300(링 버퍼 전체)
+    output:
+      items: "CallLogEntry[]"
+    errors: []
+    notes: |
+      같은 링 버퍼에서 끝난(outcome 있음) 항목만 최신순으로 최대 limit개 반환한다. 파일
+      (ai-calls.jsonl)은 재부팅 후에도 남지만 이 커맨드는 메모리만 본다 — 재부팅 직후에는
+      비어 있다(파일을 다시 읽어 들이지 않음, ponytail: 필요해지면 init()이 마지막 N줄을
+      파싱해 링을 예열하게 확장).
+
+  ai_cancel_call:                                              # PLAN-2026-09-05 §3 C-5 2단계 / §3 C-2(WC): 진행 중 호출 진짜 취소
+    http: true                                                 # 폰 일괄 정리 [중단]이 진행 중 호출(≤45s)을 끊는다(AUDIT-2026-10-10 X-6/O-3). 취소 대상은 호출자가 넘기는 id/request_id 로만 좁혀지고, 원격 AI rate limit 에서 제외(remote_policy::is_ai_command)
+    input:
+      id: "string|omit"                                     # 단일 호출 취소(기존 계약). id/request_id 중 정확히 하나가 있어야 한다.
+      request_id: "string|omit"                                # WC §3 C-2: 이 request_id로 시작된 진행 중 호출 전부를 취소한다
+                                                                 # (프런트가 같은 사용자 행동을 여러 실호출로 쪼갠 경우 — 예: 재시도
+                                                                 # 버튼을 두 번 눌러 이전 요청이 아직 살아 있는 경우 — 를 한 번에 정리).
+                                                                 # id가 있으면 id가 우선(request_id는 무시).
+    output:
+      cancelled: boolean                                       # count > 0 과 동치 — 기존 프런트 하위호환용으로 유지.
+      count: integer                                           # 실제로 신호가 나간 개수. id 경로는 0 또는 1, request_id 경로는 0 이상.
+    errors: [VALIDATION]                                       # VALIDATION: id와 request_id 둘 다 생략
+    notes: |
+      repo::ai::call_log 의 취소 토큰(Arc<tokio::sync::Notify>, id별로 begin() 시 하나씩 발급)에
+      신호를 보낸다. id가 아직 진행 중이면 신호를 보내고 count=1, 이미 끝났거나(finish 완료)
+      모르는 id거나 이미 한 번 취소 신호를 보낸 id면 count=0(신호는 id당 한 번만 나간다 — 두 번째
+      호출은 토큰이 이미 소비돼 없음). request_id 경로(call_log::cancel_by_request_id)는 그
+      request_id로 시작된 진행 중(outcome 없음) 항목을 모두 찾아 각각 같은 방식으로 취소하고
+      실제로 신호가 나간 개수를 돌려준다. 실 프로바이더 호출 네 곳(mod.rs::RealTextTransport::
+      send_text/send_json 오버라이드, RealVisionTransport::send_vision, RealTranslateTransport::
+      translate — 전부 transport::logged_call 을 지난다)이 재시도·폴백 루프(with_model_fallback_until)
+      전체를 바깥에서 select 하므로, 취소되면 그 루프 자체가 즉시 drop 되어 폴백 재시도가 새로
+      시작되지 않는다. 취소된 호출은 call_log 에 outcome="cancelled" 로 남는다.
+
+  ai_calls_summary:                                            # WI 잔여(docs/AUDIT-2026-09-05-ai-guard-friction.md): 호출 로그 탭 집계
+    http: false                                                # 프로세스 로컬 파일 조회 — ai_calls_active/recent 와 동일 표기
+    input:
+      days: integer                                            # 1..=90, 범위 밖은 VALIDATION
+    output: CallsSummary
+    errors: [VALIDATION]                                       # VALIDATION: days가 1..=90 밖
+    notes: |
+      메모리 링(300건·재부팅 시 소실)이 아니라 `ai-calls.jsonl`(+ 회전분 `.1`) 파일을 읽어
+      최근 `days`일을 집계한다 — 재부팅 후에도 히스토리를 보여줄 수 있는 유일한 경로. 파싱
+      실패 줄은 건너뛴다. 파일이 없으면 전부 0. `by_outcome`은 ok/error/deadline/cancelled
+      네 키가 항상 존재한다(관측 0건이어도 0). `median_duration_ms`/`p90_duration_ms`는
+      nearest-rank 백분위수(보간 없이 실제 관측값)이며 duration 데이터가 하나도 없으면 omit.
+      `discard_reasons`는 `ai_call_annotate`가 남긴 kind="annotation" 줄만 집계한다.
+
+  ai_call_annotate:                                            # WI 잔여: 게이트 [버리기] 사유 기록
+    http: false                                                # ai_cancel_call과 동일 이유 — 원격 sync 클라이언트엔 의미 없음
+    input:
+      request_id: string
+      discard_reason: "'wrong'|'too_long'|'bad_format'|'other'"  # 그 외 값은 VALIDATION
+    output: { ok: boolean }
+    errors: [VALIDATION]                                       # VALIDATION: discard_reason이 네 값 밖
+    notes: |
+      `ai-calls.jsonl`은 append-only라 이미 기록된 `CallLogEntry` 줄을 되돌아가 고치지 않는다
+      — 대신 `{"kind":"annotation","ts":...,"request_id":...,"discard_reason":...}` 한 줄을
+      추가로 append한다. 메모리 링에서 같은 `request_id`로 시작된 항목(끝났든 진행 중이든)에도
+      `discard_reason` 필드를 채워, 재부팅 전까지는 "호출 로그" 탭이 사유를 바로 보여줄 수
+      있게 한다. `ai_calls_summary`의 `discard_reasons`가 이 annotation 줄만 집계한다.
+
+shared_types:
+  AiPlanAction: "{ action_id: string, kind: 'create_note'|'update_note'|'delete_note'|'merge_notes', payload: { note_id?: string, source_note_ids?: string[], title?: string, body_md?: string, folder_id?: string } }"
+  AiPlanScope: "{ note_revisions: { [key: string]: string }, note_folder_ids: { [key: string]: string }, folder_ids: uuid[] }"
+  AiPlanActionResult: "{ action_id: string, status: 'applied'|'already_applied'|'failed', note_id?: string, error?: string }"
+  AiHistoryItem: "{ id: string, workspace_id: string, note_id?: string, action_type: 'operation.outcome', prompt_or_input?: string, result_text: string, created_at: string }"
+  AiUsageRow: "{ workspace_id: string, day: string, action_type: string, provider: string, calls: number }"
+  CallLogEntry: "{ ts: string, id: string, op?: string, caller?: string, provider: string, model: string, fallback_used: boolean, note_id?: string, attempts: number, http_status?: number, duration_ms?: number, prompt_bytes: number, response_bytes?: number, outcome?: 'ok'|'error'|'deadline'|'cancelled', error?: string, prompt_head?: string, response_head?: string, request_id?: string, discard_reason?: string }"
+  CallsSummary: "{ total: number, by_outcome: { [key: string]: number }, by_provider: { [key: string]: number }, median_duration_ms?: number, p90_duration_ms?: number, discard_reasons: { [key: string]: number } }"

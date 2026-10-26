@@ -1,0 +1,448 @@
+# 기능 카탈로그: 시트 섹션. 결정 요약 SSOT는 sheet.md
+features:
+  - id: F-SH01
+    name: 시트 섹션 (수식 그리드 + 차트)
+    status: shipped
+    verify:
+      rust: src-tauri/src/repo/sheet.rs
+      vitest:
+        - src/components/sheet
+        - src/lib/sheet
+    notes: 결정 표는 specs/features/sheet.md
+    cases:
+      - id: formula-cycle
+        given:
+          cells: { A1: "=B1", B1: "=A1" }
+        expect:
+          error: "#CYCLE!"
+        covered_by: "순환 참조는 #CYCLE!"
+
+      - id: formula-unknown-fn-is-name
+        given:
+          formula: "=NOSUCHFN(1)"
+        expect:
+          error: "#NAME?"
+        covered_by: "알 수 없는 함수는 #NAME?"
+
+      - id: formula-div0
+        given:
+          formula: "=1/0"
+        expect:
+          error: "#DIV/0!"
+        covered_by: "0 으로 나누면 #DIV/0!"
+
+      - id: formula-ref-on-row-delete
+        given:
+          cells: { A1: "1", A2: "2", B1: "=A2" }
+          delete_row: 1
+        expect:
+          B1: "=#REF!"
+        covered_by: "행 삭제가 셀을 지우고 남은 수식을 #REF! 로 만든다"
+
+      - id: formula-ref-range-wholly-deleted
+        given:
+          formula: "=SUM(A3:A5)"
+          delete_rows: { at: 2, delta: -3 }
+        expect:
+          formula: "=SUM(#REF!)"
+        covered_by: "범위는 줄어들고, 통째로 지워지면 #REF!"
+
+      - id: tsv-matches-shared-fixture
+        given:
+          fixture: rust FIXTURE / front projection.test.ts 와 글자 그대로 같은 JSON
+        expect:
+          # 싱글쿼트: rust 소스의 `\t` `\n` 이스케이프와 바이트 단위로 같아야 한다.
+          tsv: '항목\t금액\t메모\n커피\t4500\t\n점심\t12000\t회사 근처\n\t=SUM(B2:B3)\t'
+        covered_by: tsv_matches_the_shared_fixture
+
+      - id: set-cells-patches-and-removes
+        given:
+          patch: { B2: { raw: "5000", fmt: "currency", cur: "KRW" }, C3: { raw: null } }
+        expect:
+          raw: "5000"
+          fmt: "currency"
+        covered_by: set_cells_patches_and_removes
+
+      - id: chart-empty-when-no-series
+        given:
+          spec: { series: [] }
+        expect:
+          empty: "No data to chart"
+        covered_by: "renders the empty state when the spec selects no series"
+
+  # 시트 차트 라이브 첨부 (PLAN-2026-09-20 §2.3 W4, D5·D6ⓒ·D8). 결정 요약은 docs/SHEET.md "차트 첨부".
+  - id: F-SH02
+    name: 시트 차트 라이브 첨부 (kind='chart', url="<section_id>#<chart_id>")
+    status: shipped
+    verify:
+      rust:
+        - src-tauri/src/repo/attachments/mod.rs
+        - src-tauri/src/db/migrations.rs
+      vitest:
+        - src/components/sheet
+        - src/lib/sheet
+        - src/components/preview
+    notes: >
+      스냅샷이 아니라 참조 — 프리뷰가 activeNote.sections 의 시트 본문에서 매번 다시 그린다. 진실은 DB 행
+      (시트 JSON 에 플래그 없음). 편집기 토글·카드 버튼·(W5) 어시스트가 setChartRegistered 하나를 부른다.
+    cases:
+      - id: chart-ref-roundtrip-idempotent
+        given:
+          section: { kind: sheet, charts: [{ id: c1 }] }
+          add_twice: same section_id + chart_id
+        expect:
+          rows: 1
+          name_kept: "기존 행의 이름이 유지된다"
+        covered_by: add_chart_ref_roundtrip_is_idempotent_and_survives_section_delete
+
+      - id: chart-ref-survives-section-delete
+        given:
+          section_delete: after add
+        expect:
+          row_kept: "section delete must not cascade to the chart attachment"
+        covered_by: add_chart_ref_roundtrip_is_idempotent_and_survives_section_delete
+
+      - id: v88-check-admits-chart-url-only
+        given:
+          v87_db: 7 kinds seeded, then V88
+        expect:
+          rows: "일곱 행 전부 살아남아야 한다"
+          kinds: ["image", "doc", "link", "audio", "note", "internal", "footnote"]
+        covered_by: test_v88_rebuild_keeps_seven_kinds_and_admits_chart_as_url_only
+
+      - id: chart-preview-live
+        given:
+          same_attachment: url sec-1#c1
+          body_md_b2: ["200", "500"]
+        expect:
+          total_before: "300"
+          total_after: "600"
+        covered_by: "renders the chart live from the sheet section body — same attachment, changed cells, changed value"
+
+      - id: chart-preview-missing-source
+        given:
+          section: removed
+        expect:
+          testid: chart-ref-missing
+          ipc_on_remove: attachment_remove
+        covered_by: "shows 원본 없음 when the section is gone and removes the row on request"
+
+      - id: chart-register-toggle-truth-is-db
+        given:
+          attachments: [{ kind: chart, url: "sec-1#c1" }]
+        expect:
+          checked: true
+          on_toggle: { chartId: "c1", on: false }
+        covered_by: "reads its initial state from the DB row and unregisters through setChartRegistered"
+
+      - id: chart-register-new-after-save
+        given:
+          initialSpec: none
+        expect:
+          before_save_ipc: 0
+          after_save: { on: true }
+        covered_by: "for a new chart registers only after save, with the saved chart id and title (fallback when blank)"
+
+      - id: chart-register-card-same-function
+        given:
+          card_button: chart-register-c1
+        expect:
+          pressed: "true"
+        covered_by: "shows pressed state from the DB row and toggles through the same setChartRegistered"
+
+      - id: chart-set-registered-flushes-then-adds
+        given:
+          on: true
+        expect:
+          ipc: attachment_add_chart
+          args: { note_id: "n1", section_id: "sec-1", chart_id: "c1" }
+        covered_by: "on=true flushes pending sheet saves, calls attachment_add_chart, then reloads"
+
+  # 시트 차트 진입 UX 3종 (PLAN-2026-09-20 D6ⓐⓑ W5). 어시스트 Explore 타일·선택 모서리 퀵 칩·툴바 편집기가
+  # 전부 useSheetState.saveChart(sheetFocus.addChart) 한 경로로 doc.charts 에 넣는다 — 타일·칩은 addChartFromSelection.
+  - id: F-SH03
+    name: 시트 차트 진입 3종 (추천 종류 · 어시스트 Explore 미리보기 타일 · 퀵 칩 팝오버)
+    status: shipped
+    verify:
+      vitest:
+        - src/lib/sheet
+        - src/components/sheet
+        - src/components/assist
+    notes: >
+      추천은 순수 함수 recommendChartTypes 하나(선택 범위의 열 종류로 판정, 첫 행만 문자면 헤더로 뺀다).
+      추천이 비면 Explore 그룹·칩이 DOM 에 없다(비활성이 아님). Explore 타일은 라벨 아래 미니 미리보기를
+      패널 안에 품는다(퀵 칩 팝오버와 같은 모양·같은 스펙) — 시트 위 고스트 카드는 2026-09-20 오너가 뺐다.
+    cases:
+      - id: recommend-text-plus-number
+        given:
+          columns: [text, number]
+          rows: 8
+        expect:
+          types: '["bar", "line", "pie"]'
+        covered_by: "텍스트 열 1 + 숫자 열 1 → bar · line · pie"
+
+      - id: recommend-two-numbers
+        given:
+          columns: [text, number, number]
+        expect:
+          types: '["stacked", "line", "bar"]'
+        covered_by: "숫자 열 2+ → stacked · line · bar"
+
+      - id: recommend-number-only
+        given:
+          columns: [number]
+        expect:
+          types: '["kpi", "bar"]'
+        covered_by: "숫자 열만 1개(라벨 열 없음) → kpi · bar"
+
+      - id: recommend-short-rows-pie-first
+        given:
+          columns: [text, number]
+          rows: 6
+        expect:
+          types: '["pie", "bar", "line"]'
+        covered_by: "행 ≤ 6 이면 pie 가 맨 앞"
+
+      - id: add-chart-single-gate
+        given:
+          entry: quick chip popover, type bar, A1:B2
+        expect:
+          args: '{ sectionId: "sec-1", range: { r1: 0, c1: 0, r2: 1, c2: 1 }, type: "bar", register: true }'
+        covered_by: "칩 클릭 → 팝오버에 추천 카드 1장(미리보기 svg 하나 + 종류 칩), 고정 클릭 → 어시스트와 같은 관문 같은 인자"
+
+      - id: add-chart-registers-once
+        given:
+          register: true
+        expect:
+          spec: '{ id: res.chartId, type: "line", x: "A1:A2", series: ["B1:B2"] }'
+          registered: "on: true"
+        covered_by: "doc.charts 에 1개 추가(defaultChartRanges 규칙) + setChartRegistered 를 on:true 로 1회"
+
+      - id: explore-absent-without-selection
+        given:
+          sheetFocus: null
+        expect:
+          testid: "sheet-explore-group"
+          absent: "toBeNull"
+        covered_by: "선택 없음 → 그룹 부재 · 숫자 없는 선택 → 그룹 부재 · 숫자+텍스트 선택 → 추천 카드 1장(1위 pie) + 종류 칩 pie/bar/line"
+
+      - id: explore-card-inline-preview
+        given:
+          selection: A1:B2
+        expect:
+          testid: "chart-suggest-preview-bar"
+          svg: ".sheet-chart svg"
+        covered_by: "카드 미리보기는 패널 안에 붙는다(시트 위 고스트 아님) — 칩을 누르면 같은 카드가 그 종류로 바뀐다"
+
+  # 시트 수식·서식 프리셋 (PLAN-2026-09-21-assist-modes.md D5 W3). Explore(recommendChartTypes)와 같은
+  # 동형 모델 — recommendSheetAssists 가 순수 함수로 id 목록을 주고, SheetAssist.tsx 가 클릭 시 apply.
+  - id: F-SH04
+    name: 시트 수식·서식 프리셋(작업 어시스트)
+    status: shipped
+    verify:
+      vitest:
+        - src/lib/sheet
+        - src/components/assist
+    notes: >
+      1차 항목: sum_row·avg_row·count_row·minmax_row·running_total(집계) ·
+      fmt_currency·fmt_percent·fmt_date·fmt_checkbox(서식) · sort_asc·sort_desc(정렬). 추천이 비면
+      그룹 자체가 DOM 에 없다(비활성이 아님). 위치는 차트 카드 → Explore → 수식·서식 → AI.
+      2차 항목(2026-09-21): dedupe_rows(중복 행 삭제, ops.deleteRows 신설) · fill_blank_down(라벨 열
+      빈 칸을 위 값으로) · hl_extremes/hl_extremes_clear(숫자 열 최대·최소 셀 강조·해제, Cell.hl 신설).
+    cases:
+      - id: sum-row-writes-label-and-formula
+        given:
+          range: A1:B3, 텍스트+숫자
+        expect:
+          formula: "=SUM(B2:B3)"
+          label_key: "presets.sheet_assist_label_sum"
+        covered_by: "숫자+텍스트 범위에서 sum_row 를 추천하고 적용하면 라벨과 SUM 수식을 1회 setCells 로 채운다"
+
+      - id: fmt-checkbox-shape
+        given:
+          values: ["예", "아니오", "TRUE"]
+        expect:
+          shape: "예/아니오·true/false 값"
+          apply: "setColFormat(colIdx,'checkbox')"
+        covered_by: "체크박스 서식은 예/아니오·true/false 값 열에서만 추천되고, apply 는 setColFormat(colIdx,'checkbox')"
+
+      - id: sort-needs-three-rows
+        given:
+          rows: [2, 3]
+        expect:
+          threshold: "3행 이상"
+          id: "sort_desc"
+        covered_by: "정렬은 선택 범위가 3행 이상일 때만 추천된다"
+
+      - id: sheet-assist-row-calls-ops-once
+        given:
+          click: "assist-sheet-sum_row"
+        expect:
+          testid: "assist-sheet-sum_row"
+          calls: "toHaveBeenCalledTimes(1)"
+        covered_by: "추천이 있으면 그룹 헤더와 행이 뜨고, 클릭하면 해당 assist 의 apply 가 ops 를 정확히 1회 부른다"
+
+      - id: sheet-assist-group-absent-without-recommendation
+        given:
+          ops: none
+        expect:
+          testid: "presets.sheet_assist_title"
+        covered_by: "수식·서식 그룹은 추천이 있을 때만 존재한다"
+
+      - id: dedupe-rows-deletes-later-duplicate
+        given:
+          rows: "철수/1, 철수/1(중복), 영희/2"
+        expect:
+          apply: "ops.deleteRows"
+        covered_by: "dedupe_rows 는 완전히 같은 내용의 행을 찾아 추천하고, apply 는 뒤의 중복 행 번호로 ops.deleteRows 를 1회 부른다"
+
+      - id: fill-blank-down-uses-nearest-value-above
+        given:
+          col: "1월, (빈칸), 2월"
+        expect:
+          id: "fill_blank_down"
+        covered_by: "fill_blank_down 은 첫 열의 빈 칸 위에 값이 있으면 추천되고, apply 는 가장 가까운 위 값으로 1회 setCells 한다"
+
+      - id: hl-extremes-paints-max-and-min
+        given:
+          col: "10, 30, 20"
+        expect:
+          id: "hl_extremes"
+        covered_by: "hl_extremes 는 숫자 열(3행 이상)의 최대·최소 셀에 hl 을 한 번에 칠하고, 이미 강조된 범위에서는 해제 짝(hl_extremes_clear)만 추천된다"
+
+      - id: hl-extremes-clear-is-mutually-exclusive
+        given:
+          state: "이미 hl 이 있는 범위"
+        expect:
+          id: "hl_extremes_clear"
+        covered_by: "hl_extremes 는 숫자 열(3행 이상)의 최대·최소 셀에 hl 을 한 번에 칠하고, 이미 강조된 범위에서는 해제 짝(hl_extremes_clear)만 추천된다"
+
+      - id: dedupe-rows-assist-row-calls-ops-deleteRows
+        given:
+          click: "assist-sheet-dedupe_rows"
+        expect:
+          calls: "toHaveBeenCalledTimes(1)"
+        covered_by: "dedupe_rows 는 중복 행을 찾아 ops.deleteRows 를 정확히 1회, 그 행 배열로 부른다(2차, PLAN-2026-09-21 §4 W3)"
+
+  - id: F-SH05
+    name: 시트 선택·이동 문법(엑셀 근육 기억 1단계)
+    status: shipped
+    verify:
+      vitest:
+        - src/components/sheet
+        - src/lib/sheet
+    notes: >
+      PLAN-2026-09-21 W1. 순수 함수 4개(jumpTarget·selectAllRange·fillHandleDoubleClickTarget·
+      autoFitWidth)는 lib/sheet/navigation.ts, 리터럴 테스트는 navigation.test.ts. 나머지 키·마우스
+      조합(Ctrl+A·Shift/Ctrl+화살표·Home/End·PageUp/PageDown·머리글 드래그)은 SheetGrid.tsx
+      handleKeyDown 한 곳 + 머리글 mousedown/mouseenter. 2단계(편집 근육 기억)는 F-SH06.
+    cases:
+      - id: select-all-ctrl-a
+        given:
+          action: "Ctrl+A 또는 모서리 칸 클릭"
+        expect:
+          range: "A1:Z100"
+        covered_by: "Ctrl+A는 문서 전체를 선택하고 활성 셀은 그대로 둔다"
+
+      - id: ctrl-arrow-jump
+        given:
+          row: "A1=1, B1=2, C1=3 (연속), D1 이후 빈 칸"
+        expect:
+          key: "ArrowRight"
+        covered_by: "Ctrl+화살표는 연속 데이터 끝으로 점프한다"
+
+      - id: shift-arrow-extend
+        given:
+          from: "A1"
+          keys: "Shift+↓, Shift+→"
+        expect:
+          range: "A1:B2"
+        covered_by: "Shift+화살표는 활성 셀을 고정하고 반대 모서리를 확장한다"
+
+      - id: autofit-width
+        given:
+          column: "짧은 값 1개 + 가장 긴 값 1개"
+        expect:
+          formula: "AUTOFIT_PADDING"
+        covered_by: "autoFitWidth 는 열의 가장 넓은 값 폭에 패딩을 더한다"
+
+      - id: fill-handle-double-click
+        given:
+          selection: "B1(빈 칸 아님, 값 x)"
+          adjacent: "A1:A4 연속 데이터"
+        expect:
+          fn: "fillHandleDoubleClickTarget"
+        covered_by: "fillHandleDoubleClickTarget 은 인접 열의 연속 데이터 끝 행까지 확장한다"
+
+  - id: F-SH06
+    name: 시트 편집 근육 기억(엑셀 근육 기억 2단계)
+    status: shipped
+    verify:
+      vitest:
+        - src/components/sheet
+        - src/lib/sheet
+    notes: >
+      PLAN-2026-09-21 W2. 순수 함수 5개(insertRefIntoFormula·cycleAbsolute·refAtCaret·
+      fillDownPatch/fillRightPatch·columnSuggestion)는 lib/sheet/editing.ts, 리터럴 테스트는
+      editing.test.ts. Ctrl+D/R 은 새 prop 없이 기존 onApplyFillHandle(=applyFillHandle, W1 부터
+      있던 채우기 핸들 함수)을 재사용 — sourceRange 를 첫 행/열 한 줄로 좁혀 부르면 그 함수의 수열
+      감지가 안 걸려 "첫 줄을 나머지로" 규칙과 같아진다(useSheetState.ts 에 수평 분기를 대칭 추가).
+      첫 행 고정은 undo 에 안 걸린다(history.ts 가 이번 웨이브 소유 범위 밖 — memo 참고). 1단계는 F-SH05.
+    cases:
+      - id: formula-ref-click-insert
+        given:
+          draft: "= 로 시작, 캐럿 끝"
+          click: "다른 셀(B2)"
+        expect:
+          call: "mouseDown"
+        covered_by: "수식 편집 중 다른 셀을 클릭하면 캐럿 위치에 참조가 삽입된다"
+
+      - id: f4-cycle-absolute
+        given:
+          formula: "=A1, 캐럿이 참조 끝"
+        expect:
+          result: "$A$1"
+        covered_by: "F4는 캐럿이 걸친 참조의 $ 를 순환시킨다"
+
+      - id: ctrl-d-fill-down
+        given:
+          selection: "A1:A3, A1 값만 있음"
+        expect:
+          key: "ctrlKey"
+        covered_by: "Ctrl+D는 선택 범위 첫 행을 나머지 행에 한 번에 채운다"
+
+      - id: ctrl-semicolon-today
+        given:
+          action: "Ctrl+; (편집 중 아님)"
+        expect:
+          fn: "getFullYear"
+        covered_by: "Ctrl+;는 편집 중이 아니면 활성 셀에 오늘 날짜를 채운다"
+
+      - id: autocomplete-tab-accept
+        given:
+          column: "사과주스(A1)"
+          typed: "사과(2자 이상 접두)"
+        expect:
+          value: "사과주스"
+        covered_by: "자동완성 제안은 Tab으로 수락하고 그 칸에 남아 있는다(커밋 아님)"
+
+      - id: freeze-first-row-toggle
+        given:
+          menu: "우클릭 행 메뉴 → 첫 행 고정"
+        expect:
+          class: "sheet-frozen-rows"
+        covered_by: "우클릭 행 메뉴의 첫 행 고정은 토글되고 고정 레이어가 나타난다/사라진다"
+
+      - id: row-height-auto
+        given:
+          selection: "B2 raw 에 개행 2개(3줄 값)"
+        expect:
+          fn: "rowHeightOf"
+        covered_by: "3줄 값은 기본 행 높이에 LINE_STEP 2배를 더한다"
+
+      - id: row-height-wired-to-grid
+        given:
+          selection: "B2 raw 3줄 값, SheetGrid 렌더"
+        expect:
+          fn: "rowHeightOf(3)"
+        covered_by: "B2 에 3줄 값이면 2행 높이가 rowHeightOf(3) 이고 3행 머리글 top 이 그만큼 밀린다"

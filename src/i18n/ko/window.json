@@ -1,0 +1,8 @@
+{
+  "minimize": "최소화",
+  "maximize": "최대화 / 복원",
+  "close": "닫기",
+  "always_on_top": "항상 위에 표시",
+  "always_on_top_failed": "항상 위에 표시를 변경하지 못했습니다: {{msg}}",
+  "always_on_top_not_applied": "창 관리자가 요청한 상태를 적용하지 않았습니다"
+}

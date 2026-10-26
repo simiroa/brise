@@ -1,0 +1,6 @@
+{
+  "warn_title": "Organize many notes",
+  "warn_desc": "{{count}} notes × up to 45s each = up to {{minutes}} min. You can [Stop] while it runs. Continue?",
+  "warn_confirm_btn": "Continue",
+  "abort_cancelled_pending": "Stop requested — the in-flight call was cancelled too"
+}

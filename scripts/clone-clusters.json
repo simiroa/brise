@@ -1,0 +1,47 @@
+{
+  "_comment": "복제 클러스터 SSOT. 새 *WindowApp.tsx 는 AuxWindowChrome 을 써야 한다. daysInMonth/formatSize 의 새 정의가 owner+variants 밖에 있으면 실패. dead 식별자는 src/ 에 재등장하면 안 된다.",
+  "windowAppAllowlist": [],
+  "clusters": [
+    {
+      "id": "aux-window",
+      "owner": [
+        "src/components/AuxWindowChrome.tsx",
+        "src-tauri/src/aux_window.rs"
+      ],
+      "copies": [],
+      "variants": [
+        "src/plugins/pet/PetApp.tsx",
+        "src/plugins/pet/PetBubbleApp.tsx"
+      ],
+      "dead": []
+    },
+    {
+      "id": "dead-after-split",
+      "owner": [],
+      "copies": [],
+      "variants": [],
+      "dead": ["SnapshotModal", "OverlayFrostHost"]
+    },
+    {
+      "id": "days-in-month",
+      "owner": ["src/lib/dateUtils.ts"],
+      "copies": [],
+      "variants": [],
+      "dead": []
+    },
+    {
+      "id": "format-size",
+      "owner": ["src/lib/ui.ts"],
+      "copies": [],
+      "variants": [],
+      "dead": []
+    },
+    {
+      "id": "format-relative-time",
+      "owner": ["src/lib/dateUtils.ts"],
+      "copies": [],
+      "variants": [],
+      "dead": []
+    }
+  ]
+}

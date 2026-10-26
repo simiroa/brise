@@ -1,0 +1,101 @@
+# 커맨드 계약: suggestions — 규약: _conventions.yaml
+# P2 후행 제안(docs/PLAN-2026-08-07-second-brain.md Q5). 겹침(kind='overlap')은 그래프 탭 로드 시
+# related_sql 이 upsert_overlap 으로 채우고, 링크 붙여넣기 요약(repo::web_reader + AI)이
+# kind='link' 를 채운다. kind='theme' 행은 저장 스키마만 준비돼 있고 프로덕션 생산자가 없다.
+# 펫 칩 UI(src/plugins/pet/bridge/petSuggestionsBridge.ts)가 list 를 소비한다.
+commands:
+  suggestions_list:
+    input:
+      workspace_id: "uuid|omit=active"
+      status: "'pending'|'dismissed'|'accepted'|omit=pending"
+    output:
+      suggestions: "Suggestion[]"    # created_at desc
+    notes: |
+      repo::suggestions::list. 삭제(소프트 포함)된 노트가 관련된 행은 notes 조인으로 제외한다.
+      kind은 'overlap'(그래프 탭 related_sql 겹침) | 'link'(링크 붙여넣기 요약, P2 3단계) |
+      'theme'(저장 스키마만 준비, 프로덕션 생산자 없음 — 테스트가 upsert_theme 로 형태만 검증).
+      theme의 payload는 {note_ids: string[]} — 앵커 포함 클러스터 멤버 전량이며
+      note_id 컬럼이 앵커(칩의 대표 제목), related_note_id는 최고 점수 이웃(NOT NULL 채움용)이다.
+      link의 payload는
+      {url, summary, title, target_note_id?, target_note_title?} — target_note_id 없음(대상
+      노트를 못 찾음)은 related_note_id 컬럼이 note_id로 자기참조된 것으로 인코딩돼 있다
+      (repo::suggestions::insert_link 참고, NOT NULL 제약 때문) — 프런트는 이 컬럼이 아니라
+      payload.target_note_id 유무로 판단한다.
+
+  suggestion_set_status:
+    input:
+      id: uuid
+      status: "'pending'|'dismissed'|'accepted'"
+    output:
+      ok: boolean
+    errors: [VALIDATION]   # status가 허용값 밖
+    notes: |
+      repo::suggestions::set_status. 수락(accepted) 자체가 병합 등 실제 액션을 실행하지는
+      않는다 — 그건 P2 2단계가 기존 승인 플로우(merge_notes 등)로 이어붙일 몫이고, 이 커맨드는
+      상태 필드만 갱신한다.
+
+  graph_suggestion_accept:
+    input: { id: uuid }
+    output: { ok: boolean }
+    errors: [NOT_FOUND, VALIDATION, CONFLICT]
+    notes: |
+      pending overlap 제안을 internal attachment 링크로 수락하고 accepted 상태로 바꾸는 단일
+      트랜잭션. 같은 id 재시도와 이미 존재하는 같은 note pair 링크는 멱등 처리한다.
+
+  graph_suggestion_dismiss:
+    input: { id: uuid }
+    output: { ok: boolean }
+    errors: [NOT_FOUND, VALIDATION, CONFLICT]
+    notes: |
+      pending overlap pair를 note_related_exclusions에 넣고 dismissed 상태로 바꾸는 단일 트랜잭션.
+      같은 id 재시도는 멱등 처리한다.
+
+  link_suggest:
+    input:
+      workspace_id: "uuid|omit=active"
+      note_id: uuid
+      url: string
+    output: { ok: boolean }
+    errors: [VALIDATION, IO]
+    notes: |
+      P2 3단계(docs/PLAN-2026-08-07-second-brain.md Q5) — 에디터에서 단독 URL을 붙여넣었을 때
+      프런트가 fire-and-forget으로 호출한다(callSilent, 실패해도 토스트 없음). 실효 게이트:
+      repo::suggestions::link_suggestions_active(ai_enabled && link_suggestions, 둘 다 기본
+      OFF) — 꺼져 있으면 ok:false로 조용히 반환한다(에러 아님). 같은 note_id+url의 pending
+      제안이 이미 있으면(repo::suggestions::has_pending_link) 마찬가지로 ok:false(중복 생성
+      금지).
+
+      attachment_fetch_reader(commands/attachments.yaml)의 "명시적 사용자 액션에서만 fetch,
+      백그라운드 프리페치 금지" 원칙의 의도적 예외다 — link_suggestions 옵트인 설정 자체가 그
+      동의를 대신한다. repo::web_reader::fetch_reader로 본문을 추출하고(그 실패는 IO/VALIDATION
+      그대로 전파), 기존 AI 프로바이더 호출 경로(repo::ai::TextTransport/RealTextTransport, 같은
+      프라이버시 게이트 해석·ai_history 로깅)로 2-3문장 요약+제목을 생성한 뒤,
+      repo::search::hybrid_search로 이 노트 자신을 제외한 가장 관련 있는 노트 1건을 대상 후보로
+      찾는다. suggestions에 kind='link'로 저장한다(repo::suggestions::insert_link).
+
+  link_preview:
+    input:
+      workspace_id: "uuid|omit=active"
+      url: string
+    output:
+      ok: boolean
+      title: string
+      summary: string
+      target_note_id: "string?"
+      target_note_title: "string?"
+    errors: [VALIDATION, IO]
+    notes: |
+      link_suggest 와 **같은 파이프라인을 저장 없이** 돌려주는 형제 커맨드 — 펫 우클릭
+      "클립보드 저장"(docs/PLAN-2026-08-08-presets-schedule.md Q9)이 쓴다. 갈라진 이유는 둘:
+      (1) 클립보드에는 출처 노트가 없는데 suggestions 행은 note_id NOT NULL + notes 조인이라
+      넣을 수 없고, (2) Q9 의 "확인 후에만 저장"이 확인 전 어떤 쓰기도 금지한다.
+
+      게이트는 link_suggest 와 동일한 한 지점(repo::suggestions::link_suggestions_active,
+      ai_enabled && link_suggestions) — OFF 이거나 본문 추출이 비면 ok:false 로 조용히 반환한다
+      (에러 아님). 호출자(src/plugins/pet/bridge/petClipboardBridge.ts)는 그때 라우팅 없이 "인박스에 그대로
+      저장" 확인으로 강등한다. 대상 노트 후보는 repo::search::hybrid_search 상위 1건이며 제외할
+      노트가 없다(붙여넣기 경로와 달리 출처 노트가 없다). 외부 fetch + AI 호출은 실제로
+      일어나므로 ai_history 에 action_type='link_preview' 로 기록한다.
+
+shared_types:
+  Suggestion: "{ id: uuid, kind: string, note_id: uuid, note_title: string, related_note_id: uuid, related_note_title: string, payload: string, score: number, created_at: timestamp }"

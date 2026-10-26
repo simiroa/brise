@@ -1,0 +1,82 @@
+# 기능 카탈로그: 제안
+features:
+  - id: F-SU01
+    name: 겹침 · 수집 후처리 제안
+    status: shipped
+    commands: commands/suggestions.yaml
+    verify:
+      rust:
+        - src-tauri/src/repo/suggestions.rs
+        - src-tauri/src/commands/suggestions.rs
+    notes: |
+      프로덕션은 theme 행을 넣지 않는다. theme-anchor-title-is-chip 은 저장 형태만 검증한다.
+      그래프 탭 겹침은 related_sql → upsert_overlap.
+    cases:
+      - id: overlap-pair-order-collapses
+        given:
+          upsert: [A→B, B→A]
+        expect:
+          reason: "A→B and B→A must collapse into one suggestion row"
+        covered_by: upsert_overlap_normalizes_pair_order
+
+      - id: dismissed-overlap-not-reproposed
+        given:
+          pair: [A, B]
+          status: dismissed
+          later_upsert: true
+        expect:
+          status: "dismissed"
+          reason: "dismissed pairs must not be re-proposed"
+        covered_by: upsert_overlap_does_not_reinsert_a_dismissed_pair
+
+      - id: list-pending-excludes-deleted-notes
+        given:
+          pairs: [[A, B], [A, C]]
+          C: soft-deleted
+        expect:
+          reason: "the pair involving the soft-deleted note must be filtered out"
+        covered_by: list_defaults_to_pending_and_excludes_deleted_notes
+
+      - id: link-payload-round-trips
+        given:
+          url: "https://example.com/article"
+          summary: "요약 두세 문장"
+        expect:
+          url: "https://example.com/article"
+          summary: "요약 두세 문장"
+        covered_by: insert_link_payload_round_trips
+
+      - id: theme-anchor-title-is-chip
+        given:
+          anchor_title: "우유 사기"
+          members: 4
+        expect:
+          kind: "theme"
+          title: "우유 사기"
+          reason: "앵커 노트가 칩의 대표 제목이 된다"
+        covered_by: upsert_theme_row_is_listable_and_carries_members
+
+      - id: graph-accept-adds-one-backlink
+        given:
+          overlap_pair: [A, B]
+          accept: twice
+        expect:
+          status: "accepted"
+          kind: "backlink"
+        covered_by: graph_suggestion_accept_adds_one_link_and_is_idempotent
+
+      - id: parse-title-summary-labeled-lines
+        given:
+          raw: "TITLE: … SUMMARY: …"
+        expect:
+          title: "Sejong the Great"
+          summary: "Hangul"
+        covered_by: parse_title_summary_extracts_labeled_lines
+
+      - id: parse-title-summary-falls-back
+        given:
+          raw: "Sure! Here's a summary of the page you asked about."
+        expect:
+          title: "Page Title"
+          summary: "the actual extracted body text"
+        covered_by: parse_title_summary_falls_back_when_the_model_ignores_the_format

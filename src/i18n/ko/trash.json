@@ -1,0 +1,16 @@
+{
+  "title": "휴지통",
+  "moved": "휴지통으로 이동",
+  "restore": "복원",
+  "delete_forever": "완전히 삭제",
+  "delete_confirm": "\"{{title}}\"을(를) 완전히 삭제할까요? 이 작업은 되돌릴 수 없습니다.",
+  "empty": "휴지통 비우기",
+  "empty_confirm": "휴지통에 있는 {{n}}개의 노트가 모두 영구 삭제됩니다. 이 작업은 되돌릴 수 없습니다.",
+  "empty_type_prefix": "확인하려면",
+  "empty_type_suffix": "을(를) 입력하세요.",
+  "empty_state": "휴지통이 비어 있습니다",
+  "notes_heading": "노트",
+  "sections_heading": "섹션",
+  "section_from": "\"{{name}}\" — {{note}} 에서",
+  "section_restore_blocked": "원 노트가 휴지통에 있어 복구할 수 없습니다"
+}

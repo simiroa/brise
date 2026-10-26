@@ -1,0 +1,119 @@
+# 기능 카탈로그: 캡처 (스크린샷 · 빠른 기록)
+features:
+  - id: F-CAP01
+    name: 캡처 · 스크린샷
+    status: shipped
+    commands: commands/capture.yaml
+    verify:
+      rust: src-tauri/src/repo/screenshot.rs
+      vitest: src/mobile/MobileCapturePresets.test.tsx
+    cases:
+      - id: skip-own-windows-on-top
+        given:
+          windows: ["Brise Pet", "Brise Pet Bubble", other]
+          our_pid: 42
+        expect:
+          skipped: "Brise Pet"
+          skipped_bubble: "Brise Pet Bubble"
+        covered_by: skips_our_own_windows_even_when_they_are_on_top
+
+      - id: ignore-minimized-untitled-tiny
+        given:
+          windows: [minimized, tiny, untitled, titled]
+        expect:
+          picked: "빈 제목 아님"
+          ignored: "최소화됨"
+        covered_by: ignores_minimized_untitled_and_tiny_windows
+
+      - id: file-name-sortable-no-path-chars
+        given:
+          at: 2026-08-09 14:25:30
+        expect:
+          name: "screenshot-20260809-142530.png"
+        covered_by: file_name_is_sortable_and_has_no_path_characters
+
+      - id: vision-rejects-non-image
+        given:
+          bytes: "not an image"
+        expect:
+          bytes: "not an image"
+        covered_by: vision_image_rejects_bytes_that_are_not_an_image
+
+      - id: ui-builtins-no-blank-note
+        given:
+          custom: [{ name: "My Preset" }]
+        expect:
+          todo: "To-do list"
+          ai: "Start with AI"
+          custom: "My Preset"
+          blank: "Blank note"
+        covered_by: "shows builtin chips on the surface and keeps AI + custom presets behind 더보기"
+
+      - id: ui-checklist-applies-once
+        given:
+          tap: "To-do list"
+        expect:
+          bodyMd: '<ul data-type="taskList"></ul>'
+        covered_by: "applies the checklist preset exactly once on tap"
+
+      - id: ui-daily-travel-retro-builtins
+        given:
+          tap: travel builtin
+        expect:
+          daily: "presets.daily_name"
+          travel: "presets.travel_name"
+          retro: "presets.retro_name"
+        covered_by: "W8-f: shows the new 오늘 기록/여행 기록/회고 builtins and applies one on tap"
+
+      - id: ui-ai-start-applies-generated-body
+        given:
+          topic: "My trip"
+          generated: "Generated body text"
+        expect:
+          topic: "My trip"
+          body: "Generated body text"
+          placeholder: "What's this note about?"
+        covered_by: "AI-start: typing a topic, generating, and applying calls onGenerateAi then onApply with the generated body"
+
+  - id: F-CAP02
+    name: 가계부 캡처 (결제문자/알림, Tasker·단축어 연동)
+    status: shipped
+    commands: commands/capture.yaml
+    verify:
+      rust:
+        - src-tauri/src/sync_server/ingest.rs
+        - src-tauri/src/repo/ai/mod.rs
+    notes: loopback ingest 리스너의 유일한 채널(2026-09-09 크롬 익스텐션 철수로 clip/visits가
+      사라졌다). 폰의 자동화 앱(POST /ledger)이 친다. AI 파싱(merchant/amount/category/is_expense)은
+      게이트가 닫혀 있거나 실패해도 원문 그대로 캡처를 이어간다 — 조용히 버리지 않는다.
+      2026-09-15 오너 YAGNI — 설정 창의 가계부 파싱 UI(SmsParseSection)는 제거했다. 채널은 설정 키로만
+      켜지고, 모바일 경험을 다시 다룰 때 화면을 되살린다.
+    cases:
+      - id: ledger-gate-403-before-401
+        given:
+          channel: capture_ledger_enabled off
+        expect:
+          blocked: "the gate lives in Rust, not in the automation app"
+        covered_by: ledger_is_403_until_the_channel_setting_is_on_and_401_beats_403
+
+      - id: ledger-format-expense-line
+        given:
+          extraction: { merchant: "스타벅스", amount: 4500, category: "카페", is_expense: true }
+        expect:
+          line_contains: "-4,500원"
+        covered_by: format_ledger_line_renders_amount_merchant_and_category_for_an_expense
+
+      - id: ledger-parse-failure-keeps-raw-text
+        given:
+          extraction: null
+        expect:
+          marker: "파싱 필요"
+        covered_by: format_ledger_line_falls_back_to_the_raw_text_when_amount_is_missing
+
+      - id: ledger-dedup-same-text-same-day
+        given:
+          text: "스벅 결제 문자"
+          repeated: true
+        expect:
+          reason: "dedup must not double-append"
+        covered_by: append_ledger_line_creates_a_daily_note_and_dedupes_the_same_text

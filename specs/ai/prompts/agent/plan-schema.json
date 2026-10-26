@@ -1,0 +1,30 @@
+{
+  "title": "",
+  "summary": "",
+  "actions": [
+    {
+      "id": "",
+      "type": "create_note",
+      "description": "",
+      "payload": { "title": "", "bodyMd": "", "folderId": "" }
+    },
+    {
+      "id": "",
+      "type": "update_note",
+      "description": "",
+      "payload": { "noteId": "", "title": "", "bodyMd": "" }
+    },
+    {
+      "id": "",
+      "type": "delete_note",
+      "description": "",
+      "payload": { "noteId": "" }
+    },
+    {
+      "id": "",
+      "type": "merge_notes",
+      "description": "",
+      "payload": { "sourceNoteIds": [], "title": "", "bodyMd": "", "folderId": "" }
+    }
+  ]
+}

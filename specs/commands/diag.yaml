@@ -1,0 +1,68 @@
+# 커맨드 계약: diag — 앱 전역 진단 싱크 (규약: _conventions.yaml)
+# AUDIT-2026-09-26-fallback-observability.md §7.1: 폴백이 조용히 죽을 때 남길 기록이 릴리즈
+# 빌드엔 하나도 없다는 구조적 구멍(G1~G3)에 대한 응답. src-tauri/src/diag.rs(JSONL + 회전 +
+# 프로세스 전역 링버퍼, repo/ai/call_log.rs와 같은 방식) 위에 얇게 얹은 커맨드 4개.
+commands:
+  diag_record:
+    input:
+      source: string          # 창 라벨("main"/"settings"/"pet"/"pet-bubble"/"activity"/
+                                # "ai-history") 또는 "browser"(원격 웹뷰) — src/lib/diag.ts가 채운다.
+      feature: string
+      code: string
+      level: "'info'|'warn'|'error'"
+      message: string          # diag.rs가 300자로 절단해 저장한다. 노트 본문·전체 파일 경로를
+                                # 절대 넣지 않는다 — ai_history의 "본문 미저장" 불변식과 동일.
+    output: { ok: boolean }    # false = 이 source가 이번 분 상한(120건)을 넘겨 조용히 버려짐
+                                # (commands/diag.rs::allow_source) — 호출자 에러가 아니다.
+    errors: [VALIDATION]        # VALIDATION: level이 info/warn/error 밖
+    notes: |
+      모든 창에서 호출 가능해야 한다 — 펫 창의 기본 거부 목록(pet_window::PET_ALLOWED_COMMANDS)에
+      등록되어 있다(2026-09-28: 캔버스 플러그인 제거로 canvas_window::CANVAS_ALLOWED_COMMANDS 등록은
+      더 이상 해당 없음) (안 하면 가장 눈먼 창이 계속 눈먼다, §7.1). 원격(모바일 웹뷰, sync_server invoke)에서도
+      호출 가능(http 기본값 true) — 웹뷰 자체가 완전히 죽으면 이 경로도 눈이 멀지만, 그건 diag
+      싱크가 풀 수 없는 문제(그 경우를 위한 게 install_panic_hook + 부팅 시 diag_status).
+      dedupe(60초, 같은 source/feature/code/level)·회전(2MB)·링버퍼(상한 500)는 diag.rs 헤더
+      주석 참고.
+
+  diag_recent:
+    http: false   # 프로세스 로컬 파일+메모리 조회 — 원격 sync 클라이언트엔 의미 없음(ai_calls_recent와 동일 표기)
+    input:
+      limit: "integer|omit"    # 생략 시 200, 최대 1000(commands/diag.rs가 clamp)
+    output:
+      items: "DiagEntry[]"
+    errors: []
+    notes: |
+      diag.jsonl + diag.1.jsonl(회전분)을 읽어, 아직 파일에 안 쓰인(디듀프 윈도 안에서 count만
+      늘어난) 링 버퍼 항목과 id로 합친다(링 쪽이 더 최신이라 우선) — 그래서 재시작 후에도 최근
+      기록이 보이고, 프로세스가 살아있는 동안은 디듀프로 눌린 count도 정확히 보인다.
+
+  diag_status:
+    http: false   # 프로세스 전역 메모리 상태 조회 — 원격 sync 클라이언트엔 의미 없음(ai_calls_active와 동일 표기)
+    input: {}
+    output:
+      workers: "DiagWorkerStatus[]"
+      log_dir: string
+    errors: []
+    notes: |
+      diag::heartbeat(worker)/diag::worker_stopped(worker, reason)로 등록된 워커만 나온다(한
+      번도 안 불린 워커는 목록에 없다 — "아직 시작 안 함"과 "떠 있음"을 구분하지 않는다, 그건
+      호출부가 부팅 시 최소 한 번 heartbeat를 찍어야 한다는 뜻).
+      state: worker_stopped가 불렸으면 "stopped", 마지막 박동 후 기대 주기(기본 60초)의 3배
+      넘게 조용하면 "stale", 그 외 "alive".
+
+  diag_take_notices:
+    http: false   # 프로세스 전역 메모리 상태 제어(drain) — 원격 sync 클라이언트엔 의미 없음
+    input: {}
+    output:
+      items: "DiagNotice[]"
+    errors: []
+    notes: |
+      부팅 시 메인 창이 한 번 가져가 표시하는(drain) 대기열 — 두 번째 호출은 빈 배열. diag::
+      notify_user()/diag::worker_stopped()가 여기로 쌓는다. PINNED 코드 문자열(diag.rs 헤더
+      주석): "db_restored_from_backup"(params: backup/quarantine — 파일 이름만), "worker_stopped"
+      (params: worker). 소비하는 프런트는 code로 분기한다.
+
+shared_types:
+  DiagEntry: "{ id: string, ts: string, level: 'info'|'warn'|'error', source: string, feature: string, code: string, message: string, count: number }"
+  DiagWorkerStatus: "{ name: string, last_beat: string|null, state: 'alive'|'stale'|'stopped' }"
+  DiagNotice: "{ feature: string, code: string, params: { [key: string]: string }, ts: string }"

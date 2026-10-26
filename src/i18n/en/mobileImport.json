@@ -1,0 +1,16 @@
+{
+  "filled": "Imported content is now in Write. It is saved as a note when you leave.",
+  "filled_skipped": "Imported content is now in Write. {{count}} could not be imported (over 25 MB, etc.).",
+  "nothing": "Nothing could be imported. Files over 25 MB and unsupported formats are skipped.",
+  "failed": "Could not import. Check the connection and try again.",
+  "commit_failed": "Could not save. Your imported content is still on screen.",
+  "upload_dropped": "{{count}} photo(s) were skipped (too large or unreadable).",
+  "upload_failed_bg": "{{count}} photo(s) haven't uploaded yet. You can retry from the top of the note.",
+  "strip_images": "{{count}} imported photo(s) · uploaded when you leave",
+  "strip_remove": "Remove imported photos",
+  "strip_text": "Imported content · becomes a note when you leave",
+  "strip_discard": "Discard",
+  "pending_bar": "{{count}} imported photo(s) haven't uploaded yet",
+  "pending_uploading": "Uploading {{count}} imported photo(s)…",
+  "pending_retry": "Retry upload"
+}

@@ -1,0 +1,141 @@
+/* 폰 갤러리(MobileGalleryView) + 첨부 보기(MobileMediaViewer). 타일 얼굴은 galleryTile.css(데스크톱과 공용). */
+
+/* 종류 필터 — 아이콘 일곱 개가 한 줄에 다 들어간다(360px 폰: 328px / 7 ≈ 46px). 가로 스크롤·가장자리
+ * 흐림이 필요 없게 칸을 나눠 갖는다. */
+.mobile-gallery-filter {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--m-gutter);
+}
+.mobile-gallery-kind {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.mobile-gallery-kind-name {
+  flex: 1 0 100%;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  padding: 0 var(--space-1);
+}
+.mobile-gallery-tile-wrap { position: relative; }
+.mobile-gallery-tile-wrap .gallery-tile { width: 100%; }
+/* 오디오 타일 재생 영역 — 가운데 재생 글리프 위의 투명 버튼(44px 터치 목표). */
+.mobile-gallery-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+.mobile-gallery-kind[data-active='true'] {
+  border-color: var(--accent);
+  color: var(--m-accent-text);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* 폭 기반 열 수: 타일 최소 96px 로 채우되, 폰에서 3열 아래로는 내려가지 않는다(min() 의 두 번째 항이
+ * "3열이 되는 폭"). 360px 폰 = 3열, 태블릿 세로 ≈ 7열. */
+.mobile-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(96px, calc((100% - 2 * var(--space-1)) / 3)), 1fr));
+  gap: var(--space-1);
+  padding-bottom: var(--space-5);
+}
+.mobile-gallery-grid .gallery-tile { flex: none; width: 100%; }
+.mobile-gallery-grid .gallery-face-name { font-size: var(--text-xs); }
+.mobile-gallery-grid .gallery-face-play { width: 28px; height: 28px; }
+
+/* 첨부 보기 — 바탕·닫기는 .mobile-attach-viewer(-close) 를 그대로 쓰고, 여기서는 세로 배치와 아래 띠만. */
+.mobile-media-viewer { flex-direction: column; }
+.mobile-media-viewer-stage {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mobile-media-viewer-status {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-5);
+  transform: translateX(-50%);
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+.mobile-media-viewer-video { max-width: 100%; max-height: 100%; display: block; }
+.mobile-media-viewer-file {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: calc(100% - 2 * var(--m-gutter));
+  padding: var(--space-8) var(--space-7);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  text-align: center;
+}
+.mobile-media-viewer-file-icon { color: var(--m-accent-text); }
+.mobile-media-viewer-file-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.mobile-media-viewer-file-meta { font-size: var(--text-xs); color: var(--muted); }
+
+.mobile-media-viewer-bar {
+  flex: none;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--m-gutter) calc(var(--space-3) + env(safe-area-inset-bottom));
+  color: var(--text);
+}
+.mobile-media-viewer-bar-text { flex: 1; min-width: 0; }
+.mobile-media-viewer-bar-name,
+.mobile-media-viewer-bar-note {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mobile-media-viewer-bar-name { font-size: var(--text-sm); }
+.mobile-media-viewer-bar-note { font-size: var(--text-xs); color: var(--muted); }
+.mobile-media-viewer-btn {
+  flex: none;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-decoration: none;
+  cursor: pointer;
+}
+.mobile-media-viewer-btn--primary {
+  border-color: var(--accent);
+  color: var(--m-accent-text);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}

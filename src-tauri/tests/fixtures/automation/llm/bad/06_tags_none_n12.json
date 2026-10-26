@@ -1,0 +1,7 @@
+{
+  "_comment": "동기부여 노트(n12)에 '동기화' 태그 — 2음절 '동기' 동음이의 함정(tags_none). 태그 채점기가 n12 를 잡아야 한다.",
+  "expect": { "scorer": "tags", "ids": ["n12"] },
+  "split": "dev",
+  "target": { "prompt": "classify", "note_id": "n12" },
+  "response": { "folder": "insight", "tags": ["동기화", "습관"], "date": null, "region": null, "todos": [], "topic_hint": "동기부여와 작은 습관", "suspicious_instructions": false }
+}
