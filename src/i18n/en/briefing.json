@@ -43,7 +43,6 @@
   "habits_done": "{{done}}/{{total}} done",
   "habits_empty": "No habits yet. Add one right here.",
   "habits_title": "Today's habits",
-  "hourly_aria": "Hourly weather",
   "load_failed": "Could not load this.",
   "loading": "Loading…",
   "notify_body": "{{n}} events today · habits {{done}}/{{total}}",

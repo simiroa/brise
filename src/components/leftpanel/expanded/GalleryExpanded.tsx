@@ -1,3 +1,4 @@
+import { useSettingsStore } from "../../../stores/settings";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { List, type RowComponentProps } from "react-window";
 import { call } from "../../../lib/invoke";
@@ -106,6 +107,8 @@ export function GalleryTile({
   onOpen,
   onContextMenu,
 }: GalleryTileProps) {
+  // 설정 › 첨부파일 › 파일 이름 항상 표시 — 꺼져 있으면 호버·포커스 때만 이름이 드러난다(기존 동작).
+  const showNames = useSettingsStore((s) => s.galleryShowNames);
   const imgRel = pickTileImageRel(item.kind, item.rel_path, item.thumb_rel_path);
   const src =
     imgRel && baseDir && convert ? convert(`${baseDir}/${imgRel}`) : null;
@@ -174,7 +177,7 @@ export function GalleryTile({
       <GalleryTileFace
         item={item}
         src={src}
-        revealName={hovered || focused}
+        revealName={hovered || focused || showNames}
         audioPlaying={audioSrc ? audioPlaying : undefined}
         nameTestId={`gallery-tile-meta-${item.id}`}
       />
@@ -332,7 +335,9 @@ export function GalleryExpanded() {
     });
   }, []);
 
-  const { items, loading, hasMore, loadMore } = useGalleryQuery(selectedTabs, nameQuery);
+  const tileSize = useSettingsStore((s) => s.galleryTileSize);
+  const gallerySort = useSettingsStore((s) => s.gallerySort);
+  const { items, loading, hasMore, loadMore } = useGalleryQuery(selectedTabs, nameQuery, gallerySort);
   const { baseDir, convert } = useAttachmentsBase();
   const selectNote = useNotesStore((s) => s.selectNote);
   const setPreviewItem = useUiStore((s) => s.setPreviewItem);
@@ -349,7 +354,7 @@ export function GalleryExpanded() {
     [items, removedIds],
   );
 
-  const cols = galleryColumnCount(listWidth);
+  const cols = galleryColumnCount(listWidth, tileSize);
   // 행 슬롯 높이 추정치. 타일 자체는 flex + aspect-ratio 로 항상 정사각이므로 이 값이 몇 px
   // 어긋나도 정사각은 안 깨지고 행 사이 여백만 그만큼 달라진다(스크롤바 폭 ~9px 이 그 차이).
   const rowHeight = galleryRowHeight(listWidth, cols);

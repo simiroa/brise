@@ -1,18 +1,12 @@
 import type {
   CSSProperties,
   PointerEvent as ReactPointerEvent,
-  RefObject,
-  Dispatch,
-  SetStateAction,
 } from "react";
 import { t } from "../../../i18n/t";
 import { displayTitle } from "../../../stores/notes";
 import { folderColorCss } from "../../../lib/ui";
 import { IconSettings } from "../../icons";
-import {
-  scheduleLabels,
-  type RepeatDraft,
-} from "../../titlebar/scheduleRrule";
+import { scheduleLabels } from "../../titlebar/scheduleRrule";
 import { GFM_CHECKBOX_REGEX } from "../../../lib/inlineSchedule";
 import {
   formatHhmm,
@@ -28,27 +22,44 @@ import {
 import { type DragHandlers } from "./useAxisDragSession";
 import { RemindBadge } from "./RemindBadge";
 import { durationLabel } from "./DayBriefing";
-import { ChipSchedule } from "./ChipSchedule";
-import { type ConfirmState } from "./useAxisConfirmFlow";
+import { confirmForDelete, type ConfirmState } from "./useAxisConfirmFlow";
+import type { MovePreview } from "./pendingMove";
+import "./timeChip.css";
 
-export type MovePreview = { key: string; startMin: number; endMin: number };
 
 /**
- * W11 ③ — 축 칩의 **바닥 높이**. 30분짜리 칩은 14px 라 3줄이 물리적으로 안 들어간다.
- *
- * 유도: 세 줄(시각·반복 / 제목 / 발췌)이 전부 칩의 글꼴 크기 `--text-md`(13px)를 그대로 쓰고
- * 줄간격은 UI 기본 `--lh-ui`(1.45) 이므로 13 × 1.45 × 3 = 56.55px, 거기에 칩의 위아래 패딩
- * (`--space-1` × 2 = 8px)을 더해 ≈ 64.6px. 박스 모델이 border-box 라(tokens.css `*`) minHeight
- * 안에 패딩이 포함되므로 이 합이 그대로 바닥이다.
- *
- * 생 px 로 굳히지 않는 이유: 사용자가 글꼴 배율(`--fs`)을 키우면 세 줄은 커지는데 바닥은 그대로
- * 남아 3행이 다시 잘린다 — 토큰 곱으로 두면 배율을 따라온다.
- *
- * **W15 ⑤ — 이 식의 글꼴 토큰은 칩 본문의 것과 반드시 같아야 한다.** 칩 텍스트를 `--text-xs` →
- * `--text-md` 로 두 단 키우면서 여기를 안 맞추면 커진 글자가 좁아진 상자에서 잘린다(이 웨이브의
- * 지시서가 명시한 함정 그대로).
+ * 2026-10-27 기하 통일 — 칩의 높이는 **그 일정의 실제 길이**다(예전의 바닥 높이 CHIP_MIN_H ≈ 64.6px 는 기본 배율에서
+ * 2시간 18분어치라, 짧은 일정은 칩의 아래 가장자리가 끝 시각과 무관했고 끝 손잡이를 끌어도 칩이 안 변했다).
+ * 대신 **높이에 따라 보이는 줄 수가 줄어든다**(`chipTier`): 3줄(시각·제목·발췌) → 2줄 → 한 줄 → 작은 한 줄 → 막대.
+ * 잘린 내용은 툴팁(title)과 더블클릭(노트 열기)으로 닿는다.
  */
-export const CHIP_MIN_H = "calc(var(--text-md) * var(--lh-ui) * 3 + var(--space-1) * 2)";
+export type ChipTier = "full" | "two" | "one" | "compact" | "bar";
+
+/** 칩 한 줄의 픽셀 높이 = `--text-md`(13px × --fs) × `--lh-ui`(1.45). 글꼴 배율을 읽어 따라간다 — 토큰 값이 바뀌면
+ *  여기 두 숫자도 같이 바꾼다(tokens.css 의 --text-md · --lh-ui). jsdom 처럼 --fs 를 못 읽으면 1. */
+export function chipLinePx(): number {
+  let fs = 1;
+  if (typeof document !== "undefined") {
+    const v = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--fs"));
+    if (Number.isFinite(v) && v > 0) fs = v;
+  }
+  return 13 * fs * 1.45;
+}
+
+/** 높이(px)로 표시 단계를 고른다. 위아래 패딩(--space-1 × 2 = 8px)은 여러 줄 단계에만 든다. 작은 한 줄은
+ *  `--text-xs`(11px) · 줄간격 1 이라 한 줄 높이의 약 0.7배면 들어간다. */
+export function chipTier(heightPx: number, linePx: number): ChipTier {
+  if (heightPx >= linePx * 3 + 8) return "full";
+  if (heightPx >= linePx * 2 + 8) return "two";
+  if (heightPx >= linePx) return "one";
+  if (heightPx >= linePx * 0.7) return "compact";
+  return "bar";
+}
+
+/** 겹침 칸 하나당 들여쓰기 — 칩·손잡이가 같은 값을 써야 서로 어긋나지 않는다(DayAxis 의 손잡이도 이걸 쓴다). */
+export function laneLeft(lane: number): string {
+  return lane === 0 ? `${TIME_LABEL_W}px` : `calc(${TIME_LABEL_W}px + var(--space-5) * ${lane})`;
+}
 
 /** 칩의 한 줄 — 각 줄이 **독립적으로** 말줄임한다. 1행은 정보 밀도가 높아 줄바꿈(flexWrap)이
  *  아니라 말줄임이 맞다: 280px 패널에서 감기 시작하면 3줄 구조 자체가 무너진다. */
@@ -83,30 +94,20 @@ export function extractChipChecklist(body: string): ChipChecklistItem[] {
 
 export interface TimeChipProps {
   /** The timed event to render */
-  e?: TimedEvent;
-  event?: TimedEvent;
-  /** Layout top and height or individual numbers */
-  top?: number;
-  height?: number;
-  layout?: { top: number; height: number };
+  e: TimedEvent;
+  /** 이 칩의 픽셀 자리(layoutTimedEvents 의 결과 — top/height 는 시각·길이에서만 나오고 lane 은 겹침 들여쓰기 칸). */
+  layout?: { top: number; height: number; lane?: number };
   pxPerMin: number;
   pending?: MovePreview | null;
-  dim?: boolean;
+  /** 칩 한 줄의 픽셀 높이(chipLinePx) — 축이 렌더마다 한 번 재서 내려준다. 없으면 여기서 잰다. */
+  linePx?: number;
   searchHits?: Set<string> | null;
   folderFilter?: string | null;
-  focused?: boolean;
   focusedNoteId?: string | null;
-  color?: string;
   folderById?: Map<string, { color_hue: number | null }>;
-  excerptLine?: string;
   excerpts?: Record<string, string>;
-  checklist?: ChipChecklist | null;
   checklists?: Record<string, ChipChecklist | null>;
-  open?: { key: string; field: "time" | "repeat" | null } | null;
-  openChip?: { key: string; field: "time" | "repeat" | null } | null;
   uiLang: string;
-  chipSettingsRef?: RefObject<HTMLButtonElement | null> | null;
-  chipMenuRef: RefObject<HTMLDivElement | null>;
   chipDrag: {
     handlers: DragHandlers;
     swallowClick: () => boolean;
@@ -125,53 +126,39 @@ export interface TimeChipProps {
       positions: LinkableEvent[];
     },
     deltaPx: number,
-  ) => { next: { startMin: number; endMin: number }; linked: MovePreview[]; deltaMin: number };
+  ) => { next: { startMin: number; endMin: number }; linked: MovePreview[] };
   chipPositions: () => LinkableEvent[];
   commitTimes: (
     e: TimedEvent,
     mode: ChipDragMode,
     next: { startMin: number; endMin: number },
     linked: MovePreview[],
-    deltaMin: number,
   ) => Promise<void>;
   onRequestConfirm: (req: ConfirmState) => void;
-  setOpenChip: Dispatch<SetStateAction<{ key: string; field: "time" | "repeat" | null } | null>>;
+  /** ⚙ 버튼 — 일정 수정 모달을 연다(롱프레스는 축의 드래그 세션이 같은 모달을 연다). */
+  onEdit: (e: TimedEvent) => void;
   onToggleChecklistItem: (
     noteId: string,
     sectionId: string,
     lineIndex: number,
     currentChecked: boolean,
   ) => void;
-  commitChipTime: (e: TimedEvent, part: "start" | "end", value: string | null) => void | Promise<unknown>;
-  onRepeatApply: (e: TimedEvent, draft: RepeatDraft) => void;
 }
 
 export function TimeChip(props: TimeChipProps) {
-  const targetEvent = props.e ?? props.event;
-  if (!targetEvent) return null;
-
   const {
+    e,
     layout,
-    top: topProp,
-    height: heightProp,
     pxPerMin,
     pending: pendingProp,
-    dim: dimProp,
+    linePx: linePxProp,
     searchHits,
     folderFilter,
-    focused: focusedProp,
     focusedNoteId,
-    color: colorProp,
     folderById,
-    excerptLine: excerptLineProp,
     excerpts,
-    checklist: checklistProp,
     checklists,
-    open: openProp,
-    openChip,
     uiLang,
-    chipSettingsRef,
-    chipMenuRef,
     chipDrag,
     onChipPointerDown,
     onFocus,
@@ -180,44 +167,28 @@ export function TimeChip(props: TimeChipProps) {
     chipPositions,
     commitTimes,
     onRequestConfirm,
-    setOpenChip,
+    onEdit,
     onToggleChecklistItem,
-    commitChipTime,
-    onRepeatApply,
   } = props;
 
-  const e = targetEvent;
-
   const dim =
-    dimProp !== undefined
-      ? dimProp
-      : (searchHits !== null && searchHits !== undefined && !searchHits.has(e.item.note_id)) ||
-        (folderFilter !== null && folderFilter !== undefined && e.item.folder_id !== folderFilter);
+    (searchHits !== null && searchHits !== undefined && !searchHits.has(e.item.note_id)) ||
+    (folderFilter !== null && folderFilter !== undefined && e.item.folder_id !== folderFilter);
 
-  const focused =
-    focusedProp !== undefined
-      ? focusedProp
-      : e.item.note_id === focusedNoteId;
+  const focused = e.item.note_id === focusedNoteId;
 
   const folder = folderById?.get(e.item.folder_id);
-  const color =
-    colorProp !== undefined
-      ? colorProp
-      : folder?.color_hue != null
-        ? folderColorCss(folder.color_hue)
-        : "var(--accent)";
+  const color = folder?.color_hue != null ? folderColorCss(folder.color_hue) : "var(--accent)";
 
-  const topPx = topProp !== undefined ? topProp : layout?.top ?? 0;
-  const baseHeightPx = heightProp !== undefined ? heightProp : layout?.height ?? 0;
-
-  // 드래그 중이거나 저장을 기다리는 칩은 시간델타만큼 **밀어서** 그린다 — top 을 다시
-  // 계산하지 않는 이유는 함정 ⓐ 와 같다(top 은 스태킹 스윕을 거친 값이라 시간이 아니다).
-  // 손잡이로 늘린 경우엔 높이도 미리보기 값을 쓴다(시작 손잡이는 밀림 + 높이 둘 다).
-  // W15 — 미리보기는 목록이다(연동 이동). 이 칩의 것만 골라 쓰고, 아래 계산은 그대로다.
-  const pending = pendingProp !== undefined ? pendingProp : null;
-  const shiftPx = pending === null ? 0 : (pending.startMin - e.startMin) * pxPerMin;
-  const heightPx =
-    pending === null ? baseHeightPx : (pending.endMin - pending.startMin) * pxPerMin;
+  // 기하 통일(2026-10-27): top 은 언제나 시각이다(겹쳐도 밀지 않는다). 드래그 중이거나 저장을 기다리는 칩은
+  // 미리보기(스냅 값) 시각으로 **그 자리에** 그린다 — 손잡이·라벨·저장 값이 전부 같은 수에서 나온다.
+  // W15 — 미리보기는 목록이다(연동 이동). 이 칩의 것만 골라 쓴다.
+  const pending = pendingProp ?? null;
+  const topPx = pending !== null ? pending.startMin * pxPerMin : layout?.top ?? 0;
+  const heightPx = pending !== null ? (pending.endMin - pending.startMin) * pxPerMin : layout?.height ?? 0;
+  const tier = chipTier(heightPx, linePxProp ?? chipLinePx());
+  const lane = layout?.lane ?? 0;
+  const multiLine = tier === "full" || tier === "two";
   const timeLabel = pending === null ? e.item.start_time : formatHhmm(pending.startMin);
   // 행 모양으로 판정한다 — 잘린 span_start === span_end 는 10/31→11/2 를 10월에 하루로 본다.
   // DayDetailPanel 의 isResizable 과 같은 규칙.
@@ -245,23 +216,10 @@ export function TimeChip(props: TimeChipProps) {
   // 반복 요약은 scheduleRrule 한 곳에서 나온다 — 종일 카드의 요약 줄과 같은 문자열이다.
   const repeatLabel = scheduleLabels(e.item, uiLang).repeat;
   // 3행 — 발췌의 **첫 줄만**. 캐시는 두 줄까지 갖고 있지만(firstLines) 칩은 한 줄이다.
-  const excerptLine =
-    excerptLineProp !== undefined
-      ? excerptLineProp
-      : (excerpts?.[e.item.note_id] ?? "").split("\n")[0];
+  const excerptLine = (excerpts?.[e.item.note_id] ?? "").split("\n")[0];
   // 3행 아래 체크박스 sub-list — 발췌에서 걸러낸 GFM 체크리스트 줄들(요구사항 ①).
   // 없으면 null 이라 아래서 아무것도 그리지 않고, 그러면 칩 높이는 그대로다(요구사항 ⑤).
-  const checklist =
-    checklistProp !== undefined
-      ? checklistProp
-      : checklists?.[e.item.note_id] ?? null;
-  const open =
-    openProp !== undefined
-      ? openProp
-      : openChip?.key === e.key
-        ? openChip
-        : null;
-
+  const checklist = checklists?.[e.item.note_id] ?? null;
   return (
     // W11 ④ — 칩이 `<button>` 하나였는데, 펼친 설정에 텍스트 입력과 버튼들이 들어가야
     // 해서 wrapper `<div>` 가 됐다(버튼 안에 버튼/입력은 무효 DOM — DetailNoteCard 가
@@ -272,9 +230,12 @@ export function TimeChip(props: TimeChipProps) {
     <div
       key={e.key}
       data-testid={`cal-time-event-${e.item.note_id}`}
+      data-chip-key={e.key}
       data-search-dim={dim ? "true" : undefined}
       data-focused={focused ? "true" : undefined}
       data-moving={pending !== null ? "true" : undefined}
+      // 배경·선택 링·겹침 순서는 클래스가 갖는다(timeChip.css) — 상태 사이를 이징으로 잇는다.
+      className="cal-chip"
       onPointerDown={(ev) => onChipPointerDown(e, ev)}
       {...chipDrag.handlers}
       onClick={() => {
@@ -296,7 +257,7 @@ export function TimeChip(props: TimeChipProps) {
           // W15 — 키보드도 연동된다(드래그와 같은 기능이 같은 경험이어야 한다). 이웃의
           // 자리는 **누를 때마다 새로** 읽는다(chipPositions) — 연달아 누르면 미리보기가
           // 누적돼 있고, 델타는 이번 한 번의 step 이다(DB 행은 앞선 누름까지 이미 밀렸다).
-          const { next, linked, deltaMin } = plannedMove(
+          const { next, linked } = plannedMove(
             {
               key: e.key,
               startMin: base,
@@ -307,7 +268,7 @@ export function TimeChip(props: TimeChipProps) {
             },
             step * pxPerMin,
           );
-          if (next.startMin !== base) void commitTimes(e, "move", next, linked, deltaMin);
+          if (next.startMin !== base) void commitTimes(e, "move", next, linked);
           return;
         }
         // W10 ②(오너 실기 2026-09-11): "중첩은 이대로 괜찮지만 **선택 후 제거**는
@@ -322,12 +283,7 @@ export function TimeChip(props: TimeChipProps) {
           // span_start/span_end 와 달리 화면에서 클리핑되지 않는 값(그 행의 rrule
           // 컬럼을 그대로 옮긴 것, specs/commands/dashboard.yaml::CalendarItem) —
           // note_dates_list 왕복을 한 번 더 태우지 않고 이 값으로 문구만 가른다.
-          setOpenChip(null); // 포포버 위 모달 금지(보통 이미 닫혀 있다).
-          onRequestConfirm(
-            e.item.rrule
-              ? { kind: "deleteRepeat", key: e.key, noteId: e.item.note_id, dateId: e.item.date_id }
-              : { kind: "deleteEvent", key: e.key, noteId: e.item.note_id, dateId: e.item.date_id },
-          );
+          onRequestConfirm(confirmForDelete(e));
           return;
         }
         // See DetailNoteCard's comment — native button Enter/Space never fires dblclick.
@@ -347,89 +303,56 @@ export function TimeChip(props: TimeChipProps) {
         position: "absolute",
         top: topPx,
         height: heightPx,
-        // W11 ③ — 짧은 일정(30분 = 14px)에도 3줄이 다 보이는 바닥. `height` 는
-        // 스태킹 계산(planTimedDay)이 쓰는 값이라 **그대로 두고** 바닥만 준다. 그래서
-        // 아래 칩과 겹칠 수 있고, 그것은 오너가 승인한 것이다("위치 중복도 가능함").
-        minHeight: CHIP_MIN_H,
-        transform: shiftPx === 0 ? undefined : `translateY(${shiftPx}px)`,
-        // W15 ④ — 15분 칸마다 순간이동하던 것을 짧게 이징해 "자석에 걸리는" 느낌을 준다.
-        // 커브·지속시간은 이 저장소가 칩/버튼 눌림에 이미 쓰는 것과 **같은 값**이다
-        // (tokens.css `.chip-btn`) — 새 토큰을 만들지 않는다. --dur-fast(.12s)보다 느리게
-        // 걸면 빠른 마우스 이동을 못 따라가 고무줄처럼 끌려온다.
-        // **드래그 중(pending)에만** 건다: 놓고 굳거나 재조회가 와서 최종 자리로 바뀌는
-        // 순간엔 transition 이 없어야 한다(그때 걸려 있으면 스르륵 미끄러진다). 그 순간은
-        // pending 이 사라지는 렌더와 같은 렌더라 새 스타일엔 이 속성이 아예 없다.
-        ...(pending === null
-          ? {}
-          : { transition: "transform var(--dur-fast) cubic-bezier(0.2, 0, 0, 1)" }),
-        // 옮기는 칩은 이웃 위로 — 이웃은 새 데이터가 와야 다시 쌓인다. 삼항으로 쓰면
-        // check:type-scale ⓔ 가 값을 읽지 못해 거부한다(굵기 규칙과 같은 처방 —
-        // 조건부면 속성 자체를 뺀다). 1 은 지역 스태킹 예외 범위(0~3)다.
-        ...(pending === null ? {} : { zIndex: 1 }),
-        // W12 ③ — 설정이 열려도 칩의 크기는 **절대 안 바뀐다**(오너 실기 2026-09-11).
-        // 예전엔 height:"auto" 로 칩이 늘어났는데, 이 height 는 그 일정의 **길이**라
-        // 늘어나면 "일정이 길어졌다"는 거짓 정보가 된다. 펼침은 아래의 플로팅 메뉴가
-        // 맡고, 칩은 열려 있든 아니든 height + minHeight 그대로다.
+        // 드래그 중에도 transition 은 없다 — 15분 칸(7px)마다 이징이 재시작되면 손을 놓칠 듯 달달 떨렸다.
+        // W12 ③ — 칩의 크기는 **절대 안 바뀐다**(오너 실기 2026-09-11). 이 height 는 그 일정의 **길이**라
+        // 설정 때문에 늘어나면 "일정이 길어졌다"는 거짓 정보가 된다. 설정은 이제 칩 안이 아니라 모달
+        // (ChipEventModal — 설정 아이콘·롱프레스)에서 연다.
         // W9 ③: 여기 박혀 있던 `touchAction: "none"` 은 뺐다. 칩 위에서 시작한 터치가
         // 축을 통째로 못 굴리게 만들었고(칩이 24시간 축의 대부분을 덮는 날엔 스크롤이
         // 죽는다), 이제는 롱프레스로 드래그가 열리는 **그 순간** 훅이 같은 것을 건다.
-        // Full width always — see the file header for why overlaps stack, not split.
-        left: TIME_LABEL_W,
+        // 겹친 칩은 칸(lane)만큼 오른쪽으로 들어간다(아래로 밀지 않는다) — 뒤 칸이 DOM 순서상 나중이라 위에 그려진다.
+        left: laneLeft(lane),
         right: 0,
-        // 3줄이므로 가로줄이 아니라 세로 칼럼이다(W11 ③). 각 줄이 자기 말줄임을 갖는다.
+        // 세로 칼럼(W11 ③). 각 줄이 자기 말줄임을 갖는다.
         display: "flex",
         flexDirection: "column",
-        // W15 ⑤ — 좌상단 정렬(오너 실기 2026-09-11). 세로 중앙(center)이면 긴 일정의 칩에서
-        // 글자가 상자 한가운데로 내려가 **시각 라벨이 그 일정의 시작 눈금과 어긋나 보인다**.
-        justifyContent: "flex-start",
-        // W12 ③ — `overflow: hidden` 은 여기 있으면 **아래 플로팅 메뉴를 통째로
-        // 잘라낸다**(절대 배치된 자식도 잘린다). 안쪽 3줄 행으로 내렸다 — 말줄임은
-        // 원래부터 줄마다 CHIP_LINE 이 갖고 있어 잘리는 모양은 그대로다.
+        // W15 ⑤ — 여러 줄 단계는 좌상단 정렬(오너 실기 2026-09-11 — 세로 중앙이면 시각 라벨이 시작 눈금과
+        // 어긋나 보인다). 한 줄 이하 단계는 칩이 그 줄 높이 언저리라 가운데에 둔다.
+        justifyContent: multiLine ? "flex-start" : "center",
+        // `overflow: hidden` 은 바깥이 아니라 안쪽 3줄 행(cal-chip-clip)에 둔다 — 말줄임은 줄마다
+        // CHIP_LINE 이 갖고 있어 잘리는 모양은 같다(예전 플로팅 메뉴가 잘리지 않게 내려놓았던 자리).
         whiteSpace: "nowrap",
         textAlign: "left",
         border: "1px solid var(--line)",
         borderLeft: `2px solid ${color}`,
         borderRadius: "var(--radius-sm)",
-        // D6(그릴 2026-09-11) — 축 칩만 이 저장소의 "평소 투명·호버 채움" 관례에서
-        // 벗어난다(예외는 이 한 곳뿐, GRILL §1 D6). 뒤에 24시간 눈금선이 지나가서
-        // 평소에도 반투명(`--hover`)으로 칩의 존재를 알리고, 호버 또는 **포커스**
-        // (키보드로 옮긴 뒤에도)일 때 불투명해진다 — W12 ①의 "평소
-        // transparent · 호버 --hover" 는 축이 아닌 표면(DetailNoteCard 등)에 남는다.
-        // 정정(그릴 2026-09-13): 여기 있던 `var(--bg)` 는 색 구조 C1(64c1b269)이
-        // `--bg` 를 종이질감+글로우 레이어가 낀 캔버스 합성값으로 바꾼 뒤로 작은 칩에
-        // 얹으면 배경과 섞여 "더 투명해진 것처럼" 보였다(D6 의도와 정반대 결과) — 알파가
-        // 없는 단일 톤인 `--surface-base` 로 바꿔 실제로 불투명해지게 한다.
-        background: focused ? "var(--surface-base)" : "var(--hover)",
-        padding: "var(--space-1) var(--space-3)",
+        // D6(그릴 2026-09-11) — 축 칩만 "평소 반투명(--hover) · 호버·포커스 불투명(--surface-base)" 이다. 그 배경은
+        // 이제 .cal-chip 클래스가 갖는다(timeChip.css — 겹친 칩 정책과 이징도 거기).
+        padding: multiLine ? "var(--space-1) var(--space-3)" : "0 var(--space-3)",
         font: "inherit",
-        // W15 ⑤ — 타입 스케일 사다리에서 **두 칸 위**(xs → sm → md). 3줄이 전부 이 크기를
-        // 상속하므로 CHIP_MIN_H 의 유도식도 같은 토큰이어야 한다(그 주석 참고).
-        fontSize: "var(--text-md)",
+        // W15 ⑤ — 타입 스케일 사다리에서 **두 칸 위**(xs → sm → md). chipLinePx 가 이 토큰으로 줄 높이를 잰다.
+        // 작은 한 줄 단계만 한 단 작게 줄여 30분(기본 배율 14px) 칩에도 제목이 보이게 한다.
+        fontSize: tier === "compact" ? "var(--text-xs)" : "var(--text-md)",
         color: "inherit",
         cursor: pending === null ? "grab" : "grabbing",
         opacity: dim ? 0.35 : 1,
-        outline: focused || pending !== null ? "2px solid var(--accent)" : "none",
-        // 오너 결정 2026-09-10: 링은 안쪽으로. 밖으로 나간 링(offset 2 + 2px = 4px)이
+        // 선택 링 색은 .cal-chip[data-focused|data-moving] 이 갖는다(이징). 오너 결정 2026-09-10: 링은 안쪽으로. 밖으로 나간 링(offset 2 + 2px = 4px)이
         // 우측 스크롤 경계에서 잘려서 — 담는 스크롤러에 우측 패딩이 없다.
         outlineOffset: -2,
       }}
-      onMouseEnter={(ev) => {
-        ev.currentTarget.style.background = "var(--surface-base)";
-      }}
-      onMouseLeave={(ev) => {
-        // D6 — 포커스가 남아 있으면 호버가 끝나도 불투명을 유지한다(3단계: 평소 --hover
-        // · 호버 또는 포커스 --surface-base). focused 는 이 렌더의 클로저 값 — 매 렌더 이
-        // 핸들러가 새로 만들어지므로 최신 값을 그대로 읽는다.
-        ev.currentTarget.style.background = focused ? "var(--surface-base)" : "var(--hover)";
-      }}
     >
+      {/* 칩 높이(= 실제 길이) 안으로만 내용을 자른다. */}
+      <div
+        data-testid={`cal-chip-clip-${e.item.note_id}`}
+        data-tier={tier}
+        style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}
+      >
       <div
         style={{
           display: "flex",
-          alignItems: "flex-start",
+          alignItems: multiLine ? "flex-start" : "center",
           gap: "var(--space-2)",
           minWidth: 0,
-          // 칩 wrapper 에서 내려온 것 — 이유는 위 style 의 W12 ③ 주석.
           overflow: "hidden",
         }}
       >
@@ -455,21 +378,38 @@ export function TimeChip(props: TimeChipProps) {
             cursor: "inherit",
           }}
         >
-          <div
-            data-testid={`cal-chip-meta-${e.item.note_id}`}
-            style={{ ...CHIP_LINE, color: "var(--faint)", fontVariantNumeric: "tabular-nums" }}
-          >
-            {endLabel ? `${timeLabel}–${endLabel}` : timeLabel}
-            {/* W15 ② — 지속시간은 **끄는 동안에만** 이 줄에 붙는다. title 툴팁은 포인터를
-                누른 채로는 뜨지 않아 정작 필요한 순간에 안 보이고, 평소에도 붙여 두면
-                1행이 네 조각(시각·구간·길이·반복)이 되어 280px 에서 반복이 밀려난다. */}
-            {pending !== null && durText ? ` · ${durText}` : ""}
-            {repeatLabel ? ` · ${repeatLabel}` : ""}
-          </div>
-          <div data-testid={`cal-chip-title-${e.item.note_id}`} style={CHIP_LINE}>
-            {displayTitle(e.item.title)}
-          </div>
-          {excerptLine && (
+          {multiLine ? (
+            <>
+              <div
+                data-testid={`cal-chip-meta-${e.item.note_id}`}
+                style={{ ...CHIP_LINE, color: "var(--faint)", fontVariantNumeric: "tabular-nums" }}
+              >
+                {endLabel ? `${timeLabel}–${endLabel}` : timeLabel}
+                {/* W15 ② — 지속시간은 **끄는 동안에만** 이 줄에 붙는다. title 툴팁은 포인터를
+                    누른 채로는 뜨지 않아 정작 필요한 순간에 안 보이고, 평소에도 붙여 두면
+                    1행이 네 조각(시각·구간·길이·반복)이 되어 280px 에서 반복이 밀려난다. */}
+                {pending !== null && durText ? ` · ${durText}` : ""}
+                {repeatLabel ? ` · ${repeatLabel}` : ""}
+              </div>
+              <div data-testid={`cal-chip-title-${e.item.note_id}`} style={CHIP_LINE}>
+                {displayTitle(e.item.title)}
+              </div>
+            </>
+          ) : tier !== "bar" ? (
+            // 한 줄 단계 — 시각(여러 줄 단계의 1행과 같은 내용)과 제목을 한 줄에. 끄는 동안엔 시각이 미리보기 값이다.
+            <div style={{ ...CHIP_LINE, lineHeight: tier === "compact" ? 1 : "var(--lh-ui)" }}>
+              <span
+                data-testid={`cal-chip-meta-${e.item.note_id}`}
+                style={{ color: "var(--faint)", fontVariantNumeric: "tabular-nums" }}
+              >
+                {endLabel ? `${timeLabel}–${endLabel}` : timeLabel}
+                {pending !== null && durText ? ` · ${durText}` : ""}
+                {repeatLabel ? ` · ${repeatLabel}` : ""}
+              </span>{" "}
+              <span data-testid={`cal-chip-title-${e.item.note_id}`}>{displayTitle(e.item.title)}</span>
+            </div>
+          ) : null}
+          {tier === "full" && excerptLine && (
             <div
               data-testid={`cal-chip-excerpt-${e.item.note_id}`}
               // 발췌는 본문이라 에디터 글꼴이다 — 카드의 발췌(FocusedDetails)와 같은 규칙.
@@ -479,28 +419,20 @@ export function TimeChip(props: TimeChipProps) {
             </div>
           )}
         </button>
-        {e.item.remind && <RemindBadge size={10} noteId={e.item.note_id} />}
-        {/* ④ 설정 — **호버에 숨기지 않는다.** 시각 있는 항목은 종일 카드가 아예 없어
-            (listItems = plan.allDay) 이 칩이 시각·반복에 이르는 유일한 자리이고, 터치엔
-            호버가 없어 숨기면 그 경로가 통째로 사라진다. 대신 평소엔 옅게(--faint) 두고
-            호버/펼침에서 또렷해진다 — 1행이 아니라 아이콘 자신이 반응한다(1행 전체를
-            강조하면 그 줄이 눌리는 것처럼 보이는데, 실제 조작부는 이 아이콘이다). */}
+        {e.item.remind && tier !== "bar" && <RemindBadge size={10} noteId={e.item.note_id} />}
+        {/* ④ 설정 — 마우스를 올렸을 때만 보인다(오너 2026-10-27, `.cal-chip-gear`: 호버·포커스에서 불투명). */}
         <button
           type="button"
-          // 열려 있는 칩의 토글 버튼만 ref 를 갖는다(축 전체에 하나뿐) — 바깥 클릭
-          // 판정이 이 버튼을 "바깥"으로 보면 mousedown 이 닫고 click 이 다시 열어
-          // 아무리 눌러도 안 닫힌다(Select.tsx 가 btnRef 를 같이 넘기는 이유).
-          ref={open === null ? null : chipSettingsRef}
+          className="cal-chip-gear"
           data-testid={`cal-chip-settings-${e.item.note_id}`}
           aria-label={t("home.cal_chip_settings")}
           title={t("home.cal_chip_settings")}
-          aria-expanded={open !== null}
           // 이 버튼에서 시작한 포인터는 칩 드래그를 열지 않는다 — 누르려던 손이 칩을
           // 옮기면 안 된다(카드의 그립과 정확히 반대 방향의 같은 규율).
           onPointerDown={(ev) => ev.stopPropagation()}
           onClick={(ev) => {
             ev.stopPropagation(); // 포커스(칩 클릭)로 새지 않는다.
-            setOpenChip((cur) => (cur?.key === e.key ? null : { key: e.key, field: null }));
+            onEdit(e);
           }}
           onDoubleClick={(ev) => ev.stopPropagation()} // 두 번 눌러 노트가 열리지 않는다.
           style={{
@@ -510,24 +442,20 @@ export function TimeChip(props: TimeChipProps) {
             border: 0,
             padding: 0,
             background: "transparent",
-            color: open === null ? "var(--faint)" : "var(--accent)",
             cursor: "pointer",
-          }}
-          onMouseEnter={(ev) => {
-            ev.currentTarget.style.color = "var(--text)";
-          }}
-          onMouseLeave={(ev) => {
-            ev.currentTarget.style.color = open === null ? "var(--faint)" : "var(--accent)";
+            // 막대 단계는 칩이 아이콘보다 낮다 — 잘리지 않게 칩 오른쪽 가운데에 걸쳐 띄운다(설정은 시각 있는 항목이
+            // 시각·반복에 이르는 유일한 자리라 숨기지 않는다, 아래 ④ 주석).
+            ...(tier === "bar"
+              ? { position: "absolute", right: "var(--space-2)", top: "50%", transform: "translateY(-50%)" }
+              : {}),
           }}
         >
           <IconSettings size={12} strokeWidth={2} />
         </button>
       </div>
-      {/* 요구사항 ① — 발췌(3행) 아래, 체크리스트 줄이 있을 때만 별도 sub-list. 칩의
-          height 는 그 일정의 길이라(위 W12 ③ 주석) 이 sub-list 로 칩이 `height` 보다
-          커지는 것은 W11 ③/W12 ③ 이 이미 허용한 겹침이다(요구사항 ⑤) — 체크박스가
-          없는 칩은 이 블록 자체가 없어 높이가 그대로다. */}
-      {checklist && checklist.items.length > 0 && (
+      {/* 요구사항 ① — 발췌(3행) 아래, 체크리스트 줄이 있을 때만 별도 sub-list. 3줄 단계에서만 그리고, 칩 높이
+          (= 실제 길이) 안에 들어가는 만큼만 보인다(위 clip). */}
+      {tier === "full" && checklist && checklist.items.length > 0 && (
         <div
           data-testid={`cal-chip-checklist-${e.item.note_id}`}
           style={{
@@ -589,25 +517,7 @@ export function TimeChip(props: TimeChipProps) {
           ))}
         </div>
       )}
-      {open && (
-        <ChipSchedule
-          menuRef={chipMenuRef}
-          onClose={() => setOpenChip(null)}
-          item={e.item}
-          resizable={resizable}
-          uiLang={uiLang}
-          field={open.field}
-          onToggleField={(field) =>
-            setOpenChip((cur) =>
-              cur === null
-                ? cur
-                : { key: cur.key, field: cur.field === field ? null : field },
-            )
-          }
-          onTime={(part, value) => void commitChipTime(e, part, value)}
-          onRepeatApply={(draft) => onRepeatApply(e, draft)}
-        />
-      )}
+      </div>
     </div>
   );
 }

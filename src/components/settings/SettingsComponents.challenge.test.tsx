@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { useSettingsStore } from "../../stores/settings";
-import { SwitchGrid, SWITCH_GRID_COLUMNS, type SwitchGridItem } from "./SwitchGrid";
+import { SwitchGrid } from "./SwitchGrid";
 import { MetricTileGroup, MetricTile, type MetricTileItem } from "./MetricTileGroup";
 import { StorageGauge } from "./StorageGauge";
 
@@ -148,29 +148,11 @@ describe("Challenger 1 M1: Common Components Adversarial Challenge", () => {
   /* ─────────────────────────────────────────────────────────────────────────
    * 2. SwitchGrid columns — 나머지 경계 조건은 SwitchGrid.test.tsx 가 본다
    * ───────────────────────────────────────────────────────────────────────── */
-  describe("SwitchGrid columns Adversarial Challenges", () => {
+  describe("SwitchGrid Adversarial Challenges", () => {
     it("renders empty item array gracefully without throwing", () => {
-      render(<SwitchGrid items={[]} aria-label="empty" data-testid="empty-grid" columns={2} />);
+      render(<SwitchGrid items={[]} aria-label="empty" data-testid="empty-grid" />);
       const grid = screen.getByTestId("empty-grid");
       expect(grid.children.length).toBe(0);
-      expect(grid.style.gridTemplateColumns).toBe("repeat(2, minmax(0, 1fr))");
-    });
-
-    it("supports 1 and 3 columns and falls back to auto-fit when columns is 0", () => {
-      const items: SwitchGridItem[] = [
-        { id: "c1", label: "Col 1", checked: true, onChange: vi.fn() },
-        { id: "c2", label: "Col 2", checked: false, onChange: vi.fn() },
-        { id: "c3", label: "Col 3", checked: true, onChange: vi.fn() },
-      ];
-
-      const { rerender } = render(<SwitchGrid items={items} aria-label="g" columns={1} />);
-      expect(screen.getByTestId("switch-grid").style.gridTemplateColumns).toBe("repeat(1, minmax(0, 1fr))");
-
-      rerender(<SwitchGrid items={items} aria-label="g" columns={3} />);
-      expect(screen.getByTestId("switch-grid").style.gridTemplateColumns).toBe("repeat(3, minmax(0, 1fr))");
-
-      rerender(<SwitchGrid items={items} aria-label="g" columns={0} />);
-      expect(screen.getByTestId("switch-grid").style.gridTemplateColumns).toBe(SWITCH_GRID_COLUMNS);
     });
   });
 

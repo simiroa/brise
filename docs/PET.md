@@ -177,18 +177,33 @@ Rust(`pet_window.rs`·`commands/pet.rs`·`repo/pet`)는 이미 파일 단위로 
 - 펫 우클릭·트리플클릭 `pet_open_main`
 - 말풍선 노트 칩 / 계획 칩 / 겹침 검토 (`pet_open_main` + 이벤트)
 
-`show_and_focus`는 `unminimize` → `show` → 안 보이면 `center` 후 재시도 → `set_focus`.
-실패를 삼키되 `eprintln`으로 남긴다.
+`show_and_focus`는 `unminimize` → `show` → 안 보이면 `center` 후 재시도 → `set_focus` →
+(숨은 동안 보류한 효과가 있으면) 메인 스레드에서 효과 적용. 각 단계의 Err 는 진단(`tray/*`)에
+남기고, 약 300ms 뒤 본 창 상태를 `tray/reveal_state` 한 줄로 남긴다 — 열기 경로(`via`)·다시 만듦
+여부·보임·최소화·맨 앞(`foreground`, Win32 `GetForegroundWindow` — Tauri `is_focused()` 는 wry 가 포커스를
+웹뷰 자식으로 넘겨 정상 창도 false 로 읽힌다)·보류 효과 결과. 정상이면 Info, 하나라도 어긋나면 Warn(AI 히스토리 창 "진단"
+탭). show·set_focus 는 OS 수준에서 실패해도 Err 를 돌려주지 않아, 이 기록 전에는 "트레이로 안 열림"이
+릴리스에서 흔적 없이 지나갔다(2026-10-28). 웹뷰가 실제로 그리는지(투명·빈 창)는 아직 못 본다.
 
 Acrylic(`window_set_effect`)은 **창이 보인 뒤에만** 건다. 숨긴 HWND에 바르면 핸들이
 깨져 메인 창이 테두리만 남거나 목록에서 사라진다(`applySurfaceEffectAfterShow`).
 
 이 규칙은 오래 **이 문서에만** 있었고 지키는 것은 호출부들이었다. 그래서 새 팬아웃 경로가
-생길 때마다 되살아났다 — 마지막이 별도 설정 창(2026-08-14)이다: 메인이 트레이에 숨은 동안
+생길 때마다 되살아났다 — 첫째는 별도 설정 창(2026-08-14)이다: 메인이 트레이에 숨은 동안
 설정 창에서 테마·표면을 바꾸면 `window_set_effect` 가 펫이 아닌 **모든 창**에 걸었고, 그
-팬아웃이 숨은 메인의 핸들을 죽여 트레이/펫에서 창이 열리지 않았다. 이제 규칙은
-`commands::window::should_apply_effect` 가 강제한다(펫 제외 · 부른 창은 항상 · 그 밖은 보일
-때만). 호출부에서 다시 지킬 필요는 없다.
+팬아웃이 숨은 메인의 핸들을 죽여 트레이/펫에서 창이 열리지 않았다. 둘째는 숨은 메인 **자신**의
+요청이다(2026-10-28 조사): 숨은 본 창의 웹뷰는 살아 있어서 설정 창 노트북 칩 → `workspaces-changed` →
+본 창 `switchTo` → `reloadAppearance`, 또는 "시스템" 테마의 OS 다크/라이트 전환으로 스스로 효과를
+다시 건다. 당시 규칙 "부른 창은 항상"이 이걸 통과시켰다.
+
+이제 규칙은 `commands::window::effect_decision` 이 강제한다 — 펫 제외 · **트레이에 숨은 본 창이
+스스로 부르면 보류** · 부른 창은 항상 · 그 밖은 보일 때만. 보류 판단은 가시성이 아니라
+`tray::hide_to_tray` 가 세우고 `show_and_focus` 가 내리는 플래그(`TrayHandles::main_effect`)로 한다 —
+show 직후 `is_visible` 이 잠깐 false 로 읽혀 부팅마다 flat 으로 떨어진 2026-08-14 사고 때문이고, 부팅은
+이 플래그를 세우지 않는다. 보류한 요청은 마지막 것 하나만 남았다가 `show_and_focus` 가 show **뒤에**
+건다. 창이 파괴돼 다시 만드는 경로에선 보류분을 버린다 — 새 웹뷰의 부팅이 현재 설정으로 다시 건다.
+호출부에서 다시 지킬 필요는 없다. 한계: 설정 창이 퍼뜨린 요청은 숨은 본 창을 그대로 건너뛰어, 숨어
+있는 동안 설정 창에서 바꾼 프리셋은 다시 열었을 때 이전 효과로 나온다(다음 변경 때 맞춰진다).
 
 펫 창은 `settings_get_all` 금지(`PET_ALLOWED_COMMANDS`). 테마·표면·AI 켜짐은 `pet_theme`만.
 

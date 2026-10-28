@@ -41,7 +41,7 @@ vi.mock("./settings/NotificationsSection", () => ({ NotificationsSection: () => 
 vi.mock("./settings/AiChatSection", () => ({ AiChatSection: () => <div>mock-ai-chat</div> }));
 vi.mock("./settings/LicenseSection", () => ({ LicenseSection: () => <div>mock-license</div> }));
 vi.mock("./settings/AiProviderSection", () => ({ AiProviderSection: () => <div>mock-ai-provider</div> }));
-vi.mock("./settings/AiPresetsSection", () => ({ AiPresetsSection: () => <div>mock-ai-presets</div> }));
+vi.mock("./settings/AiPresetsSection", () => ({ AiPresetsSection: () => <div id="settings-anchor-ai_presets">mock-ai-presets</div> }));
 vi.mock("./settings/PetPersonaSection", () => ({ PetPersonaSection: () => <div>mock-pet-persona</div> }));
 vi.mock("./settings/AiPermissionsSection", () => ({ AiPermissionsSection: () => <div>mock-ai-permissions</div> }));
 vi.mock("./settings/AiCapabilityCatalog", () => ({ AiCapabilityCatalog: () => <div>mock-ai-capability-catalog</div> }));
@@ -104,7 +104,7 @@ describe("SettingsPanel — AI 페이지 2분할 (PLAN-2026-08-30 W1)", () => {
 
     await userEvent.click(screen.getByTestId("settings-nav-ai_features"));
     expect(await screen.findByText("mock-ai-capability-catalog")).toBeTruthy();
-    expect(await screen.findByTestId("ai-action-edit-open")).toBeTruthy();
+    expect(await screen.findByTestId("settings-ai-actions-card")).toBeTruthy();
     expect(screen.queryByText("mock-ai-permissions")).toBeNull();
   });
 
@@ -118,41 +118,57 @@ describe("SettingsPanel — AI 페이지 2분할 (PLAN-2026-08-30 W1)", () => {
     expect(screen.queryByText("mock-ai-permissions")).toBeNull();
   });
 
-  it("AI 가 꺼져 있으면 AI 기능 페이지의 카드 버튼은 숨지만, AI 프리셋 페이지는 레일에 그대로 있다", async () => {
+  it("AI 프리셋은 별도 페이지가 아니라 AI 기능 페이지 맨 아래에 있고, AI 가 꺼져 있어도 보인다", async () => {
     const userEvent = (await import("@testing-library/user-event")).default;
     useSettingsStore.setState({ aiEnabled: false } as any);
     render(<SettingsPanel onClose={() => {}} />);
 
+    expect(screen.queryByTestId("settings-nav-ai_presets")).toBeNull();
     await userEvent.click(screen.getByTestId("settings-nav-ai_features"));
-    expect(await screen.findByText("mock-ai-capability-catalog")).toBeTruthy();
-    expect(screen.queryByTestId("ai-action-edit-open")).toBeNull();
-    // 2026-09-27: 예전엔 AI 가 꺼져 있으면 프리셋 편집으로 들어갈 길이 아예 없었다.
-    await userEvent.click(screen.getByTestId("settings-nav-ai_presets"));
-    expect(await screen.findByText("mock-ai-presets")).toBeTruthy();
-  });
-
-  // 2026-09-27: 편집기는 자기 페이지(AI 프리셋)에 산다 — 기능 페이지 카드의 버튼은 그 페이지로 옮겨 갈 뿐
-  // 설정 창 안에 모달을 띄우지 않는다.
-  it("기능 페이지 카드의 'AI 프리셋 열기' 버튼이 AI 프리셋 페이지로 옮겨 간다", async () => {
-    const userEvent = (await import("@testing-library/user-event")).default;
-    useSettingsStore.setState({ aiEnabled: true } as any);
-    render(<SettingsPanel onClose={() => {}} />);
-
-    await userEvent.click(screen.getByTestId("settings-nav-ai_features"));
-    expect(screen.queryByText("mock-ai-presets")).toBeNull();
-
-    await userEvent.click(await screen.findByTestId("ai-action-edit-open"));
-    expect(await screen.findByText("mock-ai-presets")).toBeTruthy();
-    expect(screen.queryByText("mock-ai-capability-catalog")).toBeNull();
+    const catalog = await screen.findByText("mock-ai-capability-catalog");
+    const presets = await screen.findByText("mock-ai-presets");
+    expect(catalog.compareDocumentPosition(presets) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("이미 열린 창에 온 settings-navigate 이벤트가 그 페이지로 옮긴다", async () => {
     render(<SettingsPanel onClose={() => {}} />);
     expect(screen.getByText("mock-general")).toBeTruthy();
     await act(async () => {
+      navListeners["settings-navigate"]({ payload: "ai_presets" }); // 옛 id → AI 기능 페이지로 보낸다
+    });
+    expect(await screen.findByText("mock-ai-capability-catalog")).toBeTruthy();
+    expect(await screen.findByText("mock-ai-presets")).toBeTruthy();
+  });
+
+  it("옛 ai_presets 딥링크는 AI 기능 페이지의 프리셋 카드 앵커까지 간다 — 앵커를 따로 준 호출은 그 앵커가 우선", async () => {
+    reportFallbackMock.mockClear();
+    render(<SettingsPanel onClose={() => {}} />);
+    await act(async () => {
       navListeners["settings-navigate"]({ payload: "ai_presets" });
     });
     expect(await screen.findByText("mock-ai-presets")).toBeTruthy();
+    // 앵커를 소비했다 = 프리셋 카드가 강조된다(맨 위에 떨어지지 않는다).
+    await vi.waitFor(() =>
+      expect(document.getElementById("settings-anchor-ai_presets")!.classList.contains("settings-anchor-flash")).toBe(true),
+    );
+    // 명시한 앵커가 있으면 별칭의 기본 앵커를 쓰지 않는다(없는 앵커라 진단만 남는다).
+    act(() => navListeners["settings-navigate"]({ payload: { page: "ai_presets", anchor: "nope" } }));
+    await vi.waitFor(() => expect(reportFallbackMock).toHaveBeenCalledWith("settings", "anchor_not_found", "nope"), { timeout: 2000 });
+    expect(reportFallbackMock).not.toHaveBeenCalledWith("settings", "anchor_not_found", "ai_presets");
+  });
+
+  it("URL 쿼리 ?page=ai_presets 로 새 창이 열려도 프리셋 카드 앵커를 소비한다", async () => {
+    const orig = window.location.href;
+    window.history.replaceState(null, "", "/index.html?page=ai_presets#/settings");
+    try {
+      render(<SettingsPanel onClose={() => {}} />);
+      expect(await screen.findByText("mock-ai-presets")).toBeTruthy();
+      await vi.waitFor(() =>
+        expect(document.getElementById("settings-anchor-ai_presets")!.classList.contains("settings-anchor-flash")).toBe(true),
+      );
+    } finally {
+      window.history.replaceState(null, "", orig);
+    }
   });
 
   // 딥링크(settings_window_open 의 page 인자) — 새 창은 URL 쿼리(`?page=`)로 첫 페이지를 받는다.
@@ -161,7 +177,7 @@ describe("SettingsPanel — AI 페이지 2분할 (PLAN-2026-08-30 W1)", () => {
     window.history.replaceState(null, "", "/index.html?page=ai_presets#/settings");
     try {
       const { unmount } = render(<SettingsPanel onClose={() => {}} />);
-      expect(await screen.findByText("mock-ai-presets")).toBeTruthy();
+      expect(await screen.findByText("mock-ai-capability-catalog")).toBeTruthy();
       unmount();
       window.history.replaceState(null, "", "/index.html?page=nope#/settings");
       render(<SettingsPanel onClose={() => {}} />);
@@ -207,6 +223,7 @@ describe("SettingsPanel — 레일 5그룹 IA (PLAN-2026-09-12 §1)", () => {
       "settings-nav-group-general",
       "settings-nav-general",
       "settings-nav-editor",
+      "settings-nav-attachments",
       "settings-nav-notifications",
       "settings-nav-appearance",
       "settings-nav-view",
@@ -218,7 +235,6 @@ describe("SettingsPanel — 레일 5그룹 IA (PLAN-2026-09-12 §1)", () => {
       "settings-nav-ai",
       "settings-nav-ai_permissions",
       "settings-nav-ai_features",
-      "settings-nav-ai_presets",
       "settings-nav-ai_chat",
       "settings-nav-group-system",
       "settings-nav-data",
@@ -266,7 +282,8 @@ describe("SettingsPanel — 알림 및 일정 페이지 · 본문 블록 간격 
       .filter((id) => id.startsWith("settings-nav-") && !id.startsWith("settings-nav-group-") && id !== "settings-nav-footer");
     expect(pages).toHaveLength(17);
     expect(pages.indexOf("settings-nav-editor")).toBe(pages.indexOf("settings-nav-general") + 1);
-    expect(pages.indexOf("settings-nav-notifications")).toBe(pages.indexOf("settings-nav-editor") + 1);
+    expect(pages.indexOf("settings-nav-attachments")).toBe(pages.indexOf("settings-nav-editor") + 1); // 2026-10-27 신설
+    expect(pages.indexOf("settings-nav-notifications")).toBe(pages.indexOf("settings-nav-attachments") + 1);
     expect(screen.getByTestId("settings-nav-notifications").textContent).toBe(t("settings.page_notifications"));
 
     await userEvent.click(screen.getByTestId("settings-nav-notifications"));
@@ -295,10 +312,16 @@ describe("SettingsPanel — 알림 및 일정 페이지 · 본문 블록 간격 
     expect(content.contains(close)).toBe(false);
     expect(header.contains(close)).toBe(true);
     expect(header.style.height).toBe("var(--row-chrome)");
-    // 헤더는 레일과 본문 위를 가로지른다 — 둘 다 헤더의 아래쪽 형제 줄 안에 있다.
+    // 2026-10-27: 창은 하나의 그리드다 — 헤더(1행 2열)·범위 칸(1행 1열)·내비(2행 1열)·본문(2행 2열)이 같은 트랙을 공유한다.
+    const panel = screen.getByTestId("settings-panel");
+    expect(panel.style.display).toBe("grid");
     expect(header.contains(screen.getByTestId("settings-nav"))).toBe(false);
-    expect(header.nextElementSibling?.contains(screen.getByTestId("settings-nav"))).toBe(true);
-    expect(header.nextElementSibling?.contains(content)).toBe(true);
+    expect(header.parentElement).toBe(panel);
+    expect(screen.getByTestId("settings-nav").parentElement).toBe(panel);
+    // 검색 줄 안쪽 열과 페이지 본문이 같은 열 클래스(.settings-column)를 쓴다 — 좌우 기하의 단일 출처.
+    // (2026-10-27 C1: 검색창은 본문 열 안쪽 여백이 아니라 구분선에 붙는다 — 헤더는 .settings-column 이 아니라 .settings-search-box.)
+    expect(header.querySelector(".settings-search-box")).not.toBeNull();
+    expect(screen.getByTestId("settings-page-body").classList.contains("settings-column")).toBe(true);
   });
 });
 
@@ -315,7 +338,7 @@ describe("SettingsPanel — 헤더 범위 칩 (PLAN-2026-10-24 D5)", () => {
 
     expect((await screen.findByTestId("settings-scope-chip")).textContent).toBe("역사 노트");
 
-    for (const id of ["collect", "connect", "ai_presets", "license", "pet"]) {
+    for (const id of ["collect", "connect", "license", "pet"]) {
       await userEvent.click(screen.getByTestId(`settings-nav-${id}`));
       await waitFor(() => expect(screen.getByTestId("settings-scope-chip").getAttribute("data-scope")).toBe("app"));
       expect(screen.getByTestId("settings-scope-chip").textContent).toBe(t("workspace.scope_app_label"));
@@ -532,9 +555,9 @@ describe("SettingsPanel — 브라우저(태블릿) 페이지 필터 (W5)", () =
   // 둘**(일반·시스템)이다 — 옛 제목의 "플러그인 그룹도 없다"가 그룹이 하나도 안 선다는 뜻으로
   // 읽혀서, 실제로 서는 두 헤더를 제목에 적었다.
   // 오너 QA 2026-09-15 R5: "알림 및 일정" 이 더해져 6페이지, 2026-09-20 "에디터" 가 더해져
-  // 7페이지다(다섯 키 전부 원격 허용 — remoteSettingsPolicy.ts 참고). 제목 문자열은
+  // 7페이지, 2026-10-27 "첨부파일" 이 더해져 8페이지다(다섯 키 전부 원격 허용 — remoteSettingsPolicy.ts 참고). 제목 문자열은
   // specs/features/mobile.yaml 의 covered_by 리터럴과 묶여 있다.
-  it("브라우저 모드에서는 레일에 7페이지(일반·에디터·알림 및 일정·모양·지역·대시보드·라이선스)와 그룹 헤더 둘(일반·시스템)만 남는다", () => {
+  it("브라우저 모드에서는 레일에 8페이지(일반·에디터·첨부파일·알림 및 일정·모양·지역·대시보드·라이선스)와 그룹 헤더 둘(일반·시스템)만 남는다", () => {
     sessionStorage.setItem("brise_sync_token", "t");
     render(<SettingsPanel onClose={() => {}} />);
 
@@ -544,6 +567,7 @@ describe("SettingsPanel — 브라우저(태블릿) 페이지 필터 (W5)", () =
       "settings-nav-group-general",
       "settings-nav-general",
       "settings-nav-editor",
+      "settings-nav-attachments",
       "settings-nav-notifications",
       "settings-nav-appearance",
       "settings-nav-view",

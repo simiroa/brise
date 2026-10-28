@@ -30,6 +30,8 @@
   "new_scope_pet_collect": "Compagnon et collecte",
   "new_scope_window": "Disposition des fenêtres",
   "scope_label": "Carnet : {{name}}",
+  "scope_switch_label": "Changer de carnet",
+  "scope_switched": "Carnet changé : {{name}}",
   "scope_app_label": "Tous les carnets",
   "scope_app_hint": "Les réglages de cette page s’appliquent à toute l’application, pas seulement au carnet actuel.",
   "duplicate": "Dupliquer le carnet",

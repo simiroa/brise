@@ -402,7 +402,9 @@ export function TitleBar() {
           height: var(--tb-chip-h);
           min-height: var(--tb-chip-h);
           max-height: var(--tb-chip-h);
-          border: 0;
+          /* 칩 테두리는 항상 실선 — .tag-btn 기본이 1px dashed 라서 border-style 을 여기서 못 박지 않으면
+             양옆만 점선 세로줄로 보이는 사고가 난다(상하는 칩 높이에 묻힘). */
+          border: 1px solid color-mix(in srgb, var(--theme) 40%, transparent);
           border-radius: var(--radius-sm);
           background: transparent;
           font-family: var(--font-body);
@@ -412,11 +414,16 @@ export function TitleBar() {
           box-sizing: border-box;
           transition: background var(--dur-fast), color var(--dur-fast);
         }
+        /* 설정값이 없는 칩(상태·지역·태그 추가)은 선을 더 옅게 — 값 있는 칩과 구분. */
+        .tag-btn.tb-quiet-chip[data-empty] {
+          border-color: color-mix(in srgb, var(--theme) 16%, transparent);
+        }
         .tag-btn.tb-quiet-chip:hover,
         .tag-btn.tb-quiet-chip:focus-visible,
         .tag-btn.tb-quiet-chip:focus-within,
         .tag-btn.tb-quiet-chip[aria-expanded="true"] {
           background: var(--line);
+          border-color: var(--accent);
         }
         .tag-btn.tb-quiet-chip:focus-visible {
           outline: 2px solid var(--accent);

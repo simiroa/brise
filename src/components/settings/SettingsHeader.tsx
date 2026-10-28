@@ -1,9 +1,10 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { t } from "../../i18n/t";
-import { IconSettings, IconClose } from "../icons";
-import { IconChip } from "./IconChip";
+import { IconClose } from "../icons";
 import { WindowCloseButton } from "../common/WindowCloseButton";
-import { useActiveNotebookName } from "./useActiveNotebookName";
+import { useActiveNotebook } from "./useActiveNotebookName";
+import { NotebookChip } from "./NotebookChip";
+import { useSettingsStore } from "../../stores/settings";
 import { searchSettings, type SettingsSearchResult } from "./searchSettings";
 import { SETTINGS_SEARCH_INDEX } from "./settingsSearchIndex";
 
@@ -24,11 +25,12 @@ const chipStyle = {
 } as const;
 
 /**
- * 설정 창 맨 위 한 줄 (PLAN-2026-10-24 D1, B3) — 레일과 본문 위를 가로지른다.
- * 왼쪽 톱니 + 범위 칩(D5: 노트북별 페이지는 노트북 이름, 앱 전체 페이지는 "앱 전체"), 가운데 검색창
- * (W4: 색인 드롭다운 · Ctrl+F), 오른쪽 닫기. 창 타이틀 스트립이 없는 이 창(D10 ①)의 드래그 손잡이와 닫기 X 를
- * 맡는다. Tauri 2 는 `data-tauri-drag-region` 을 **단 요소 자신**을 눌렀을 때만 끌기를 시작하므로
- * 빈 자리(헤더·좌우 칸)에만 달고 입력·버튼·칩에는 달지 않는다.
+ * 설정 창 맨 위 한 줄 (PLAN-2026-10-24 D1, B3 → 2026-10-27 개편) — 두 칸을 **패널 그리드에 직접** 내놓는다(프래그먼트):
+ * 1행 1열(레일 위) = 범위 칩(노트북별 페이지는 노트북 드롭다운, 앱 전체 페이지는 "앱 전체"), 1행 2열(본문 위) = 검색창 + 닫기.
+ * 설정 톱니 아이콘은 뺐다. 검색창의 왼쪽은 레일과 본문 사이 세로 구분선(본문 캔버스의 왼쪽 가장자리)에 맞춘다(2026-10-27 C1).
+ * 기본 폭은 좁게 두고(나머지는 창 드래그 자리) 포커스·입력 중에만 넓힌다 — settingsLayout.css 의 .settings-search-box.
+ * 창 타이틀 스트립이 없는 이 창(D10 ①)의 드래그 손잡이와 닫기 X 를 맡는다. Tauri 2 는 `data-tauri-drag-region` 을
+ * **단 요소 자신**을 눌렀을 때만 끌기를 시작하므로 빈 자리에만 달고 입력·버튼·칩에는 달지 않는다.
  * 높이는 메인 창 스트립과 같은 --row-chrome.
  */
 export function SettingsHeader({
@@ -50,7 +52,8 @@ export function SettingsHeader({
   /** 결과 선택 — SettingsPanel 이 페이지를 바꾸고 앵커로 스크롤·강조한다. */
   onPick?: (page: string, anchor?: string) => void;
 }) {
-  const notebookName = useActiveNotebookName();
+  const { name: notebookName, icon: notebookIcon } = useActiveNotebook();
+  const activeWorkspaceId = useSettingsStore((st) => st.activeWorkspaceId); // = 노트북
   const inputRef = useRef<HTMLInputElement | null>(null);
   const boxRef = useRef<HTMLDivElement | null>(null);
   const listboxId = useId();
@@ -126,24 +129,21 @@ export function SettingsHeader({
   };
 
   return (
-    <header
-      data-tauri-drag-region
-      data-testid="settings-header"
-      aria-label={t("settings.title")}
-      style={{
-        height: "var(--row-chrome)",
-        flex: "none",
-        display: "grid",
-        gridTemplateColumns: "minmax(0, 1fr) minmax(0, 400px) minmax(0, 1fr)",
-        alignItems: "center",
-        gap: "var(--space-4)",
-        padding: "0 var(--space-4)",
-      }}
-    >
-      <div data-tauri-drag-region style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", minWidth: 0 }}>
-        <IconChip size={24}>
-          <IconSettings size={14} />
-        </IconChip>
+    <>
+      {/* 레일 맨 위 칸(그리드 1행 1열) — 노트북 드롭다운이 아래 내비 항목과 같은 폭·결로 선다. 설정 톱니는 뺐다
+          (2026-10-27 오너: 상단 라인이 애매하다). 빈 자리는 창 드래그 손잡이다. */}
+      <div
+        data-tauri-drag-region
+        data-testid="settings-scope-slot"
+        style={{
+          gridColumn: 1,
+          gridRow: 1,
+          display: "flex",
+          alignItems: "center",
+          minWidth: 0,
+          padding: "0 var(--space-4)",
+        }}
+      >
         {scope === "app" ? (
           <span
             data-testid="settings-scope-chip"
@@ -154,20 +154,34 @@ export function SettingsHeader({
             {t("workspace.scope_app_label")}
           </span>
         ) : (
-          notebookName && (
-            <span
-              data-testid="settings-scope-chip"
-              data-scope="notebook"
-              title={notebookName}
-              aria-label={t("workspace.scope_label", { name: notebookName })}
-              style={chipStyle}
-            >
-              {notebookName}
-            </span>
-          )
+          notebookName && <NotebookChip name={notebookName} icon={notebookIcon} activeId={activeWorkspaceId} disabled={busy} block />
         )}
       </div>
-      <div ref={boxRef} style={{ position: "relative", minWidth: 0, zIndex: "var(--z-dropdown)" }}>
+      {/* 본문 쪽 한 줄(그리드 1행 2열) — 안쪽 열이 아래 본문 열(settings-page-body)과 **같은 좌우 기하**를 쓴다:
+          같은 maxWidth·같은 안쪽 여백·같은 캔버스 왼쪽 인셋·같은 스크롤바 자리(--settings-sb-w). 그래서 검색 카드는 정중앙이 아니라
+          본문 열의 왼쪽 선에서 시작하고, 창 폭이 바뀌어도 두 줄이 같은 열을 따라 움직인다(settingsLayout.css). */}
+      <header
+        data-tauri-drag-region
+        data-testid="settings-header"
+        aria-label={t("settings.title")}
+        className="settings-column-host"
+        style={{
+          gridColumn: 2,
+          gridRow: 1,
+          height: "var(--row-chrome)",
+          position: "relative",
+          display: "flex",
+          alignItems: "center",
+          minWidth: 0,
+        }}
+      >
+        <div data-tauri-drag-region style={{ display: "flex", alignItems: "center", flex: 1, minWidth: 0 }}>
+          <div
+            ref={boxRef}
+            className="settings-search-box"
+            data-filled={query ? "" : undefined}
+            style={{ position: "relative", minWidth: 0, zIndex: "var(--z-dropdown)" }}
+          >
         <input
           ref={inputRef}
           type="search"
@@ -263,7 +277,8 @@ export function SettingsHeader({
           </div>
         )}
       </div>
-      <div data-tauri-drag-region style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", minWidth: 0 }}>
+        </div>
+      <div style={{ position: "absolute", right: "var(--space-4)", top: 0, bottom: 0, display: "flex", alignItems: "center" }}>
         {busy ? (
           // 되돌릴 수 없는 작업 중엔 닫지 못한다 — WindowCloseButton 은 disabled·title 을 받지 않아
           // 같은 클래스·아이콘의 비활성 버튼을 이 자리에만 둔다(ponytail: 그 부품이 disabled 를
@@ -282,6 +297,7 @@ export function SettingsHeader({
           <WindowCloseButton onClose={onClose} testId="settings-window-close" />
         )}
       </div>
-    </header>
+      </header>
+    </>
   );
 }

@@ -54,7 +54,12 @@ pub(crate) fn numbered_zip_entries<R: std::io::Read + std::io::Seek>(
 ) -> AppResult<Vec<(usize, String)>> {
     let mut names: Vec<(usize, String)> = Vec::new();
     for i in 0..archive.len() {
-        let name = archive.by_index(i).map_err(|e| AppError::Io(format!("zip error: {e}")))?.name().to_string();
+        let name = archive
+            .by_index(i)
+            .map_err(|e| AppError::Io(format!("zip error: {e}")))?
+            .name()
+            .map_err(|e| AppError::Io(format!("zip error: {e}")))?
+            .to_string();
         if let Some(rest) = name.strip_prefix(prefix).and_then(|s| s.strip_suffix(suffix)) {
             if let Ok(n) = rest.parse::<usize>() {
                 names.push((n, name));

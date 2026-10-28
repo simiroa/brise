@@ -16,6 +16,17 @@ export function todayLocal(): { year: number; month: number; day: string } {
   };
 }
 
+/** "YYYY-MM-DD" 에 n 일을 더한다 — UTC 산술이라 DST·타임존에 흔들리지 않는다. 형식이 깨졌으면 null.
+ *  날짜 더하기의 **유일한 구현**이다(예전엔 달력 다이얼로그 파일의 `addDaysIso` 와 브리핑 훅 파일의 `dayAfter` 가 같은 계산을 따로 가졌다 —
+ *  브리핑의 `dayAfter` 는 이 함수에 "깨졌으면 입력 그대로" 폴백을 얹은 얇은 별칭이다). */
+export function addDaysIso(iso: string, days: number): string | null {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + days));
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
 /** "YYYY-MM" prefix for a given year + 1-based month (calendar month-nav comparisons). */
 export function yearMonthPrefix(year: number, month1: number): string {
   return `${year}-${String(month1).padStart(2, "0")}`;

@@ -132,7 +132,7 @@ describe("DayDetailBody 데이터 계층 — 축 칩의 체크리스트 토글",
   // 자기 state 를 되돌린다.
   it("실패하면 체크가 원래대로 돌아온다", async () => {
     mockNote("본문 첫 줄\n- [ ] 할일 하나", true);
-    const view = renderBody([item({ note_id: "n1", kind: "event", start_time: "09:00" })]);
+    const view = renderBody([item({ note_id: "n1", kind: "event", start_time: "09:00", end_time: "12:00" })]);
 
     const checkbox = (await view.findByTestId(
       "cal-chip-checklist-checkbox-n1-1",
@@ -153,7 +153,7 @@ describe("DayDetailBody 데이터 계층 — 축 칩의 체크리스트 토글",
 
   it("성공하면 켠 채로 남는다", async () => {
     mockNote("본문 첫 줄\n- [ ] 할일 하나", false);
-    const view = renderBody([item({ note_id: "n1", kind: "event", start_time: "09:00" })]);
+    const view = renderBody([item({ note_id: "n1", kind: "event", start_time: "09:00", end_time: "12:00" })]);
 
     const checkbox = (await view.findByTestId(
       "cal-chip-checklist-checkbox-n1-1",
@@ -166,7 +166,7 @@ describe("DayDetailBody 데이터 계층 — 축 칩의 체크리스트 토글",
 describe("DayDetailBody 데이터 계층 — 발췌·체크리스트는 한 번의 note_get_many 부산물", () => {
   it("체크리스트 줄은 발췌에서 빠지고, 본문 조회는 한 번만 돈다", async () => {
     mockNote("본문 첫 줄\n- [ ] 할일 하나\n둘째 줄", false);
-    const view = renderBody([item({ note_id: "n1", kind: "event", start_time: "09:00" })]);
+    const view = renderBody([item({ note_id: "n1", kind: "event", start_time: "09:00", end_time: "12:00" })]);
 
     await waitFor(() =>
       expect(view.getByTestId("cal-chip-excerpt-n1").textContent).toBe("본문 첫 줄"),
@@ -203,11 +203,11 @@ describe("DayDetailBody 데이터 계층 — 노트 N 개에 IPC 1 회 (달력 N
   it("노트 3 개 → note_get_many 1 회(ids 정렬·중복 제거), note_get 0 회, 발췌는 셋 다", async () => {
     mockMany();
     const view = renderBody([
-      item({ note_id: "n3", kind: "event", start_time: "11:00" }),
-      item({ note_id: "n1", kind: "event", start_time: "09:00" }),
-      item({ note_id: "n2", kind: "event", start_time: "10:00" }),
+      item({ note_id: "n3", kind: "event", start_time: "11:00", end_time: "14:00" }),
+      item({ note_id: "n1", kind: "event", start_time: "09:00", end_time: "12:00" }),
+      item({ note_id: "n2", kind: "event", start_time: "10:00", end_time: "13:00" }),
       // 같은 노트의 다른 날짜 행 — 본문 조회는 노트 단위라 한 번만.
-      item({ note_id: "n1", kind: "event", start_time: "15:00", date_id: "d-n1-b", position: 1 }),
+      item({ note_id: "n1", kind: "event", start_time: "15:00", end_time: "18:00", date_id: "d-n1-b", position: 1 }),
     ]);
 
     for (const id of ["n1", "n2", "n3"]) {
@@ -224,8 +224,8 @@ describe("DayDetailBody 데이터 계층 — 노트 N 개에 IPC 1 회 (달력 N
   it("서버가 뺀 노트(휴지통·없음)는 발췌 없이 넘어가고 나머지는 그대로 뜬다", async () => {
     mockMany(new Set(["n2"]));
     const view = renderBody([
-      item({ note_id: "n1", kind: "event", start_time: "09:00" }),
-      item({ note_id: "n2", kind: "event", start_time: "10:00" }),
+      item({ note_id: "n1", kind: "event", start_time: "09:00", end_time: "12:00" }),
+      item({ note_id: "n2", kind: "event", start_time: "10:00", end_time: "13:00" }),
     ]);
     await waitFor(() =>
       expect(view.getByTestId("cal-chip-excerpt-n1").textContent).toBe("n1 본문"),

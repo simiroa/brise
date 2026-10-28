@@ -4,13 +4,17 @@ import { t } from "../../../i18n/t";
 import { useNotesStore } from "../../../stores/notes";
 import { bumpNoteQueryVersion } from "../../../lib/noteQuery";
 import { showUndoToast } from "../../../lib/undo";
+import { addDaysIso } from "../dateFmt";
 import {
   rowIsSameDay,
   parseHhmm,
   keepDurationMin,
   formatHhmm,
   clampStoredEndMin,
+  DAY_MIN,
+  axisDayOffsetMin,
   dragTimes,
+  parseIsoDay,
   type ChipDragMode,
 } from "../calendarLayout";
 
@@ -138,7 +142,7 @@ export function shiftRowTimes(row: NoteDate, deltaMin: number): Partial<NoteDate
   if (start === null) return null;
   const durationMin = keepDurationMin(row.start_time, row.end_time, true);
   const next = start + deltaMin;
-  if (next < 0 || next > 24 * 60 - 1 || next + durationMin > 24 * 60) return null;
+  if (next < 0 || next > DAY_MIN - 1 || next + durationMin > DAY_MIN) return null;
   return {
     start_time: formatHhmm(next),
     end_time: durationMin > 0 ? formatHhmm(clampStoredEndMin(next + durationMin)) : row.end_time,
@@ -193,14 +197,35 @@ export function planRowTimes(
     return { start_time: formatHhmm(next.startMin), end_time: row.end_time, startMin: null };
   }
   if (mode === "end") {
-    return { start_time: row.start_time, end_time: formatHhmm(next.endMin), startMin: null };
+    // 24:00 은 "00:00" 이 되어 I3 에 걸린다 — 다른 경로와 같은 clampStoredEndMin 한 규칙.
+    return { start_time: row.start_time, end_time: formatHhmm(clampStoredEndMin(next.endMin)), startMin: null };
   }
   const durationMin = keepDurationMin(row.start_time, row.end_time, rowIsSameDay(row));
   const start = dragTimes("move", { ...next, durationMin }, 0, hourRowH).startMin;
   return {
     start_time: formatHhmm(start),
-    end_time: durationMin > 0 ? formatHhmm(start + durationMin) : row.end_time,
+    end_time: durationMin > 0 ? formatHhmm(clampStoredEndMin(start + durationMin)) : row.end_time,
     startMin: start,
+  };
+}
+
+/**
+ * 하루짜리 행을 다른 날로 옮기는 날짜 필드 — 익일 구간으로 자정을 넘겨 옮길 때(또는 되돌아올 때) 시각과 함께 쓴다.
+ * 종료 날짜 트리플이 시작과 같게 채워져 있던 행은 같이 옮기고, 비어 있던 행은 비운 채 둔다(rowIsSameDay 의 두 모양).
+ * **옮길 수 없는 행은 null**(= 아무것도 쓰지 않는다): 여러 날 span 은 시작만 옮기면 기간이 변하고, 반복 행은 날짜가
+ * 씨앗이라 옮기면 시리즈 전체가 밀린다. 날짜 정밀도가 day 가 아니어도 null(시각을 가진 행은 항상 day 정밀도지만 방어한다).
+ */
+export function moveRowToDay(row: NoteDate, iso: string): Partial<NoteDate> | null {
+  const to = parseIsoDay(iso);
+  if (!to || !rowIsSameDay(row) || row.rrule || row.month === null || row.day === null) return null;
+  const hasEnd = row.end_year !== null;
+  return {
+    year: to.year,
+    month: to.month,
+    day: to.day,
+    end_year: hasEnd ? to.year : null,
+    end_month: hasEnd ? to.month : null,
+    end_day: hasEnd ? to.day : null,
   };
 }
 
@@ -268,4 +293,101 @@ export async function removeDateRow(noteId: string, dateId: string): Promise<boo
   } catch {
     return false;
   }
+}
+
+/**
+ * W15 ③ — 되돌리기 토스트 문구. 연속 드래그는 토스트가 **쌓이도록** 이미 정책이 돼 있는데(그릴 D4) 문구가 고정 한 줄이라 서로 구분되지
+ * 않았다 — 어느 토스트가 어느 변경인지 알 수 없으면 쌓아 둔 의미가 없다. 이제 실제 이전 → 이후 시각이 들어간다.
+ * 한쪽이라도 없으면(시각을 처음 얹거나 해제하는 경우) 예전 고정 문구로 폴백한다 — "→ 10:00" 처럼 반쪽만 든 문구는 무엇에서 바뀐 것인지
+ * 더 헷갈린다. 축(DayAxis)·종일 스트립(AllDayStrip)·일정 수정 모달(ChipEventModal)이 같은 문구를 쓴다.
+ */
+export function timeChangeLabel(from: string | null, to: string | null): string {
+  return from && to ? t("home.cal_time_changed_at", { from, to }) : t("home.cal_time_changed");
+}
+
+/** 한 제스처가 쓸 행 하나의 계산 결과 — `fields` 가 쓸 필드, 나머지는 주 칩만 채운다. */
+export type GesturePatch = {
+  fields: Partial<NoteDate>;
+  /** move 가 행에서 얻은 길이로 하루 안에 다시 죈 **실제 시작 분**(축 분 — 익일 오프셋 포함)이 미리보기와 다르면 그 값. 호출자가 미리보기를 고친다. */
+  settledStartMin?: number | null;
+  /** 되돌리기 토스트 문구(이전 → 이후). */
+  label?: string;
+};
+
+/** 한 제스처가 쓸 행 하나. `patch` 는 **DB 행**을 받아 쓸 필드를 돌려주는 순수 함수다(null = 아무것도 쓰지 않는다) — 판정은 화면 항목이 아니라
+ *  행이 한다(함정 ⓑ). 순서가 곧 쓰기 순서이고 첫 항목이 주 칩이다(첫 쓰기가 실패하면 이웃은 쓰지 않는다). */
+export type GestureWrite = {
+  noteId: string;
+  dateId: string;
+  patch: (row: NoteDate) => GesturePatch | null;
+};
+
+/**
+ * 시각을 옮기거나(mode "move") 시작·끝을 따로 늘리는(mode "start"/"end") 제스처 하나가 **어느 행에 무엇을 쓰는가**의 순수 계산 —
+ * 예전엔 DayAxis.commitTimes 한 함수 안에 상태 갱신과 뒤섞여 있었다. 훅은 이 목록대로 쓰고 롤백만 맡는다.
+ *
+ * - 주 칩: `planRowTimes`(무엇이 고정인지는 mode). 이동이 자정을 넘으면(익일 구간 ↔ 당일) 시각과 함께 날짜도 `moveRowToDay` 로 옮긴다 —
+ *   옮길 수 없는 행(여러 날 span · 반복)은 null 이라 아무것도 쓰지 않는다.
+ * - 이웃(`linked`): move 는 각자의 원래 시작과 새 시작의 차이만큼 통째로(`shiftRowTimes`), 리사이즈는 맞닿은 한쪽 경계만(`resizeRowBoundary` —
+ *   mode 가 가리키는 손잡이의 **반대편**이 이웃의 닿은 면). 이웃의 자리·행 id 는 `neighbors`(키 → 현재 자리)에서 찾고, 없는 이웃은 건너뛴다.
+ * 좌표는 당일 00:00 기준이고 익일 구간은 +24:00 이므로 행에는 **그 날의 분**으로 쓴다.
+ */
+export function planGestureWrites(args: {
+  chip: { noteId: string; dateId: string; startMin: number };
+  mode: ChipDragMode;
+  next: { startMin: number; endMin: number };
+  linked: ReadonlyArray<{ key: string; startMin: number; endMin: number }>;
+  neighbors: ReadonlyMap<string, { noteId: string; dateId: string; startMin: number }>;
+  day: string | null;
+  hourRowH: number;
+}): GestureWrite[] {
+  const { chip, mode, next, linked, neighbors, day, hourRowH } = args;
+  const newOff = axisDayOffsetMin(next.startMin);
+  const local = { startMin: next.startMin - newOff, endMin: next.endMin - newOff };
+  const targetDay = day && mode === "move" && newOff !== axisDayOffsetMin(chip.startMin) ? addDaysIso(day, newOff ? 1 : 0) : null;
+  const writes: GestureWrite[] = [
+    {
+      noteId: chip.noteId,
+      dateId: chip.dateId,
+      patch: (row) => {
+        const { start_time, end_time, startMin } = planRowTimes(row, mode, local, hourRowH);
+        // 날짜가 바뀌는 쓰기는 옮길 수 있는 행만(하루짜리·반복 아님) — 아니면 아무것도 쓰지 않고 되돌린다.
+        const datePatch = targetDay ? moveRowToDay(row, targetDay) : {};
+        if (!datePatch) return null;
+        return {
+          fields: { ...datePatch, start_time, end_time },
+          settledStartMin: startMin !== null && startMin !== local.startMin ? startMin + newOff : null,
+          // 토스트 문구의 이전→이후는 **이 행이 실제로 바꾼 쪽**이다: 끝 손잡이는 끝 시각, 나머지(이동·시작 손잡이)는 시작 시각.
+          label: mode === "end" ? timeChangeLabel(row.end_time, end_time) : timeChangeLabel(row.start_time, start_time),
+        };
+      },
+    },
+  ];
+  for (const l of linked) {
+    const target = neighbors.get(l.key);
+    if (!target) continue;
+    if (mode === "move") {
+      const shift = l.startMin - target.startMin; // 밀린 양은 이웃마다 다르다(겹친 만큼만 밀린다)
+      writes.push({
+        noteId: target.noteId,
+        dateId: target.dateId,
+        patch: (row) => {
+          const fields = shiftRowTimes(row, shift);
+          return fields ? { fields } : null;
+        },
+      });
+      continue;
+    }
+    const side = mode === "end" ? "start" : "end";
+    const boundaryMin = (side === "start" ? l.startMin : l.endMin) - axisDayOffsetMin(target.startMin);
+    writes.push({
+      noteId: target.noteId,
+      dateId: target.dateId,
+      patch: (row) => {
+        const fields = resizeRowBoundary(row, side, boundaryMin);
+        return fields ? { fields } : null;
+      },
+    });
+  }
+  return writes;
 }

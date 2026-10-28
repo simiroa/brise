@@ -491,7 +491,7 @@ describe("AskAiModal — preset stamp composer (owner: ONE modal, tiles are sent
     });
     expect(screen.queryByTestId("askai-ctxstrip")).toBeNull();
 
-    fireEvent.click(screen.getByRole("tab", { name: "AI presets" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Custom prompts" }));
     await act(async () => {
       fireEvent.click(screen.getByTestId("askai-tile-summarize"));
     });
@@ -1403,7 +1403,7 @@ describe("AskAiModal — preset stamp composer (owner: ONE modal, tiles are sent
   describe("AI 프리셋 편집 진입점", () => {
     it("the pencil opens the AI-presets-only editor in place (no settings window); closing returns to the modal", async () => {
       render(<AskAiModal target={noteTarget} onClose={() => {}} />);
-      fireEvent.click(screen.getByLabelText("Edit AI presets"));
+      fireEvent.click(screen.getByLabelText("Edit custom prompts"));
       const stub = await screen.findByTestId("preset-modal-stub");
       expect(stub.dataset.aiOnly).toBe("true");
       expect(stub.dataset.autoAdd).toBe("null");
@@ -1431,7 +1431,7 @@ describe("AskAiModal — preset stamp composer (owner: ONE modal, tiles are sent
       await act(async () => {
         fireEvent.click(screen.getByTestId("askai-tile-summarize"));
       });
-      fireEvent.click(screen.getByLabelText("Edit AI presets"));
+      fireEvent.click(screen.getByLabelText("Edit custom prompts"));
       expect((await screen.findByTestId("preset-modal-stub")).dataset.initialId).toBe("summarize");
     });
   });

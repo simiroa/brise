@@ -7,6 +7,8 @@ export interface ReorderItem {
   label: string;
   icon?: ReactNode;
   enabled?: boolean;
+  /** 라벨 옆 작은 배지(예: 첫 번째 탭의 "시작 화면"). */
+  badge?: ReactNode;
 }
 
 interface ReorderListProps<T extends ReorderItem> {
@@ -17,7 +19,8 @@ interface ReorderListProps<T extends ReorderItem> {
 }
 
 /**
- * One-line chip strip: click = toggle, drag = reorder, ←/→ = reorder, Space/Enter = toggle.
+ * One-row chip strip (2026-10-28: 큰 세로 행 → 한 줄 균등 분할 칩, 프레임 없음): click = toggle, drag = reorder, ↑/↓(←/→) = reorder, Space/Enter = toggle.
+ * 켜짐/꺼짐은 칩 자체의 밝기가 말한다(켜짐 = 강조 테두리·옅은 면, 꺼짐 = 흐림; 보조기술에는 `aria-pressed`) — 행 전체가 토글 칩이다(별도 스위치 컨트롤이 아니다).
  * 키보드 조작은 칩 아래 힌트 한 줄이 말한다. 마지막으로 켜진 칩은 끌 수 없다(전부 꺼지면 보일 탭이
  * 없다) — 흔들기만으로는 이유가 안 보이므로 같은 순간 aria-live 줄이 이유를 말한다.
  *
@@ -165,9 +168,7 @@ export function ReorderList<T extends ReorderItem>({
         style={{
           display: "flex",
           flexDirection: "row",
-          flexWrap: "nowrap",
           gap: "var(--space-2)",
-          overflowX: "auto",
         }}
       >
         {items.map((item, index) => {
@@ -195,10 +196,10 @@ export function ReorderList<T extends ReorderItem>({
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
                   toggle(item);
-                } else if (e.key === "ArrowLeft") {
+                } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
                   e.preventDefault();
                   move(index, index - 1);
-                } else if (e.key === "ArrowRight") {
+                } else if (e.key === "ArrowRight" || e.key === "ArrowDown") {
                   e.preventDefault();
                   move(index, index + 1);
                 }
@@ -222,13 +223,19 @@ export function ReorderList<T extends ReorderItem>({
               )}
               <span
                 style={{
-                  fontSize: "var(--text-sm)",
-                  fontWeight: 400,
+                  fontSize: "var(--text-md)",
+                  fontWeight: 600,
                   color: isEnabled ? "var(--text)" : "var(--faint)",
+                  flex: 1,
+                  textAlign: "left",
+                  minWidth: 0,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
                 }}
               >
                 {item.label}
               </span>
+              {item.badge}
             </button>
           );
         })}
@@ -255,14 +262,19 @@ function chipStyle(
     display: "inline-flex",
     alignItems: "center",
     gap: "var(--space-2)",
-    padding: "var(--space-1) var(--space-2)",
+    // 한 줄 — 칩이 폭을 균등 분할하고(반응형), 좁아지면 라벨이 줄임표로 접힌다. 가로 스크롤은 없다.
+    flex: "1 1 0",
+    minWidth: 0,
+    boxSizing: "border-box",
+    padding: "var(--space-3) var(--space-4)",
     border: "1px solid var(--divider)",
-    borderRadius: "var(--radius-sm)",
-    background: enabled ? "color-mix(in srgb, var(--text) 4%, transparent)" : "transparent",
+    borderRadius: "var(--radius-md)",
+    // 켜짐/꺼짐은 배지가 아니라 칩 자체의 밝기로 말한다(오너 2026-10-28): 켜짐 = 강조 테두리·옅은 면·또렷한 글자, 꺼짐 = 흐림.
+    background: enabled ? "color-mix(in srgb, var(--accent) 12%, transparent)" : "transparent",
+    borderColor: enabled ? "var(--accent)" : "var(--divider)",
     opacity: dragging ? 0.5 : enabled ? 1 : "var(--dim-disabled)",
     cursor: dragging ? "grabbing" : "grab",
     whiteSpace: "nowrap",
-    flex: "none",
     userSelect: "none",
     touchAction: "none",
     transform: shaking ? "translateX(3px)" : undefined,

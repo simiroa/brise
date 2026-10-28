@@ -9,6 +9,7 @@ pub mod dashboard;
 pub mod data_location;
 pub mod diag;
 pub mod emoji;
+pub mod fonts;
 pub mod geocode;
 pub mod migrate;
 pub mod notes;
@@ -53,6 +54,8 @@ pub struct AppState {
     pub data_dir: PathBuf,
     /// Emoji 3D 스타일 패크 다운로드 진행 상태.
     pub emoji_state: std::sync::Arc<crate::repo::emoji::EmojiDownloadState>,
+    /// 내려받기 글꼴 진행 상태(repo/fonts.rs).
+    pub font_state: std::sync::Arc<crate::repo::fonts::FontDownloadState>,
     /// 같은 DB 파일의 읽기 전용 연결(db::open_read_only) — 채팅 근거 검색·프롬프트 합성처럼 오래
     /// 걸리는 읽기를 `db` 잠금 밖에서 돌려, 그동안 자동 저장 등 다른 커맨드가 기다리지 않게 한다.
     /// 자기 Mutex 는 이 연결을 쓰는 읽기끼리만 직렬화한다(쓰기 연결과는 무관, WAL).
@@ -67,6 +70,7 @@ impl AppState {
             db: std::sync::Arc::new(Mutex::new(conn)),
             data_dir,
             emoji_state: std::sync::Arc::new(crate::repo::emoji::EmojiDownloadState::default()),
+            font_state: std::sync::Arc::new(crate::repo::fonts::FontDownloadState::default()),
             read_db: Mutex::new(None),
         }
     }

@@ -699,7 +699,7 @@ fn install_from_zip(conn: &mut Connection, data_dir: &Path, zip_path: &Path) -> 
         if entry.is_dir() {
             continue;
         }
-        let name = entry.name().to_string();
+        let name = entry.name().map_err(|_| pet_install("bad_zip"))?.to_string();
         if zip_entry_is_junk(&name) {
             continue;
         }

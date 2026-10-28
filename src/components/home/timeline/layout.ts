@@ -940,6 +940,27 @@ export function defaultTimelineView(nowYear: number = new Date().getFullYear()):
   return { from: nowYear - 1, to: nowYear + 1 };
 }
 
+/**
+ * 설정 › 대시보드 › 타임라인의 "첫 화면 범위"(`timeline_default_range`) → 보이는 구간. `fit`(기본)은 null — 노트에 맞추는
+ * 지금까지의 동작이 그대로 간다. 나머지는 오늘 기준 고정 구간이고, 호출자가 corpus 범위 안으로 clampView 한다.
+ */
+export function timelinePresetView(
+  preset: "fit" | "around_now" | "recent_3m" | "recent_1y",
+  now: Date = new Date(),
+): YearRange | null {
+  const today = dateToFractionalYear(now.getFullYear(), now.getMonth() + 1, now.getDate());
+  switch (preset) {
+    case "around_now":
+      return defaultTimelineView(now.getFullYear());
+    case "recent_3m":
+      return { from: today - 0.25, to: today + 0.03 };
+    case "recent_1y":
+      return { from: today - 1, to: today + 0.08 };
+    default:
+      return null;
+  }
+}
+
 /** True when the global/sidebar year filter is narrower than its corpus bounds. */
 export function isYearFilterNarrowed(
   yearFrom: number,

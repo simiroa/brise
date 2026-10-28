@@ -126,11 +126,11 @@ describe("DataManagementSection — 위험 작업 전용 페이지 (PLAN-2026-09
     await waitFor(() => expect(callMock).toHaveBeenCalledWith("backup_auto_status", {}));
   });
 
-  // 위에서 아래로: 게이지 → 첨부 저장 → 저장 및 백업 → 데이터 이동 → 위험 작업.
-  it("카드 순서: 게이지가 맨 위, 저장 및 백업은 첨부 저장 다음, 위험 작업이 맨 아래", () => {
+  // 위에서 아래로: 게이지 → 저장 및 백업(첨부 저장은 2026-10-27 첨부파일 페이지로 이사) → 데이터 이동 → 위험 작업.
+  it("카드 순서: 게이지가 맨 위, 저장 및 백업 다음, 위험 작업이 맨 아래", () => {
     const { container } = render(<DataManagementSection {...baseProps()} />);
     expect(container.firstElementChild).toBe(screen.getByTestId("storage-gauge"));
-    const order = ["storage-gauge", "settings-attachment-storage", "settings-storage-backup", "settings-danger-zone"].map(
+    const order = ["storage-gauge", "settings-storage-backup", "settings-danger-zone"].map(
       (id) => screen.getByTestId(id),
     );
     for (let i = 1; i < order.length; i++) {
@@ -206,9 +206,9 @@ describe("DataManagementSection — 위험 작업 전용 페이지 (PLAN-2026-09
     expect(screen.getByTestId("settings-restore").className).not.toContain("btn-danger");
   });
 
-  it("첨부 저장 카드가 있고, 위험 작업도 카드 안에 있다", () => {
+  it("첨부 저장 카드는 첨부파일 페이지로 갔고, 위험 작업은 카드 안에 있다", () => {
     render(<DataManagementSection {...baseProps()} />);
-    expect(screen.getByTestId("settings-attachment-storage")).toBeTruthy();
+    expect(screen.queryByTestId("settings-attachment-storage")).toBeNull();
     expect(screen.getByTestId("settings-danger-zone").closest(".card")).not.toBeNull();
   });
 
@@ -346,6 +346,34 @@ describe("DataManagementSection — 위험 작업 전용 페이지 (PLAN-2026-09
     expect(reload).not.toHaveBeenCalled();
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(reload).toHaveBeenCalled());
+  });
+
+  it("저장 및 백업 카드의 복구 목록에서 복원해도 같은 스냅샷 안내를 거친다 — 닫아야 창을 닫고 reload 한다", async () => {
+    const reload = vi.fn();
+    const onClose = vi.fn();
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { ...window.location, reload },
+    });
+    const entries = [{ name: "auto-1", path: "C:/b/auto-1.zip", created_at: "2026-07-20T10:00:00Z", size_bytes: 1024 }];
+    callMock.mockImplementation(async (cmd: string) => {
+      if (cmd === "backup_auto_status") return { last_backup_at: null, interval: "weekly", keep: 3, last_error: null };
+      if (cmd === "backup_auto_list") return entries;
+      if (cmd === "backup_restore") return { backup_path: "C:/data/backups/pre-list-restore.db", note_count: 1 };
+      return {};
+    });
+
+    render(<DataManagementSection onClose={onClose} />);
+    await userEvent.click(await screen.findByTestId("settings-backup-restore"));
+    await userEvent.click(await screen.findByTestId("settings-backup-restore-confirm"));
+
+    expect((await screen.findByTestId("settings-safety-snapshot-path")).textContent).toBe(
+      "C:/data/backups/pre-list-restore.db",
+    );
+    expect(reload).not.toHaveBeenCalled(); // 안내를 닫기 전엔 다시 불러오지 않는다(예전엔 곧바로 reload 했다)
+    await userEvent.click(screen.getByTestId("settings-safety-snapshot-ok"));
+    expect(onClose).toHaveBeenCalled();
+    expect(reload).toHaveBeenCalled();
   });
 
   it("the single 'Import from another app' dropdown opens with all 3 sources and routes each to its handler", async () => {

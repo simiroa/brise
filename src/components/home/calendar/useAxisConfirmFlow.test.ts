@@ -476,6 +476,7 @@ describe("useAxisConfirmFlow pure unit tests", () => {
             endMin: 660,
             top: 100,
             height: 50,
+            lane: 0,
           },
         ],
         allDay: [],
@@ -509,6 +510,7 @@ describe("useAxisConfirmFlow pure unit tests", () => {
             endMin: 660,
             top: 100,
             height: 50,
+            lane: 0,
           },
         ],
         allDay: [],
@@ -562,6 +564,79 @@ describe("useAxisConfirmFlow pure unit tests", () => {
       rerender({ plan: nextPlan, day: "2026-08-10" });
 
       expect(showUndoToastMock).not.toHaveBeenCalled();
+    });
+
+    // ── 익일 구간 칩의 반복 수정(코드리뷰 2026-10-28) ─────────────────────────────────────────
+    // 예전엔 DayAxis 가 익일 칩의 요청 day 를 "그 칩의 실제 날(다음 날)" 로 보내, 사후 판정이 selectedDay 와 영영 안 맞아 되돌리기 토스트가
+    // 조용히 사라졌다. 이제 day = selectedDay 이고, 칩은 당일 plan 이 아니라 합친 목록(익일 구간 포함)에서 찾는다.
+    describe("익일 구간 칩", () => {
+      const tailChip = (key: string) => ({
+        key,
+        item: {} as never,
+        startMin: 60, // 다음 날 01:00 — 다음 날 plan 의 좌표(합칠 때 +24:00)
+        endMin: 120,
+        top: 0,
+        height: 0,
+        lane: 0,
+      });
+      const tailState = { ...repeatState, key: "tail-k", inTail: true };
+      const empty: TimedDayPlan = { timed: [], allDay: [] };
+
+      const mount = (props: { plan: TimedDayPlan; tailPlan: TimedDayPlan | null; day: string }) =>
+        renderHook(
+          (p: { plan: TimedDayPlan; tailPlan: TimedDayPlan | null; day: string }) =>
+            useAxisConfirmFlow({
+              selectedDay: p.day,
+              plan: p.plan,
+              tailHours: 4,
+              tailPlan: p.tailPlan,
+              setDropPreview: setDropPreviewMock,
+            }),
+          { initialProps: props },
+        );
+
+      it("다음 날 plan 이 도착해 칩이 그대로 있으면 '바뀌었다' 되돌리기 토스트를 띄운다", async () => {
+        fetchDateRowMock.mockResolvedValueOnce({ rrule: "FREQ=DAILY" });
+        commitDateRowMock.mockResolvedValueOnce(true);
+        const { result, rerender } = mount({ plan: empty, tailPlan: empty, day: "2026-08-09" });
+        await act(async () => {
+          await result.current.resolveRepeatApply(tailState);
+        });
+        expect(showUndoToastMock).not.toHaveBeenCalled();
+
+        // 재조회: 당일 plan 이 먼저 도착해도(익일 칩이라 아직 판정하지 않는다) 토스트는 없다.
+        rerender({ plan: { timed: [], allDay: [] }, tailPlan: empty, day: "2026-08-09" });
+        expect(showUndoToastMock).not.toHaveBeenCalled();
+
+        // 다음 날 plan 이 도착 — 칩이 있다.
+        rerender({ plan: { timed: [], allDay: [] }, tailPlan: { timed: [tailChip("tail-k")], allDay: [] }, day: "2026-08-09" });
+        expect(showUndoToastMock).toHaveBeenCalledWith("home.cal_repeat_changed", expect.any(Function));
+        showUndoToastMock.mock.calls[0][1]();
+        expect(commitDateRowMock.mock.calls[1][2]()).toEqual({ rrule: "FREQ=DAILY" });
+      });
+
+      it("다음 날 plan 에서 칩이 빠지면 '오늘에서 빠졌다' 토스트", async () => {
+        fetchDateRowMock.mockResolvedValueOnce({ rrule: "FREQ=WEEKLY" });
+        commitDateRowMock.mockResolvedValueOnce(true);
+        const { result, rerender } = mount({ plan: empty, tailPlan: { timed: [tailChip("tail-k")], allDay: [] }, day: "2026-08-09" });
+        await act(async () => {
+          await result.current.resolveRepeatApply(tailState);
+        });
+        rerender({ plan: empty, tailPlan: { timed: [], allDay: [] }, day: "2026-08-09" });
+        expect(showUndoToastMock).toHaveBeenCalledWith("home.cal_repeat_dropped_today", expect.any(Function));
+      });
+
+      it("날이 달라지면 판정을 버린다 — 같은 날로 돌아와 plan 이 바뀌어도 낡은 토스트가 뜨지 않는다", async () => {
+        fetchDateRowMock.mockResolvedValueOnce({ rrule: "FREQ=DAILY" });
+        commitDateRowMock.mockResolvedValueOnce(true);
+        const { result, rerender } = mount({ plan: empty, tailPlan: empty, day: "2026-08-09" });
+        await act(async () => {
+          await result.current.resolveRepeatApply(repeatState);
+        });
+        rerender({ plan: empty, tailPlan: empty, day: "2026-08-10" }); // 다른 날로 갔다
+        rerender({ plan: { timed: [], allDay: [] }, tailPlan: empty, day: "2026-08-09" }); // 돌아왔고 plan 도 새로 왔다
+        expect(showUndoToastMock).not.toHaveBeenCalled();
+      });
     });
   });
 });

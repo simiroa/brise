@@ -67,7 +67,7 @@ pub(crate) fn entries(bytes: &[u8]) -> Vec<(String, Vec<u8>)> {
             let mut f = ar.by_index(i).unwrap();
             let mut v = Vec::new();
             f.read_to_end(&mut v).unwrap();
-            (f.name().to_string(), v)
+            (f.name().unwrap().to_string(), v)
         })
         .collect()
 }

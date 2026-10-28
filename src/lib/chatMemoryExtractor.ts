@@ -1,4 +1,4 @@
-import { callSilent } from "./invoke";
+import { call, callSilent } from "./invoke";
 import { reportFallback, safeErrorDetail } from "./diag";
 import { uniqueId } from "./ids";
 import { useSettingsStore, CHAT_MEMORY_MAX_ITEMS, CHAT_MEMORY_MAX_LENGTH } from "../stores/settings";
@@ -24,6 +24,83 @@ If no permanent personal fact is mentioned by the user, return an empty JSON arr
 
 Respond ONLY with a JSON array of strings, for example:
 ["Fact 1", "Fact 2"] or []`;
+
+/** 모델 답에서 JSON 문자열 배열을 뽑는다 — 앞뒤 설명이 붙어도 첫 `[` 부터 마지막 `]` 만 본다. */
+function parseMemoryItems(text: string): string[] {
+  const t0 = text.trim();
+  const jsonStart = t0.indexOf("[");
+  const jsonEnd = t0.lastIndexOf("]");
+  if (jsonStart < 0 || jsonEnd <= jsonStart) return [];
+  const parsed = JSON.parse(t0.slice(jsonStart, jsonEnd + 1));
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+}
+
+const MANUAL_CONTEXT_CHARS = 6000;
+
+/**
+ * 사용자가 "이 대화에서 기억 추출" 을 눌렀을 때 — 대화 **전체**에서 기억할 만한 사실 후보를 뽑아 돌려준다(저장하지 않는다).
+ * 자동 추출(턴마다, 1인칭 휴리스틱·확인 없이 저장)과 달리 휴리스틱 게이트가 없고, 저장은 호출자가 사용자 선택 뒤에 한다.
+ * 이미 있는 기억과 같은 문장은 걸러낸다.
+ * 사용자가 메뉴로 시작한 동작이라 **실패와 "기억할 게 없음"을 구분한다**: 후보가 없으면 `[]`, 모델 호출·설정 조회가
+ * 실패하면 `null`(call() 이 토스트를 띄운 뒤라 호출자는 모달을 열지 않으면 된다). 답이 JSON 배열이 아니어서
+ * 못 읽은 경우는 진단에 남기고 `[]` — 호출은 성공했고 쓸 후보가 없는 것이다.
+ */
+export async function proposeChatMemories(
+  turns: { role: "user" | "assistant"; text: string }[],
+): Promise<string[] | null> {
+  if (!useSettingsStore.getState().aiEnabled) return [];
+  const transcript = turns
+    .filter((m) => m.text.trim())
+    .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.text.trim()}`)
+    .join("\n")
+    .slice(-MANUAL_CONTEXT_CHARS);
+  if (transcript.length < 4) return [];
+  let res: AiGenerateFromPromptOutput | undefined;
+  try {
+    // call() = 토스트 + rethrow(함정 8). 키 없음·네트워크·403 이 빈 결과처럼 보이면 안 된다. aiCreds() 도 call() 이다.
+    res = await call<AiGenerateFromPromptOutput>("ai_generate_from_prompt", {
+      prompt: EXTRACT_PROMPT.replace("the following conversation turn", "the following conversation"),
+      context_text: transcript,
+      ...(await aiCreds()),
+    });
+  } catch {
+    return null; // 실패 기록·토스트는 call() 이 이미 남겼다.
+  }
+  if (!res?.generated) return [];
+  try {
+    const existing = new Set(useSettingsStore.getState().chatMemory.map((m) => m.text.trim()));
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const item of parseMemoryItems(res.generated)) {
+      const clean = item.trim().slice(0, CHAT_MEMORY_MAX_LENGTH);
+      if (clean && !existing.has(clean) && !seen.has(clean)) {
+        seen.add(clean);
+        out.push(clean);
+      }
+    }
+    return out;
+  } catch (e) {
+    reportFallback("chat", "memory_propose_failed", safeErrorDetail(e));
+    return [];
+  }
+}
+
+/** 사용자가 고른 후보를 기억 목록 앞에 붙여 저장한다 — 캡(CHAT_MEMORY_MAX_ITEMS)을 넘기지 않는다. 저장한 개수를 돌려준다. */
+export async function saveChatMemories(texts: string[]): Promise<number> {
+  const fresh = useSettingsStore.getState().chatMemory;
+  const slots = CHAT_MEMORY_MAX_ITEMS - fresh.length;
+  const existing = new Set(fresh.map((m) => m.text.trim()));
+  const picked = texts
+    .map((x) => x.trim().slice(0, CHAT_MEMORY_MAX_LENGTH))
+    .filter((x) => x && !existing.has(x))
+    .slice(0, Math.max(0, slots));
+  if (picked.length === 0) return 0;
+  const now = new Date().toISOString();
+  const added = picked.map((text) => ({ id: uniqueId("mem"), text, created_at: now }));
+  await useSettingsStore.getState().setChatMemory([...added, ...fresh]);
+  return added.length;
+}
 
 export async function extractAndSaveChatMemory({
   userText,
@@ -68,16 +145,7 @@ export async function extractAndSaveChatMemory({
 
     if (!res?.generated) return;
 
-    let items: string[] = [];
-    const text = res.generated.trim();
-    const jsonStart = text.indexOf("[");
-    const jsonEnd = text.lastIndexOf("]");
-    if (jsonStart >= 0 && jsonEnd > jsonStart) {
-      const parsed = JSON.parse(text.slice(jsonStart, jsonEnd + 1));
-      if (Array.isArray(parsed)) {
-        items = parsed.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
-      }
-    }
+    const items = parseMemoryItems(res.generated);
 
     if (items.length === 0) return;
 

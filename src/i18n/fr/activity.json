@@ -14,5 +14,6 @@
   "view_snapshots": "Sauvegardes auto",
   "view_snapshots_hint": "Voir les versions sauvegardées automatiquement - choisissez un point à restaurer",
   "back_to_activity": "Retour à l'activité",
-  "restore_failed": "Échec de la restauration de l'instantané : {{message}}"
+  "restore_failed": "Échec de la restauration de l'instantané : {{message}}",
+  "open_window": "Ouvrir dans une fenêtre"
 }

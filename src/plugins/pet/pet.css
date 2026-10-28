@@ -439,39 +439,6 @@
   align-items: center;
   gap: var(--space-3);
 }
-.pet-chat__thinking-label {
-  color: var(--muted);
-}
-.pet-chat__dots {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-.pet-chat__dots i {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--muted);
-  animation: pet-chat-dot 1.2s ease-in-out infinite;
-}
-.pet-chat__dots i:nth-child(2) {
-  animation-delay: 0.16s;
-}
-.pet-chat__dots i:nth-child(3) {
-  animation-delay: 0.32s;
-}
-@keyframes pet-chat-dot {
-  0%,
-  80%,
-  100% {
-    opacity: 0.28;
-    transform: translateY(0);
-  }
-  40% {
-    opacity: 1;
-    transform: translateY(-2px);
-  }
-}
 .pet-chat__stop-wait {
   flex: 0 0 auto;
   padding: var(--space-1) var(--space-3);

@@ -86,6 +86,7 @@ export function StatusControl({
         type="button"
         ref={btnRef}
         className="tag-btn tb-quiet-chip"
+        data-empty={!status || undefined}
         onClick={() => {
           if (anchor) {
             setAnchor(null);
@@ -96,7 +97,6 @@ export function StatusControl({
             }
           }
         }}
-        title={tooltip}
         aria-label={tooltip}
         aria-haspopup="listbox"
         aria-controls={listboxId}

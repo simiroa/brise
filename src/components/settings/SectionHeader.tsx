@@ -17,7 +17,8 @@ interface SectionHeaderProps {
 /** Settings section heading — label-caps + accent + one margin. Replaces the 17 drifted copies. */
 export function SectionHeader({ title, hint, badge, icon, actions }: SectionHeaderProps) {
   return (
-    <div style={{ marginBottom: "var(--space-4)" }}>
+    // 카드의 첫 자식이면 settingsLayout.css 가 박스 밖(옅은 색)으로 올린다 — 그 규칙의 단일 출처.
+    <div className="settings-section-header">
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-2)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", minWidth: 0 }}>
           {icon && <IconChip size={24}>{icon}</IconChip>}
@@ -25,7 +26,7 @@ export function SectionHeader({ title, hint, badge, icon, actions }: SectionHead
             style={{
               fontSize: "var(--text-section)",
               fontWeight: 600,
-              color: "var(--text)",
+              color: "var(--settings-title-color, var(--text))",
             }}
           >
             {title}

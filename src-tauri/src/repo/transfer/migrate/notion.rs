@@ -82,7 +82,13 @@ pub fn import_notion_zip(
             }
             continue;
         }
-        let name = entry.name().to_string();
+        let name = match entry.name() {
+            Ok(n) => n.to_string(),
+            Err(_) => {
+                parse_skipped += 1;
+                continue;
+            }
+        };
         let ext = Path::new(&name)
             .extension()
             .and_then(|e| e.to_str())

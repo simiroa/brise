@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { PetSearchHit } from "../../lib/commands.gen";
 import { storedTitleOrEmpty } from "../../lib/noteTitle";
 import { IconClose, IconNote } from "../../components/icons";
+import { ThinkingLoader } from "../../components/common/ThinkingLoader";
 import { ChatBubble, CHAT_BUBBLE_LABELS } from "./ChatBubble";
 import { ChatComposer } from "./ChatComposer";
 import { ChatSuggestionCard } from "../../components/leftpanel/chat/ChatSuggestionCard";
@@ -249,12 +250,7 @@ export function PetChat({
         ))}
         {pending ? (
           <div className="pet-bubble pet-bubble--assistant pet-chat__thinking">
-            <span className="pet-chat__thinking-label">{WAITING}</span>
-            <span className="pet-chat__dots" aria-hidden="true">
-              <i />
-              <i />
-              <i />
-            </span>
+            <ThinkingLoader variant="plain" phases={[WAITING]} />
           </div>
         ) : null}
       </div>

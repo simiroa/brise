@@ -139,7 +139,7 @@ describe("RegionMetaBadge — meta-row multi-region entry point (QA 항목 2)", 
       expect(screen.queryByTestId("region-meta-badge-detected-dot")).toBeNull();
     });
 
-    it("is present for this note and the title mentions the detected count", () => {
+    it("is present for this note", () => {
       useRegionNudgeStore.setState({
         noteId: "n1",
         candidates: [
@@ -152,7 +152,6 @@ describe("RegionMetaBadge — meta-row multi-region entry point (QA 항목 2)", 
       const dot = screen.getByTestId("region-meta-badge-detected-dot");
       expect(dot).toBeTruthy();
       expect(dot.getAttribute("aria-hidden")).toBe("true");
-      expect(screen.getByTestId("region-meta-badge").title).toContain("2");
     });
 
     it("is absent when the store's candidates belong to a different note", () => {

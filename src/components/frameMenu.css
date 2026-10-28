@@ -1,0 +1,27 @@
+/* 프레임 드롭다운(알림 · 활동 기록) 공용 크기 — 예전 알림 메뉴(260×320)보다 조금 크게, 둘 다 같은 크기.
+   본문 스크롤은 안쪽(.frame-menu__body 또는 활동 기록 패널)이 진다. */
+.frame-menu{
+  position:fixed;
+  z-index:var(--z-popover);
+  width:340px;
+  height:440px;
+  max-height:calc(100vh - 48px);
+  display:flex;
+  flex-direction:column;
+}
+.frame-menu__body{
+  flex:1 1 auto;
+  min-height:0;
+  overflow-y:auto;
+  padding:var(--space-4);
+  display:flex;
+  flex-direction:column;
+  gap:var(--space-3);
+}
+.frame-menu__footer{
+  flex:none;
+  display:flex;
+  justify-content:flex-end;
+  padding:var(--space-2) var(--space-4);
+  border-top:1px solid var(--divider);
+}

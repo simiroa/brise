@@ -1,0 +1,303 @@
+{
+ "gothic-a1": [
+  {
+   "file": "gothic-a1-korean.woff2"
+  },
+  {
+   "file": "gothic-a1-latin.woff2",
+   "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+  }
+ ],
+ "ibm-plex-sans-kr": [
+  {
+   "file": "ibm-plex-sans-kr-korean.woff2"
+  },
+  {
+   "file": "ibm-plex-sans-kr-latin.woff2",
+   "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+  }
+ ],
+ "nanum-gothic": [
+  {
+   "file": "nanum-gothic-korean.woff2"
+  }
+ ],
+ "gowun-dodum": [
+  {
+   "file": "gowun-dodum-korean.woff2"
+  }
+ ],
+ "hahmlet": [
+  {
+   "file": "hahmlet-korean.woff2"
+  }
+ ],
+ "nanum-myeongjo": [
+  {
+   "file": "nanum-myeongjo-korean.woff2"
+  }
+ ],
+ "gowun-batang": [
+  {
+   "file": "gowun-batang-korean.woff2"
+  }
+ ],
+ "song-myung": [
+  {
+   "file": "song-myung-korean.woff2"
+  }
+ ],
+ "nanum-pen-script": [
+  {
+   "file": "nanum-pen-script-korean.woff2"
+  },
+  {
+   "file": "nanum-pen-script-latin.woff2",
+   "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+  }
+ ],
+ "nanum-brush-script": [
+  {
+   "file": "nanum-brush-script-korean.woff2"
+  },
+  {
+   "file": "nanum-brush-script-latin.woff2",
+   "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+  }
+ ],
+ "gaegu": [
+  {
+   "file": "gaegu-korean.woff2"
+  }
+ ],
+ "hi-melody": [
+  {
+   "file": "hi-melody-korean.woff2"
+  }
+ ],
+ "gamja-flower": [
+  {
+   "file": "gamja-flower-korean.woff2"
+  }
+ ],
+ "poor-story": [
+  {
+   "file": "poor-story-korean.woff2"
+  }
+ ],
+ "east-sea-dokdo": [
+  {
+   "file": "east-sea-dokdo-korean.woff2"
+  }
+ ],
+ "dokdo": [
+  {
+   "file": "dokdo-korean.woff2"
+  }
+ ],
+ "jua": [
+  {
+   "file": "jua-korean.woff2"
+  }
+ ],
+ "do-hyeon": [
+  {
+   "file": "do-hyeon-korean.woff2"
+  }
+ ],
+ "black-han-sans": [
+  {
+   "file": "black-han-sans-korean.woff2"
+  }
+ ],
+ "dongle": [
+  {
+   "file": "dongle-korean.woff2"
+  }
+ ],
+ "sunflower": [
+  {
+   "file": "sunflower-korean.woff2"
+  }
+ ],
+ "yeon-sung": [
+  {
+   "file": "yeon-sung-korean.woff2"
+  }
+ ],
+ "gasoek-one": [
+  {
+   "file": "gasoek-one-korean.woff2"
+  }
+ ],
+ "bagel-fat-one": [
+  {
+   "file": "bagel-fat-one-korean.woff2"
+  }
+ ],
+ "orbit": [
+  {
+   "file": "orbit-korean.woff2"
+  }
+ ],
+ "diphylleia": [
+  {
+   "file": "diphylleia-korean.woff2"
+  }
+ ],
+ "gugi": [
+  {
+   "file": "gugi-korean.woff2"
+  }
+ ],
+ "cute-font": [
+  {
+   "file": "cute-font-korean.woff2"
+  }
+ ],
+ "stylish": [
+  {
+   "file": "stylish-korean.woff2"
+  }
+ ],
+ "single-day": [
+  {
+   "file": "single-day-korean.woff2"
+  }
+ ],
+ "kirang-haerang": [
+  {
+   "file": "kirang-haerang-korean.woff2"
+  }
+ ],
+ "black-and-white-picture": [
+  {
+   "file": "black-and-white-picture-korean.woff2"
+  }
+ ],
+ "moirai-one": [
+  {
+   "file": "moirai-one-korean.woff2"
+  }
+ ],
+ "grandiflora-one": [
+  {
+   "file": "grandiflora-one-korean.woff2"
+  }
+ ],
+ "nanum-gothic-coding": [
+  {
+   "file": "nanum-gothic-coding-korean.woff2"
+  }
+ ],
+ "jetbrains-mono": [
+  {
+   "file": "jetbrains-mono-latin.woff2"
+  }
+ ],
+ "fira-code": [
+  {
+   "file": "fira-code-latin.woff2"
+  }
+ ],
+ "ibm-plex-mono": [
+  {
+   "file": "ibm-plex-mono-latin.woff2"
+  }
+ ],
+ "cascadia-code": [
+  {
+   "file": "cascadia-code-latin.woff2"
+  }
+ ],
+ "geist-mono": [
+  {
+   "file": "geist-mono-latin.woff2"
+  }
+ ],
+ "victor-mono": [
+  {
+   "file": "victor-mono-latin.woff2"
+  }
+ ],
+ "inter": [
+  {
+   "file": "inter-latin.woff2"
+  }
+ ],
+ "ibm-plex-sans": [
+  {
+   "file": "ibm-plex-sans-latin.woff2"
+  }
+ ],
+ "ibm-plex-serif": [
+  {
+   "file": "ibm-plex-serif-latin.woff2"
+  }
+ ],
+ "geist": [
+  {
+   "file": "geist-latin.woff2"
+  }
+ ],
+ "figtree": [
+  {
+   "file": "figtree-latin.woff2"
+  }
+ ],
+ "manrope": [
+  {
+   "file": "manrope-latin.woff2"
+  }
+ ],
+ "atkinson-hyperlegible": [
+  {
+   "file": "atkinson-hyperlegible-latin.woff2"
+  }
+ ],
+ "lora": [
+  {
+   "file": "lora-latin.woff2"
+  }
+ ],
+ "literata": [
+  {
+   "file": "literata-latin.woff2"
+  }
+ ],
+ "merriweather": [
+  {
+   "file": "merriweather-latin.woff2"
+  }
+ ],
+ "newsreader": [
+  {
+   "file": "newsreader-latin.woff2"
+  }
+ ],
+ "eb-garamond": [
+  {
+   "file": "eb-garamond-latin.woff2"
+  }
+ ],
+ "crimson-pro": [
+  {
+   "file": "crimson-pro-latin.woff2"
+  }
+ ],
+ "fraunces": [
+  {
+   "file": "fraunces-latin.woff2"
+  }
+ ],
+ "caveat": [
+  {
+   "file": "caveat-latin.woff2"
+  }
+ ],
+ "kalam": [
+  {
+   "file": "kalam-latin.woff2"
+  }
+ ]
+}

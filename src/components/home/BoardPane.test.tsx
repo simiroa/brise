@@ -342,6 +342,34 @@ describe("BoardPane (Wave 4)", () => {
     expect(() => getByTestId("board-capped-banner")).toThrow();
   });
 
+  // 2026-10-28 W3b: 설정 › 대시보드 › 칸반 — 완료 카드 자동 숨김(화면에서만, 데이터는 그대로).
+  it("완료 카드 자동 숨김: 기준일보다 오래된 완료 카드만 안 그린다 (fake now = 2026-07-31)", async () => {
+    const mk = (id: string, updated_at: string) => ({
+      id, title: id, year: 2026, month: 7, day: 1, end_year: null, end_month: null, end_day: null,
+      remind: false, updated_at, unchecked_count: 0, items: [],
+    });
+    callMock.mockImplementation((cmd: string) =>
+      Promise.resolve(
+        cmd === "dashboard_board"
+          ? {
+              columns: [
+                { status: "done", status_label: "done", notes: [mk("old-done", "2026-06-01T00:00:00Z"), mk("fresh-done", "2026-07-29T00:00:00Z")] },
+                { status: "in_progress", status_label: "in_progress", notes: [mk("old-ip", "2026-06-01T00:00:00Z")] },
+              ],
+              total_matched: 3, cap: 500, capped: false,
+            }
+          : {},
+      ),
+    );
+    useSettingsStore.setState({ boardDoneAutohide: "7d" } as never);
+    const { getAllByTestId } = render(<BoardPane />);
+    await waitFor(() => expect(getAllByTestId("board-card").length).toBeGreaterThan(0));
+    const ids = getAllByTestId("board-card").map((c) => c.getAttribute("data-note-id")).sort();
+    // 완료 열의 old-done 만 빠진다 — 같은 날짜여도 진행 중 열의 old-ip 는 남는다.
+    expect(ids).toEqual(["fresh-done", "old-ip"]);
+    useSettingsStore.setState({ boardDoneAutohide: "off" } as never);
+  });
+
   it("new-status slot sits at the far right of the column row; + → input → Enter adds the status (2026-09-08)", async () => {
     const addStatusMock = vi.fn().mockResolvedValue(undefined);
     useTaxonomyStore.setState({ addStatus: addStatusMock } as never);

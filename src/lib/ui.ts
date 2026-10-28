@@ -8,7 +8,7 @@ export function clamp(v: number, a: number, b: number) {
 
 /** KB/MB/GB byte-size label (no B tier — used for DB/backup/attachment totals, not per-file
  *  displays that care about very small sizes). Shared by DataManagementSection,
- *  BackupNudgeBanner, and PetAssetGrid (Wave R1-b dedup — was a byte-identical copy in each).
+ *  ReminderBell, and PetAssetGrid (Wave R1-b dedup — was a byte-identical copy in each).
  *  Per-file / per-attachment labels use `formatFileSize`. */
 export function formatSize(bytes: number): string {
   if (bytes === 0) return "0 KB";

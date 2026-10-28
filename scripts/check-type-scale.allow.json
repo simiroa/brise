@@ -46,7 +46,7 @@
   "src/components/sheet/SheetPreview.tsx": 4,
   "src/components/titlebar/DateRangeCalendar.tsx": 2,
   "src/components/titlebar/TagEditor.tsx": 1,
-  "src/styles/dashboardList.css": 5,
+  "src/styles/dashboardList.css": 4,
   "src/styles/mobile/lists-cards.css": 1,
   "src/styles/mobile/note-header.css": 1,
   "src/styles/tokens.css": 12

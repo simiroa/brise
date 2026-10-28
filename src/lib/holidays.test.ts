@@ -26,6 +26,17 @@ describe("holidaysForYear", () => {
     for (const day of h.keys()) expect(day).toMatch(/^2026-\d\d-\d\d$/);
   });
 
+  it("fr 2026·2027: 고정 공휴일과 부활절 기준 이동 공휴일(부활절 2026-04-05, 2027-03-28)", () => {
+    const h = holidaysForYear("fr", 2026);
+    expect(h.get("2026-07-14")).toBe("Fête nationale");
+    expect(h.get("2026-04-06")).toBe("Lundi de Pâques");
+    expect(h.get("2026-05-14")).toBe("Ascension");
+    expect(h.get("2026-05-25")).toBe("Lundi de Pentecôte");
+    expect(h.size).toBe(11);
+    expect(holidaysForYear("fr", 2027).get("2027-03-29")).toBe("Lundi de Pâques");
+    expect(holidaysForYear("fr", 2031).size).toBe(0);
+  });
+
   it("region none, or a year past the table, is empty (never throws)", () => {
     expect(holidaysForYear("none", 2026).size).toBe(0);
     expect(holidaysForYear("kr", 1999).size).toBe(0);

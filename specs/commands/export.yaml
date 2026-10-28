@@ -221,6 +221,12 @@ commands:
       last_error: backup_auto_last_error 설정값(비어있으면 null) — 마지막 자동 백업 시도가 실패했을 때
       "타임스탬프: 메시지" 형식으로 채워진다(repo/transfer/backup.rs::record_auto_backup_error).
 
+  backup_auto_list:                # 설정 "저장 및 백업" 카드의 복구 목록 — 최신순 auto-*.zip
+    http: false   # 서버 머신 로컬 경로를 돌려준다 — backup_restore 의 zip_path 로만 쓰이고 그것이 http:false
+    input:  { limit: integer }          # 1~20 로 고정(UI 는 보관 개수 backup_auto_keep 을 넘긴다)
+    output: "AutoBackupEntry[]"
+    notes: backups/ 의 auto-*.zip 만. 사용자가 임의로 둔 zip·brise-*.db 는 목록에 없다.
+
   backup_auto_run:                  # 설정 "지금 백업" — 스케줄 무시하고 즉시 전체 zip 백업 + 회전
     http: false   # 인자는 없지만 서버 머신 로컬 디스크(data_dir/backups/)에 즉시 쓰는 부수효과 —
                   # db_reset/backup_restore와 같은 "서버 로컬 상태를 건드리는 관리 동작" 급
@@ -230,5 +236,6 @@ commands:
     notes: backup_create 와 동일 zip(brise.db+attachments/+workspace_bg/), data_dir/backups/auto-<타임스탬프>.zip 에 저장 후 backup_auto_keep 개수로 회전.
 
 shared_types:
+  AutoBackupEntry: "{ name: string, path: string, created_at: timestamp, size_bytes: integer }"
   # export_hwpx·export_docx 의 섹션 하나 — doc 은 그 섹션 body_md 를 헤드리스 TipTap(markdownSchemaExtensions)으로 연 getJSON().
   DocExportSection: "{ name: string, doc: json }"

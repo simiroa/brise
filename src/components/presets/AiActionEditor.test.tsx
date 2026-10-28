@@ -33,7 +33,7 @@ const openPicker = () => fireEvent.click(picker());
 const options = () =>
   Array.from(screen.getByTestId("ai-action-select-list").querySelectorAll('[role="option"]')) as HTMLElement[];
 const promptBox = () => screen.getByLabelText("Prompt") as HTMLTextAreaElement;
-const nameBox = () => screen.getByLabelText("Preset name") as HTMLInputElement;
+const nameBox = () => screen.getByLabelText("Prompt name") as HTMLInputElement;
 
 /** The list as it was last actually written to disk — NOT the in-memory store. Two overlapping
  *  settings_set calls both "succeed" in-memory; only the final payload shows who won. */
@@ -118,11 +118,11 @@ describe("AiActionEditor — single-column preset editor (프리셋 관리 모�
   it("add creates a custom action, selects it, and puts focus in the name field", async () => {
     render(<AiActionEditor />);
 
-    await userEvent.click(screen.getByRole("button", { name: "Add preset" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add prompt" }));
 
     const created = useAiPresetsStore.getState().list.find((p) => !p.isBuiltin)!;
-    expect(created.name).toBe("New preset");
-    expect(nameBox().value).toBe("New preset");
+    expect(created.name).toBe("New prompt");
+    expect(nameBox().value).toBe("New prompt");
     expect(document.activeElement).toBe(nameBox());
     // Built-in vs custom stays visible: only the custom entry carries the badge.
     expect(picker().textContent).toContain("Custom");
@@ -151,7 +151,7 @@ describe("AiActionEditor — single-column preset editor (프리셋 관리 모�
 
     render(<AiActionEditor />);
     fireEvent.change(promptBox(), { target: { value: "half-typed" } });
-    fireEvent.click(screen.getByRole("button", { name: "Add preset" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add prompt" }));
 
     await waitFor(() => expect(writes).toBeGreaterThan(0));
     expect(writes).toBe(1); // addCustom's write must still be queued behind the commit
@@ -160,7 +160,7 @@ describe("AiActionEditor — single-column preset editor (프리셋 관리 모�
     await waitFor(() => expect(writes).toBe(2));
     const persisted = lastPersisted();
     expect(persisted.find((p) => p.id === "list")?.prompt).toBe("half-typed");
-    expect(persisted.some((p) => p.name === "New preset")).toBe(true);
+    expect(persisted.some((p) => p.name === "New prompt")).toBe(true);
   });
 
   it("deleting the selected preset selects the next neighbour, and the one above when deleting the last", async () => {
@@ -195,7 +195,7 @@ describe("AiActionEditor — single-column preset editor (프리셋 관리 모�
     render(<AiActionEditor />);
     expect(picker().disabled).toBe(true);
     expect(screen.queryByLabelText("Prompt")).toBeNull();
-    expect(screen.getByText(/No AI presets left/i)).toBeTruthy();
+    expect(screen.getByText(/No custom prompts left/i)).toBeTruthy();
   });
 
   it("action slots (built-ins without a tile) never show in the editor", async () => {
@@ -245,7 +245,7 @@ describe("AiActionEditor — single-column preset editor (프리셋 관리 모�
 
   it("a custom action has no reset button (nothing to reset to)", async () => {
     render(<AiActionEditor />);
-    await userEvent.click(screen.getByRole("button", { name: "Add preset" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add prompt" }));
 
     expect(screen.queryByRole("button", { name: "Reset to default" })).toBeNull();
   });
@@ -318,7 +318,7 @@ describe("AiActionEditor — autoAdd (AI 모달의 「추가」)", () => {
   it("creates exactly one preset of the given kind/targets, selects it and focuses its name", async () => {
     useAiPresetsStore.setState({ list: fourBuiltins(), loaded: true });
     const { rerender } = render(<AiActionEditor autoAdd={{ kind: "diagram", targets: ["diagram"] }} />);
-    await waitFor(() => expect(nameBox().value).toBe("New preset"));
+    await waitFor(() => expect(nameBox().value).toBe("New prompt"));
     rerender(<AiActionEditor autoAdd={{ kind: "diagram", targets: ["diagram"] }} />);
     const custom = useAiPresetsStore.getState().list.filter((p) => !p.isBuiltin);
     expect(custom).toHaveLength(1);

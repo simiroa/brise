@@ -1,10 +1,9 @@
 import { useSettingsStore, type PetDblclickAction } from "../../../stores/settings";
 import { t } from "../../../i18n/t";
 import { Select } from "../../Select";
-import { groupCardStyle } from "../shared";
-import { SectionHeader } from "../SectionHeader";
 import { SettingsRow } from "../SettingsRow";
 import { IconMousePointerClick } from "../../icons";
+import { SettingsCard } from "../SettingsCard";
 
 /**
  * 설정 > 펫 — "동작" 그룹. 더블클릭 동작(펫 소유)과 페르소나 **링크 행**.
@@ -22,8 +21,7 @@ export function PetReactionSection({ onNavigate }: { onNavigate?: (page: string)
   ];
 
   return (
-    <div className="card" style={groupCardStyle} data-testid="settings-pet-reaction-section">
-      <SectionHeader title={t("settings.pet_group_behavior")} icon={<IconMousePointerClick size={14} strokeWidth={2} />} />
+    <SettingsCard title={t("settings.pet_group_behavior")} icon={<IconMousePointerClick size={14} strokeWidth={2} />} testId="settings-pet-reaction-section">
       <SettingsRow
         label={t("settings.pet_dblclick_action")}
         hint={!aiEnabled ? t("settings.pet_action_chat_disabled_hint") : undefined}
@@ -54,6 +52,6 @@ export function PetReactionSection({ onNavigate }: { onNavigate?: (page: string)
           }
         />
       )}
-    </div>
+    </SettingsCard>
   );
 }

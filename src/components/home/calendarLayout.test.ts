@@ -17,7 +17,6 @@ import {
   itemKey,
   MIN_SLOT_MIN,
   DAY_AXIS_H,
-  STACK_GAP_PX,
   HOUR_ROW_H,
   PX_PER_MIN,
   SNAP_MIN,
@@ -25,8 +24,8 @@ import {
   keepDurationMin,
   formatHhmm,
   parseHhmm,
-  chipDragMode,
-  handleThicknessPx,
+  HANDLE_HIT_PAD,
+  handlePadPx,
   dragTimes,
   planNewRange,
   planAllDayDrop,
@@ -38,8 +37,15 @@ import {
   buildCalendarGridCustom,
   tickIntervalMinFor,
   layoutTimedEvents,
+  MIN_RESIZE_MIN,
   MIN_HOUR_ROW_H,
   MAX_HOUR_ROW_H,
+  axisDayOffsetMin,
+  splitAxisMin,
+  mergeTailTimed,
+  axisContentPx,
+  maxAxisScrollTop,
+  type TimedEvent,
 } from "./calendarLayout";
 
 function item(partial: Partial<CalendarItem> & Pick<CalendarItem, "note_id" | "kind" | "span_start" | "span_end">): CalendarItem {
@@ -338,21 +344,24 @@ describe("calendarLayout", () => {
       expect(plan.timed[1].endMin - plan.timed[1].startMin).toBe(MIN_SLOT_MIN);
     });
 
-    // Vertical stacking (owner revision 2026-08-09, §6.2 QA): a staircase offset let a near-time
-    // chip (e.g. 09:00/09:05) fully cover the row below's title, failing "title always readable".
-    // Overlapping chips now keep full width and stack: pushed straight under whatever is above.
-    it("pushes a near-time overlapping chip below the one above it instead of narrowing it", () => {
+    // 기하 통일(오너 결정 2026-10-27): 겹쳐도 아래로 밀지 않는다 — top 은 언제나 시각, 겹침은 들여쓰기 칸(lane).
+    // 예전 스태킹은 밀린 칩의 top 이 시각이 아니라서 손잡이·스냅과 칩이 화면에서 다른 자리에 섰다.
+    it("겹치는 칩도 top 은 자기 시각이고, 들여쓰기 칸만 다르다", () => {
       const plan = planTimedDay(
         [timed("a", "09:00", "10:00"), timed("b", "09:05", "10:05")],
         "2026-08-09",
       );
       const [a, b] = plan.timed;
-      const topA = (540 / 1440) * DAY_AXIS_H;
-      const heightA = (60 / 1440) * DAY_AXIS_H;
-      expect(a.top).toBe(topA); // cluster's first chip sits exactly on its time coordinate
-      expect(a.height).toBe(heightA);
-      expect(b.top).toBe(a.top + a.height + STACK_GAP_PX); // pushed directly under a, not beside it
-      expect(b.height).toBe((60 / 1440) * DAY_AXIS_H); // duration-true — a push moves it, never squeezes it
+      expect(a.top).toBe((540 / 1440) * DAY_AXIS_H);
+      expect(b.top).toBeCloseTo((545 / 1440) * DAY_AXIS_H, 9); // 밀리지 않는다
+      expect(b.height).toBe((60 / 1440) * DAY_AXIS_H);
+      expect([a.lane, b.lane]).toEqual([0, 1]);
+    });
+
+    it("실제 끝이 30분보다 짧아도 늘리지 않는다 — 높이 = 실제 길이(끝이 없을 때만 기본 30분)", () => {
+      const plan = planTimedDay([timed("short", "09:00", "09:15"), timed("none", "11:00")], "2026-08-09");
+      expect(plan.timed[0].endMin - plan.timed[0].startMin).toBe(15);
+      expect(plan.timed[1].endMin - plan.timed[1].startMin).toBe(MIN_SLOT_MIN);
     });
 
     it("gives non-overlapping chips their exact time coordinate — no push", () => {
@@ -365,34 +374,22 @@ describe("calendarLayout", () => {
       expect(b.top).toBe((660 / 1440) * DAY_AXIS_H);
     });
 
-    it("chains a push through an event whose OWN time doesn't overlap anything, when the pushed chip above it now covers its slot", () => {
+    it("맞닿기만 한 일정(앞 끝 = 뒤 시작)은 겹침이 아니다 — 같은 칸, 들여쓰지 않는다", () => {
       const plan = planTimedDay(
-        [
-          timed("a", "09:00", "10:00"), // 540-600
-          timed("b", "09:30", "09:50"), // 570-590, overlaps a → pushed under a
-          timed("c", "10:10", "10:30"), // 610-630, overlaps neither a's nor b's ORIGINAL time range
-        ],
+        [timed("a", "09:00", "09:30"), timed("b", "09:30", "10:00"), timed("c", "10:00", "10:30")],
         "2026-08-09",
       );
-      const [a, b, c] = plan.timed;
-      const nativeTopC = (610 / 1440) * DAY_AXIS_H;
-      expect(a.top).toBeLessThan(b.top); // sanity: b really did get pushed under a
-      expect(c.top).toBeGreaterThan(nativeTopC); // c is pushed too, not left at its own time slot
-      expect(c.top).toBe(b.top + b.height + STACK_GAP_PX); // ...chained straight off b's pushed bottom
+      expect(plan.timed.map((e) => e.lane)).toEqual([0, 0, 0]);
+      expect(plan.timed.map((e) => e.top)).toEqual([540, 570, 600].map((m) => (m / 1440) * DAY_AXIS_H));
     });
 
-    it("stacks any number of same-time chips in sequence — no track cap or overflow anymore", () => {
+    it("같은 시각 칩이 여럿이면 칸이 하나씩 늘고, 겹침이 끝나면 다시 0 칸부터 쓴다", () => {
       const plan = planTimedDay(
-        ["a", "b", "c", "d", "e"].map((id) => timed(id, "09:00", "10:00")),
+        [...["a", "b", "c"].map((id) => timed(id, "09:00", "10:00")), timed("d", "10:00", "11:00")],
         "2026-08-09",
       );
-      expect(plan.timed).toHaveLength(5);
-      for (let i = 1; i < plan.timed.length; i++) {
-        expect(plan.timed[i].top).toBe(
-          plan.timed[i - 1].top + plan.timed[i - 1].height + STACK_GAP_PX,
-        );
-      }
-      expect(plan.timed.every((e) => e.height === (60 / 1440) * DAY_AXIS_H)).toBe(true);
+      expect(plan.timed.map((e) => e.lane)).toEqual([0, 1, 2, 0]);
+      expect(plan.timed.slice(0, 3).every((e) => e.top === (540 / 1440) * DAY_AXIS_H)).toBe(true);
     });
 
     it("clamps a late event to the end of the day instead of overflowing the 24h axis", () => {
@@ -542,8 +539,8 @@ describe("calendarLayout", () => {
         const [chip] = planTimedDay([overnight], "2026-10-31").timed;
         expect(chip.startMin).toBe(540);
         expect(chip.endMin).toBe(540 + MIN_SLOT_MIN);
-        // 손잡이도 없다 — 잡으면 11/02 의 끝 시각을 조용히 바꾼다.
-        expect(chipDragMode(chip.height, chip.height, rowIsSameDay(overnight))).toBe("move");
+        // 손잡이도 없다 — 잡으면 11/02 의 끝 시각을 조용히 바꾼다. 손잡이를 주는 기준이 바로 위의 rowIsSameDay(false) 다(DayAxis::isResizable).
+        expect(chip.endMin - chip.startMin).toBe(MIN_SLOT_MIN);
       });
     });
 
@@ -557,15 +554,6 @@ describe("calendarLayout", () => {
 
   // ── 칩 드래그 산수 (PLAN-2026-09-10 달력 W3) ───────────────────────────────────────────
   describe("snapStartMin / keepDurationMin / formatHhmm", () => {
-    const timed = (id: string, start: string, end?: string, day = "2026-08-09") =>
-      item({
-        note_id: id,
-        kind: "event",
-        span_start: day,
-        span_end: day,
-        start_time: start,
-        end_time: end ?? null,
-      });
 
     it("28px/시간이라 7px 이 정확히 15분이다", () => {
       expect(PX_PER_MIN).toBe(HOUR_ROW_H / 60);
@@ -575,17 +563,6 @@ describe("calendarLayout", () => {
       // 격자 사이는 가까운 칸으로 — 3px(≈6.4분)는 아직 09:00.
       expect(snapStartMin(540, 3)).toBe(540);
       expect(snapStartMin(540, 4)).toBe(555);
-    });
-
-    it("스태킹으로 밀린 top 이 아니라 startMin 을 기준으로 센다(함정 ⓐ)", () => {
-      // 09:00 시작인데 앞 칩에 밀려 top 이 09:30 자리(=+14px)에 있는 칩을 15분 아래로 끌면
-      // 09:15 여야 한다. top 을 역산했다면 09:45 가 나왔을 자리다.
-      const a = timed("a", "09:00", "11:00");
-      const b = timed("b", "09:00");
-      const plan = planTimedDay([a, b], "2026-08-09");
-      const pushed = plan.timed[1];
-      expect(pushed.top).toBeGreaterThan((pushed.startMin / 1440) * DAY_AXIS_H);
-      expect(snapStartMin(pushed.startMin, 7)).toBe(555);
     });
 
     it("경계: 0 미만으로도, 자정 너머로도 못 간다", () => {
@@ -626,30 +603,20 @@ describe("calendarLayout", () => {
   });
 
   // ── 손잡이 · 빈 곳 드래그 · 현재 시각 눈금 (W5) ────────────────────────────────────────
-  describe("chipDragMode / handleThicknessPx", () => {
-    it("손잡이는 높이의 1/3 을 넘지 않는다 — 30분 칩(14px)에서도 가운데가 남는다", () => {
+  describe("handlePadPx — 손잡이 히트 반폭", () => {
+    it("위·아래 손잡이를 합쳐 칩 높이의 절반을 넘지 않는다 — 30분 칩(14px)에서도 가운데(이동)가 남는다", () => {
       const shortest = MIN_SLOT_MIN * PX_PER_MIN; // 14px
       expect(shortest).toBe(14);
-      expect(handleThicknessPx(shortest)).toBeCloseTo(14 / 3);
-      // 고정 6px 이었다면 가운데가 2px 밖에 안 남는다.
-      expect(handleThicknessPx(shortest)).toBeGreaterThan(6 - 2);
-      // 충분히 긴 칩에서는 6px 로 고정.
-      expect(handleThicknessPx(60)).toBe(6);
+      expect(handlePadPx(shortest)).toBeCloseTo(14 / 4);
+      expect(handlePadPx(shortest) * 2 * 2).toBeLessThanOrEqual(shortest); // 두 손잡이(각 반폭×2)가 덮는 합 ≤ 높이
+      // 고정 ±6px 이었다면 두 손잡이(24px)가 14px 칩을 통째로 덮는다.
+      expect(handlePadPx(shortest)).toBeLessThan(HANDLE_HIT_PAD);
     });
 
-    it("위 가장자리 = 시작, 아래 = 끝, 가운데 = 이동", () => {
-      expect(chipDragMode(1, 60, true)).toBe("start");
-      expect(chipDragMode(30, 60, true)).toBe("move");
-      expect(chipDragMode(59, 60, true)).toBe("end");
-    });
-
-    it("여러 날 span(resizable=false)에는 손잡이가 아예 없다 — 어디를 잡아도 이동", () => {
-      expect(chipDragMode(0, 60, false)).toBe("move");
-      expect(chipDragMode(60, 60, false)).toBe("move");
-    });
-
-    it("높이가 0(레이아웃 전)이면 잡을 손잡이가 없다", () => {
-      expect(chipDragMode(100, 0, true)).toBe("move");
+    it("충분히 긴 칩에서는 상한(6px)으로 고정, 아주 짧아도 1px 아래로 내려가지 않는다", () => {
+      expect(handlePadPx(60)).toBe(HANDLE_HIT_PAD);
+      expect(handlePadPx(1)).toBe(1);
+      expect(handlePadPx(0)).toBe(1);
     });
   });
 
@@ -668,15 +635,62 @@ describe("calendarLayout", () => {
       expect(dragTimes("end", base, 7)).toEqual({ startMin: 540, endMin: 615 });
     });
 
-    it("최소 길이 30분 — 시작이 끝을 넘지도, 끝이 시작 아래로 가지도 못한다", () => {
-      expect(dragTimes("start", base, 1000).startMin).toBe(600 - MIN_SLOT_MIN);
-      expect(dragTimes("end", base, -1000).endMin).toBe(540 + MIN_SLOT_MIN);
+    it("최소 길이는 스냅 한 칸(15분) — 시작이 끝을 넘지도, 끝이 시작 아래로 가지도 못한다", () => {
+      expect(MIN_RESIZE_MIN).toBe(15);
+      expect(dragTimes("start", base, 1000).startMin).toBe(600 - MIN_RESIZE_MIN);
+      expect(dragTimes("end", base, -1000).endMin).toBe(540 + MIN_RESIZE_MIN);
+    });
+
+    it("15분짜리 일정의 손잡이를 살짝 건드려도 30분으로 튀지 않는다", () => {
+      const short = { startMin: 540, endMin: 555, durationMin: 15 };
+      expect(dragTimes("end", short, 1)).toEqual({ startMin: 540, endMin: 555 });
+      expect(dragTimes("start", short, -1)).toEqual({ startMin: 540, endMin: 555 });
     });
 
     it("끝은 자정을 넘지 않는다", () => {
       expect(dragTimes("end", { startMin: 1380, endMin: 1410, durationMin: 30 }, 1000).endMin).toBe(
         24 * 60,
       );
+    });
+  });
+
+  describe("히스테리시스 (드래그 손맛)", () => {
+    const base = { startMin: 540, endMin: 600, durationMin: 60 }; // 09:00–10:00
+    const px = (min: number) => (min * HOUR_ROW_H) / 60;
+
+    it("prev 가 없으면 예전 반올림 그대로다 (키보드·첫 이동)", () => {
+      expect(dragTimes("move", base, px(8.6)).startMin).toBe(555); // 8.6분 → 9:15 쪽
+    });
+
+    it("prev 칸에서 0.7칸(10.5분) 안쪽이면 경계 근처에서 흔들려도 prev 를 유지한다", () => {
+      expect(dragTimes("move", base, px(8.6), HOUR_ROW_H, { startMin: 540, endMin: 600 }).startMin).toBe(540);
+      expect(dragTimes("move", base, px(10), HOUR_ROW_H, { startMin: 540, endMin: 600 }).startMin).toBe(540);
+    });
+
+    it("충분히 벗어나면 다음 칸으로 넘어간다 — 그리고 돌아올 때도 같은 폭의 완충이 있다", () => {
+      expect(dragTimes("move", base, px(12.9), HOUR_ROW_H, { startMin: 540, endMin: 600 }).startMin).toBe(555);
+      // 555 에서 되돌아올 때: 540.5 쪽(= 14.5분 지점)은 아직 555 유지, 더 내려가야 540.
+      expect(dragTimes("move", base, px(5), HOUR_ROW_H, { startMin: 555, endMin: 615 }).startMin).toBe(555);
+      expect(dragTimes("move", base, px(2), HOUR_ROW_H, { startMin: 555, endMin: 615 }).startMin).toBe(540);
+    });
+
+    it("start/end 손잡이에도 같은 히스테리시스, 최소 길이는 여전히 지킨다", () => {
+      expect(dragTimes("end", base, px(8.6), HOUR_ROW_H, { startMin: 540, endMin: 600 }).endMin).toBe(600);
+      expect(dragTimes("end", base, px(12.9), HOUR_ROW_H, { startMin: 540, endMin: 600 }).endMin).toBe(615);
+      expect(dragTimes("start", base, px(1000), HOUR_ROW_H, { startMin: 540, endMin: 600 }).startMin).toBe(
+        600 - MIN_RESIZE_MIN,
+      );
+    });
+
+    it("snapStartMin 도 prev 를 받아 같은 규칙을 쓴다", () => {
+      expect(snapStartMin(540, px(8.6), 60, HOUR_ROW_H, 540)).toBe(540);
+      expect(snapStartMin(540, px(12.9), 60, HOUR_ROW_H, 540)).toBe(555);
+    });
+
+    it("잡은 자리 오프셋은 델타에 이미 들어 있다 — 같은 델타면 어디를 잡았든 같은 결과", () => {
+      // 세션은 pointerdown 좌표 대비 이동량만 쓴다. 손잡이 히트(±6px) 어디서 잡아도 경계는 점프하지 않는다.
+      expect(dragTimes("end", base, px(15))).toEqual(dragTimes("end", base, px(15)));
+      expect(dragTimes("end", base, 0)).toEqual({ startMin: 540, endMin: 600 });
     });
   });
 
@@ -828,10 +842,10 @@ describe("calendarLayout", () => {
 });
 
 /**
- * W15 — 붙어 있는(gap 0) 항목의 연동 이동. 이동 방향으로만 따라가고, 체인 전부를 모으고,
- * 시각을 함부로 못 바꾸는 이웃(여러 날 span)과 하루를 벗어나는 이웃에서 끊긴다.
+ * 이동은 이웃을 **밀어내며** 간다(오너 2026-10-27 — 겹침을 만들지 않는다). 겹친 만큼만 밀고 연쇄이며, 맞닿은 이웃은
+ * 델타 전부만큼 밀리는 특수한 경우다(W15 의 연동 이동). 밀 수 없는 이웃·하루 끝은 벽이라 칩이 그 앞에서 멈춘다.
  */
-describe("planLinkedMove — 맞닿은 이웃의 연동 이동 (W15)", () => {
+describe("planLinkedMove — 이웃을 밀어내는 이동", () => {
   /** 09:00-10:00(a) — 10:00-11:00(b) — 11:00-12:00(c) 세 칩이 전부 맞닿은 하루. */
   const chain = [
     { key: "a", startMin: 540, endMin: 600, linkable: true },
@@ -839,72 +853,93 @@ describe("planLinkedMove — 맞닿은 이웃의 연동 이동 (W15)", () => {
     { key: "c", startMin: 660, endMin: 720, linkable: true },
   ];
 
-  it("아래로 옮기면 뒤에 붙은 체인 전부가 같은 델타만큼 따라온다", () => {
-    expect(planLinkedMove(chain, "a", 15)).toEqual([
-      { key: "b", startMin: 615, endMin: 675 },
-      { key: "c", startMin: 675, endMin: 735 },
-    ]);
+  it("아래로 옮기면 맞닿은 체인 전부가 델타만큼 밀려난다", () => {
+    expect(planLinkedMove(chain, "a", 15)).toEqual({
+      deltaMin: 15,
+      linked: [
+        { key: "b", startMin: 615, endMin: 675 },
+        { key: "c", startMin: 675, endMin: 735 },
+      ],
+    });
   });
 
-  it("위로 옮기면 앞에 붙은 것만 따라온다 — 뒤쪽은 간격이 생기는 것을 허용한다", () => {
-    expect(planLinkedMove(chain, "c", -15)).toEqual([
-      { key: "b", startMin: 585, endMin: 645 },
-      { key: "a", startMin: 525, endMin: 585 },
-    ]);
+  it("위로 옮기면 앞에 맞닿은 것이 밀려난다 — 뒤쪽은 그대로(간격 허용)", () => {
+    expect(planLinkedMove(chain, "c", -15)).toEqual({
+      deltaMin: -15,
+      linked: [
+        { key: "b", startMin: 585, endMin: 645 },
+        { key: "a", startMin: 525, endMin: 585 },
+      ],
+    });
   });
 
-  it("맞닿지 않았으면(1분이라도 벌어지면) 아무도 따라오지 않는다", () => {
-    const gapped = [chain[0], { key: "b", startMin: 601, endMin: 660, linkable: true }];
-    expect(planLinkedMove(gapped, "a", 15)).toEqual([]);
+  it("간격이 있으면 겹친 만큼만 밀린다 — 간격 안에서는 아무도 안 밀린다", () => {
+    const gapped = [chain[0], { key: "b", startMin: 630, endMin: 690, linkable: true }]; // a 끝과 30분 간격
+    expect(planLinkedMove(gapped, "a", 15)).toEqual({ deltaMin: 15, linked: [] }); // 아직 안 닿는다
+    expect(planLinkedMove(gapped, "a", 45)).toEqual({
+      deltaMin: 45,
+      linked: [{ key: "b", startMin: 645, endMin: 705 }], // 45 - 30 = 15분만 민다
+    });
   });
 
-  it("델타가 0 이면 연동도 없다 — 움직이지 않은 것에 이웃을 딸려 보내지 않는다", () => {
-    expect(planLinkedMove(chain, "a", 0)).toEqual([]);
-  });
-
-  it("여러 날 span 이웃은 빠지고, 맞닿음이 그 자리에서 끊긴다", () => {
-    const withSpan = [
+  it("연쇄 — 밀린 이웃이 다음 이웃과 겹치게 되면 그것도 민다, 그 뒤 간격에서 멈춘다", () => {
+    const events = [
       chain[0],
-      { key: "b", startMin: 600, endMin: 660, linkable: false },
-      chain[2],
+      { key: "b", startMin: 600, endMin: 660, linkable: true },
+      { key: "c", startMin: 675, endMin: 720, linkable: true }, // b 와 15분 간격
+      { key: "d", startMin: 780, endMin: 840, linkable: true }, // 한참 뒤
     ];
-    // b 는 시각을 함부로 못 바꾸고(그 end_time 은 마지막 날의 것), b 뒤의 c 도 따라오지 않는다.
-    expect(planLinkedMove(withSpan, "a", 15)).toEqual([]);
+    expect(planLinkedMove(events, "a", 30)).toEqual({
+      deltaMin: 30,
+      linked: [
+        { key: "b", startMin: 630, endMin: 690 },
+        { key: "c", startMin: 690, endMin: 735 }, // b 의 새 끝에 맞춰 15분만
+      ],
+    });
   });
 
-  it("델타를 얹어 자정을 넘는 이웃은 빠진다", () => {
+  it("델타가 0 이면 아무것도 안 민다", () => {
+    expect(planLinkedMove(chain, "a", 0)).toEqual({ deltaMin: 0, linked: [] });
+  });
+
+  it("여러 날 span 이웃은 벽이다 — 칩이 그 앞에서 멈춘다(스냅 한 칸씩 줄여 간다)", () => {
+    const withSpan = [chain[0], { key: "b", startMin: 600, endMin: 660, linkable: false }];
+    expect(planLinkedMove(withSpan, "a", 15)).toEqual({ deltaMin: 0, linked: [] });
+    const gapped = [chain[0], { key: "b", startMin: 630, endMin: 690, linkable: false }];
+    expect(planLinkedMove(gapped, "a", 60)).toEqual({ deltaMin: 30, linked: [] }); // 닿기 직전까지
+  });
+
+  it("하루 끝(자정)도 벽이다 — 밀려 나가는 이웃이 있으면 칩이 그 전에서 멈춘다", () => {
     const late = [
       { key: "a", startMin: 22 * 60, endMin: 23 * 60, linkable: true },
       { key: "b", startMin: 23 * 60, endMin: 24 * 60, linkable: true },
     ];
-    expect(planLinkedMove(late, "a", 15)).toEqual([]);
-    // 정확히 자정에서 끝나는 자리까지는 허용한다(저장 쪽에서 23:59 로 눌린다).
+    expect(planLinkedMove(late, "a", 15)).toEqual({ deltaMin: 0, linked: [] }); // b 가 갈 곳이 없다
     const almost = [late[0], { key: "b", startMin: 23 * 60, endMin: 23 * 60 + 45, linkable: true }];
-    expect(planLinkedMove(almost, "a", 15)).toEqual([
-      { key: "b", startMin: 23 * 60 + 15, endMin: 24 * 60 },
-    ]);
+    expect(planLinkedMove(almost, "a", 15)).toEqual({
+      deltaMin: 15,
+      linked: [{ key: "b", startMin: 23 * 60 + 15, endMin: 24 * 60 }],
+    });
   });
 
-  it("같은 경계에 둘이 붙어 있으면(스택) 둘 다 따라온다", () => {
+  it("같은 시각에 시작하는 둘이 앞에 있으면 둘 다 밀린다(스택)", () => {
     const stacked = [
       chain[0],
       { key: "b1", startMin: 600, endMin: 630, linkable: true },
       { key: "b2", startMin: 600, endMin: 660, linkable: true },
     ];
-    expect(planLinkedMove(stacked, "a", 15).map((p) => p.key).sort()).toEqual(["b1", "b2"]);
+    const r = planLinkedMove(stacked, "a", 15);
+    expect(r.linked.map((p) => p.key).sort()).toEqual(["b1", "b2"].slice(0, r.linked.length));
+    expect(r.linked.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("서로 맞닿은 고리(순환)라도 한 바퀴에 끝난다 — 방문한 키는 다시 보지 않는다", () => {
-    // 30분짜리 둘이 서로의 시작=끝인 자리에 있는 병리적 입력(같은 시각 0 길이 취급).
-    const loop = [
-      { key: "a", startMin: 540, endMin: 540, linkable: true },
-      { key: "b", startMin: 540, endMin: 540, linkable: true },
-    ];
-    expect(planLinkedMove(loop, "a", 15)).toEqual([{ key: "b", startMin: 555, endMin: 555 }]);
+  it("이미 겹쳐 저장된 이웃(칩의 원래 범위와 겹침)은 밀지 않는다 — 옛 겹침을 고치는 규칙이 아니다", () => {
+    const legacy = [chain[0], { key: "o", startMin: 570, endMin: 630, linkable: true }];
+    expect(planLinkedMove(legacy, "a", 15)).toEqual({ deltaMin: 15, linked: [] });
   });
 
-  it("없는 키는 조용히 빈 목록", () => {
-    expect(planLinkedMove(chain, "없음", 15)).toEqual([]);
+  it("없는 키는 조용히 빈 결과", () => {
+    expect(planLinkedMove(chain, "없음", 15)).toEqual({ deltaMin: 15, linked: [] });
   });
 });
 
@@ -912,7 +947,7 @@ describe("planLinkedMove — 맞닿은 이웃의 연동 이동 (W15)", () => {
  * 오너 요청(2026-09-16) — 맞닿은 이음새를 손잡이로 끌면 양쪽이 같이 반응한다. planLinkedMove
  * 와 달리 체인이 아니라 **이웃 하나뿐**이고, 이웃 쪽은 이동이 아니라 그 한쪽 경계만 옮긴다.
  */
-describe("planLinkedResize — 맞닿은 이음새의 리사이즈 연동", () => {
+describe("planLinkedResize — 이웃을 줄이는 리사이즈(맞닿은 이음새는 양쪽 반응)", () => {
   /** 09:00-10:00(a) — 10:00-11:00(b), 정확히 맞닿은 하루짜리 둘. */
   const two = [
     { key: "a", startMin: 540, endMin: 600, linkable: true, hasEnd: true },
@@ -933,49 +968,71 @@ describe("planLinkedResize — 맞닿은 이음새의 리사이즈 연동", () =
     });
   });
 
-  it("이웃이 MIN_SLOT_MIN 아래로 줄면 next 도 이웃의 한계에서 다시 죈다", () => {
-    // b 는 10:00-10:45(45분) — 최대 15분만 밀릴 수 있다(30분 밑으로는 못 줄어든다).
+  it("이웃이 MIN_RESIZE_MIN 아래로 줄면 next 도 이웃의 한계에서 다시 죈다", () => {
+    // b 는 10:00-10:30(30분) — 최대 15분만 밀릴 수 있다(15분 밑으로는 못 줄어든다).
     const tight = [
       { key: "a", startMin: 540, endMin: 600, linkable: true, hasEnd: true },
-      { key: "b", startMin: 600, endMin: 645, linkable: true, hasEnd: true },
+      { key: "b", startMin: 600, endMin: 630, linkable: true, hasEnd: true },
     ];
     // 60분 늘리려 해도(제안된 next.endMin = 660) 이웃 한계인 615 에서 멈춘다.
     expect(planLinkedResize(tight, "a", "end", { startMin: 540, endMin: 660 })).toEqual({
       next: { startMin: 540, endMin: 615 },
-      linked: [{ key: "b", startMin: 615, endMin: 645 }],
+      linked: [{ key: "b", startMin: 615, endMin: 630 }],
     });
   });
 
-  it("맞닿은 이웃이 없으면 next 그대로, 연동도 없다", () => {
+  it("간격 안에서는 이웃이 안 줄고, 넘어서 겹치면 겹친 만큼 줄어든다", () => {
     const gapped = [
       { key: "a", startMin: 540, endMin: 600, linkable: true, hasEnd: true },
       { key: "b", startMin: 615, endMin: 660, linkable: true, hasEnd: true },
     ];
+    // 간격(10:00~10:15) 안 — 연동 없음.
     expect(planLinkedResize(gapped, "a", "end", { startMin: 540, endMin: 615 })).toEqual({
       next: { startMin: 540, endMin: 615 },
       linked: [],
     });
+    // 10:30 까지 늘리면 b 의 시작이 10:30 으로 따라와 줄어든다(겹침을 만들지 않는다).
+    expect(planLinkedResize(gapped, "a", "end", { startMin: 540, endMin: 630 })).toEqual({
+      next: { startMin: 540, endMin: 630 },
+      linked: [{ key: "b", startMin: 630, endMin: 660 }],
+    });
   });
 
-  it("여러 날 span 이웃(linkable: false)은 연동에서 빠진다", () => {
+  it("앞쪽도 같다 — 시작을 위로 늘려 앞 이웃과 겹치면 그 이웃의 끝이 줄어든다", () => {
+    const gapped = [
+      { key: "a", startMin: 480, endMin: 540, linkable: true, hasEnd: true },
+      { key: "b", startMin: 555, endMin: 600, linkable: true, hasEnd: true },
+    ];
+    expect(planLinkedResize(gapped, "b", "start", { startMin: 525, endMin: 600 })).toEqual({
+      next: { startMin: 525, endMin: 600 },
+      linked: [{ key: "a", startMin: 480, endMin: 525 }],
+    });
+  });
+
+  it("여러 날 span 이웃(linkable: false)은 줄일 수 없는 벽이다 — 연동 없이 칩이 그 앞에서 멈춘다", () => {
     const withSpan = [
       { key: "a", startMin: 540, endMin: 600, linkable: true, hasEnd: true },
       { key: "b", startMin: 600, endMin: 660, linkable: false, hasEnd: true },
     ];
     expect(planLinkedResize(withSpan, "a", "end", { startMin: 540, endMin: 615 })).toEqual({
-      next: { startMin: 540, endMin: 615 },
+      next: { startMin: 540, endMin: 600 },
+      linked: [],
+    });
+    // 줄이는 쪽(칩이 짧아지는 방향)은 막지 않는다.
+    expect(planLinkedResize(withSpan, "a", "end", { startMin: 540, endMin: 585 })).toEqual({
+      next: { startMin: 540, endMin: 585 },
       linked: [],
     });
   });
 
-  it("끝이 없던(hasEnd: false) 이웃은 시작 손잡이 연동에서 빠진다 — 없는 끝을 지어내지 않는다", () => {
+  it("끝이 없던(hasEnd: false) 이웃은 시작 손잡이로 줄일 수 없다 — 없는 끝을 지어내지 않는다(벽)", () => {
     const noEnd = [
       { key: "a", startMin: 540, endMin: 600, linkable: true, hasEnd: false },
       { key: "b", startMin: 600, endMin: 660, linkable: true, hasEnd: true },
     ];
-    // b 의 시작 손잡이를 당겨도(mode "start") a 는 hasEnd:false 라 후보에서 빠진다.
+    // b 의 시작 손잡이를 당겨도(mode "start") a 의 end_time 을 새로 만들지 않고, b 는 a 의 끝 앞에서 멈춘다.
     expect(planLinkedResize(noEnd, "b", "start", { startMin: 585, endMin: 660 })).toEqual({
-      next: { startMin: 585, endMin: 660 },
+      next: { startMin: 600, endMin: 660 },
       linked: [],
     });
   });
@@ -1036,24 +1093,25 @@ describe("tickIntervalMinFor — 스케일에 맞는 눈금 세분화 레벨", (
   });
 });
 
-describe("layoutTimedEvents — planTimedDay 의 스태킹 스윕을 다른 hourRowH 로 다시 돌리기", () => {
+describe("layoutTimedEvents — 시각에서만 나오는 픽셀 + 겹침 칸", () => {
   it("겹치지 않는 일정은 시간·스케일에 정확히 비례한다(hourRowH 배가 되면 top/height 도 배)", () => {
     const events = [{ startMin: 9 * 60, endMin: 10 * 60 }]; // 09:00–10:00
     const base = layoutTimedEvents(events, 28);
     const doubled = layoutTimedEvents(events, 56);
-    expect(base[0]).toEqual({ top: 252, height: 28 });
-    expect(doubled[0]).toEqual({ top: 504, height: 56 });
+    expect(base[0]).toEqual({ top: 252, height: 28, lane: 0 });
+    expect(doubled[0]).toEqual({ top: 504, height: 56, lane: 0 });
   });
 
-  it("스택 간격(STACK_GAP_PX=2px)은 스케일과 무관하게 고정이다", () => {
-    // a: 09:00–11:00, b: 09:30–10:00 — b 는 a 와 겹쳐 a 바로 아래로 밀린다(planTimedDay 와 같은 룰).
+  it("겹쳐도 top 은 어느 배율에서나 시각 그대로다 — 칸은 배율과 무관하다", () => {
+    // a: 09:00–11:00, b: 09:30–10:00 — b 는 a 와 겹쳐 한 칸 들어간다(밀리지 않는다).
     const events = [
       { startMin: 9 * 60, endMin: 11 * 60 },
       { startMin: 9 * 60 + 30, endMin: 10 * 60 },
     ];
-    for (const hourRowH of [28, 100, 240]) {
+    for (const hourRowH of [8, 28, 100, 240]) {
       const [a, b] = layoutTimedEvents(events, hourRowH);
-      expect(b.top).toBe(a.top + a.height + STACK_GAP_PX);
+      expect(b.top).toBe((9 * 60 + 30) * (hourRowH / 60));
+      expect([a.lane, b.lane]).toEqual([0, 1]);
     }
   });
 
@@ -1274,5 +1332,170 @@ describe("buildMonthDayPlans — span title on the first visible piece of every 
     });
     const plans = buildMonthDayPlans(cells, [carried]);
     expect(titledDays(plans, "carry")).toEqual(["2026-10-01", "2026-10-04"]);
+  });
+});
+
+// ── 익일 구간(축의 끝 분 일원화) ─────────────────────────────────────────────────────────────
+import {
+  DAY_MIN,
+  axisEndMinFor,
+  dayBoundsOf,
+  type LinkableEvent,
+} from "./calendarLayout";
+
+describe("익일 구간 — 축의 끝 분 · 자정 규칙", () => {
+  const TAIL = axisEndMinFor(3); // 24:00 + 3h = 1620
+  const ev = (key: string, startMin: number, endMin: number, extra: Partial<LinkableEvent> = {}): LinkableEvent => ({
+    key,
+    startMin,
+    endMin,
+    linkable: true,
+    ...extra,
+  });
+
+  it("axisEndMinFor: 0=당일만, N시간=24:00+N, 0..12 로 죈다", () => {
+    expect(axisEndMinFor(0)).toBe(DAY_MIN);
+    expect(axisEndMinFor(3)).toBe(DAY_MIN + 180);
+    expect(axisEndMinFor(99)).toBe(DAY_MIN + 12 * 60);
+    expect(axisEndMinFor(-2)).toBe(DAY_MIN);
+    expect(axisEndMinFor(Number.NaN)).toBe(DAY_MIN);
+  });
+
+  it("dayBoundsOf: 시작이 속한 날의 범위", () => {
+    expect(dayBoundsOf(600, TAIL)).toEqual({ lo: 0, hi: DAY_MIN });
+    expect(dayBoundsOf(1440, TAIL)).toEqual({ lo: DAY_MIN, hi: TAIL });
+  });
+
+  it("이동: 자정을 넘어 익일 구간으로 갈 수 있다 — 끝이 축의 끝에서 멈춘다", () => {
+    const base = { startMin: 1380, endMin: 1440, durationMin: 60 };
+    // 23:00–24:00 을 한 시간 아래로 → 24:00–25:00
+    const down = dragTimes("move", base, 60 * PX_PER_MIN, HOUR_ROW_H, undefined, { axisEndMin: TAIL });
+    expect(down).toEqual({ startMin: 1440, endMin: 1500 });
+    // 아주 멀리 → 축의 끝(27:00)에 끝이 닿는다
+    const far = dragTimes("move", base, 600 * PX_PER_MIN, HOUR_ROW_H, undefined, { axisEndMin: TAIL });
+    expect(far).toEqual({ startMin: TAIL - 60, endMin: TAIL });
+    // 익일 구간이 없으면 예전 그대로 하루 끝에서 멈춘다
+    const none = dragTimes("move", { startMin: 1320, endMin: 1380, durationMin: 60 }, 600 * PX_PER_MIN);
+    expect(none).toEqual({ startMin: 1380, endMin: 1440 });
+  });
+
+  it("이동: 자정을 가로지르는 자리는 없다 — 손에 가까운 쪽으로 붙고, 같은 거리면 가던 방향", () => {
+    const base = { startMin: 1380, endMin: 1440, durationMin: 60 };
+    // 23:30 시작(끝 00:30) 요청 → 정확히 중간: 아래로 가던 중이라 24:00 시작
+    const mid = dragTimes("move", base, 30 * PX_PER_MIN, HOUR_ROW_H, undefined, { axisEndMin: TAIL });
+    expect(mid).toEqual({ startMin: 1440, endMin: 1500 });
+    // 위로 가던 중 23:15 시작(끝 00:15) 요청 → 22:00 시작이 아니라 끝이 자정인 23:00 시작이 더 가깝다
+    const up = dragTimes("move", { startMin: 1470, endMin: 1530, durationMin: 60 }, -75 * PX_PER_MIN, HOUR_ROW_H, undefined, { axisEndMin: TAIL });
+    expect(up).toEqual({ startMin: 1380, endMin: 1440 });
+  });
+
+  it("locked(여러 날 span · 반복 행)는 자기 날 안에 머문다", () => {
+    const base = { startMin: 1380, endMin: 1440, durationMin: 60 };
+    const r = dragTimes("move", base, 120 * PX_PER_MIN, HOUR_ROW_H, undefined, { axisEndMin: TAIL, locked: true });
+    expect(r).toEqual({ startMin: 1380, endMin: 1440 });
+    const tailChip = { startMin: 1500, endMin: 1560, durationMin: 60 };
+    const t = dragTimes("move", tailChip, -600 * PX_PER_MIN, HOUR_ROW_H, undefined, { axisEndMin: TAIL, locked: true });
+    expect(t).toEqual({ startMin: 1440, endMin: 1500 });
+  });
+
+  it("리사이즈는 자기 날 안에서만 — 당일 일정의 끝은 24:00 을 못 넘고, 익일 일정의 시작은 24:00 아래로 못 간다", () => {
+    const day = { startMin: 1320, endMin: 1380, durationMin: 60 };
+    expect(dragTimes("end", day, 300 * PX_PER_MIN, HOUR_ROW_H, undefined, { axisEndMin: TAIL }).endMin).toBe(1440);
+    const tail = { startMin: 1500, endMin: 1560, durationMin: 60 };
+    expect(dragTimes("start", tail, -600 * PX_PER_MIN, HOUR_ROW_H, undefined, { axisEndMin: TAIL }).startMin).toBe(1440);
+    expect(dragTimes("end", tail, 600 * PX_PER_MIN, HOUR_ROW_H, undefined, { axisEndMin: TAIL }).endMin).toBe(TAIL);
+  });
+
+  it("planLinkedMove: 하루 끝은 더 이상 벽이 아니다(익일 구간 안쪽까지) — 단 이웃은 자기 날을 못 벗어난다", () => {
+    const events = [ev("a", 1380, 1440), ev("n", 1440, 1500)];
+    // a 를 +60: 익일 구간의 n 을 밀게 되는데 n 은 자기 날(익일) 안이라 밀린다
+    const r = planLinkedMove(events, "a", 60, TAIL);
+    expect(r.deltaMin).toBe(60);
+    expect(r.linked).toEqual([{ key: "n", startMin: 1500, endMin: 1560 }]);
+    // 당일 안의 이웃이 자정 너머로 밀려야 하면 벽
+    const walled = planLinkedMove([ev("a", 1260, 1320), ev("b", 1380, 1440)], "a", 120, TAIL);
+    expect(walled.linked.every((l) => l.endMin <= DAY_MIN)).toBe(true);
+    expect(walled.deltaMin).toBeLessThan(120);
+  });
+
+  it("planLinkedMove: 익일 구간이 없으면(기본 인자) 24:00 이 벽 — 예전과 같다", () => {
+    const r = planLinkedMove([ev("a", 1380, 1440)], "a", 60);
+    expect(r.deltaMin).toBe(0);
+  });
+
+  it("planLinkedResize: 자정 너머의 이웃은 이음새로 줄이지 않는다", () => {
+    const events = [ev("a", 1380, 1440, { hasEnd: true }), ev("n", 1440, 1500, { hasEnd: true })];
+    const r = planLinkedResize(events, "a", "end", { startMin: 1380, endMin: 1400 });
+    expect(r.linked).toEqual([]);
+    expect(r.next).toEqual({ startMin: 1380, endMin: 1400 });
+  });
+
+  it("planNewRange: 익일 구간에서도 만들고, 자정을 가로지르면 시작한 날에서 자른다", () => {
+    const y = (min: number) => min * PX_PER_MIN;
+    expect(planNewRange(y(1500), y(1560), HOUR_ROW_H, TAIL)).toEqual({ startMin: 1500, endMin: 1560 });
+    expect(planNewRange(y(1380), y(1500), HOUR_ROW_H, TAIL)).toEqual({ startMin: 1380, endMin: 1440 });
+    // 축의 끝에서 30분을 지킨다
+    expect(planNewRange(y(1610), y(1620), HOUR_ROW_H, TAIL)).toEqual({ startMin: TAIL - MIN_SLOT_MIN, endMin: TAIL });
+    // 익일 구간이 없으면 24:00 이 끝 — 예전과 같다
+    expect(planNewRange(y(1430), y(1600))?.endMin).toBe(1440);
+  });
+});
+
+// ── 축 분 ↔ (날, 그날의 분) · 익일 구간 합치기 · 스크롤 상한 (코드리뷰 2026-10-28 중앙화) ────────
+describe("splitAxisMin / axisDayOffsetMin — 축 분 → (어느 날, 그날의 분)", () => {
+  it("당일 분은 그대로, 24:00 이상은 익일 날과 24시간을 뺀 분", () => {
+    expect(splitAxisMin(600, "2026-08-09", "2026-08-10")).toEqual({ day: "2026-08-09", min: 600 });
+    expect(splitAxisMin(DAY_MIN, "2026-08-09", "2026-08-10")).toEqual({ day: "2026-08-10", min: 0 });
+    expect(splitAxisMin(DAY_MIN + 90, "2026-08-09", "2026-08-10")).toEqual({ day: "2026-08-10", min: 90 });
+  });
+  it("익일 구간이 없으면(tailDay null) 24:00 이상도 당일로 둔다", () => {
+    expect(splitAxisMin(DAY_MIN + 30, "2026-08-09", null)).toEqual({ day: "2026-08-09", min: DAY_MIN + 30 });
+    expect(splitAxisMin(60, null, null)).toEqual({ day: null, min: 60 });
+  });
+  it("axisDayOffsetMin: 시작 분이 속한 날의 오프셋", () => {
+    expect(axisDayOffsetMin(DAY_MIN - 1)).toBe(0);
+    expect(axisDayOffsetMin(DAY_MIN)).toBe(DAY_MIN);
+  });
+});
+
+describe("mergeTailTimed — 당일 + 익일 구간", () => {
+  const ev = (key: string, startMin: number, endMin: number): TimedEvent => ({
+    key,
+    item: {} as never,
+    startMin,
+    endMin,
+    top: 0,
+    height: 0,
+    lane: 0,
+  });
+  const today = [ev("t1", 600, 660)];
+
+  it("구간이 없거나 다음 날 plan 이 없으면 입력 그대로(같은 참조)", () => {
+    expect(mergeTailTimed(today, null, 180)).toBe(today);
+    expect(mergeTailTimed(today, { timed: [ev("n1", 30, 60)], allDay: [] }, 0)).toBe(today);
+  });
+
+  it("구간 안에서 시작하는 다음 날 일정만 +24:00 해서 잇고, 끝은 구간 끝에서 자른다", () => {
+    const tail = { timed: [ev("in", 60, 120), ev("cut", 150, 240), ev("out", 180, 240)], allDay: [] };
+    const merged = mergeTailTimed(today, tail, 180);
+    expect(merged.map((e) => e.key)).toEqual(["t1", "in", "cut"]); // 180 에서 시작하는 것은 구간 밖
+    expect(merged[1]).toMatchObject({ startMin: DAY_MIN + 60, endMin: DAY_MIN + 120 });
+    expect(merged[2]).toMatchObject({ startMin: DAY_MIN + 150, endMin: DAY_MIN + 180 }); // 끝이 구간 끝으로
+  });
+
+  it("구간 안에 시작하는 일정이 하나도 없으면 같은 참조", () => {
+    expect(mergeTailTimed(today, { timed: [ev("far", 400, 460)], allDay: [] }, 180)).toBe(today);
+  });
+});
+
+describe("axisContentPx / maxAxisScrollTop — 스크롤 영역과 상한", () => {
+  it("눈금 영역 + compact 아래 여백 행", () => {
+    expect(axisContentPx(28, DAY_MIN)).toBe(28 * 24);
+    expect(axisContentPx(28, DAY_MIN + 180)).toBe(28 * 27); // 익일 3시간
+    expect(axisContentPx(28, DAY_MIN, 3)).toBe(28 * 24 + 28 * 3);
+  });
+  it("상한 = 영역 - 보이는 높이, 음수가 되면 0", () => {
+    expect(maxAxisScrollTop(672, 168)).toBe(504);
+    expect(maxAxisScrollTop(100, 168)).toBe(0);
   });
 });

@@ -6,6 +6,7 @@ pub mod import;
 pub mod migrate;
 pub mod render;
 pub mod reset;
+mod swap;
 
 pub use backup::{backup_create, backup_restore, BackupResult, RestoreResult};
 pub use export::{

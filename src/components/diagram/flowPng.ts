@@ -21,6 +21,7 @@
  * an export that ends without a notice naming WHERE the file went did not export anything. Both
  * paths below end in an emitNotice carrying the filename or the full path.)
  */
+import { withExportDir } from "../../lib/exportDir";
 import { getNodesBounds, type Node } from "@xyflow/react";
 import { t } from "../../i18n/t";
 import { call, emitNotice } from "../../lib/invoke";
@@ -114,7 +115,7 @@ export async function exportFlowPngToFile(
 
   const { save } = await import("@tauri-apps/plugin-dialog");
   const dest = await save({
-    defaultPath: pngFilename(),
+    defaultPath: withExportDir(pngFilename()),
     filters: [{ name: "PNG", extensions: ["png"] }],
   });
   if (!dest) return true;

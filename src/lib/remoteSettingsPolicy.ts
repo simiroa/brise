@@ -35,6 +35,8 @@ const BLOCKED_EXACT: ReadonlySet<string> = new Set([
   "capture_ingest_token",
   // 이 기기 파일시스템 쓰기 위치(화면 저장 폴더) — 원격이 임의 경로로 돌리면 안 된다.
   "capture_screenshot_dir",
+  // 내보내기 기본 폴더 — 저장 대화상자가 시작하는 이 기기의 경로(capture_screenshot_dir 와 같은 급).
+  "export_default_dir",
   // 이 기기에서 실행되는 프로그램 경로(LibreOffice) — 슬라이드 미리보기가 그대로 spawn 한다.
   "soffice_path",
 ]);
@@ -77,6 +79,9 @@ export const BROWSER_SETTINGS_PAGES: readonly string[] = [
   // 갈랐다고 원격에서 사라지면 회귀이므로 여기도 같이 넣는다. 에디터 자체가 브라우저(태블릿)
   // 에서도 동작하는 화면이라 성립 여부가 바뀌지 않는다.
   "editor",
+  // 첨부파일(2026-10-27 신설): 붙여넣기·드롭 정책 키는 예전에 "editor" 에서 원격 허용이었다 — 페이지를 갈라도 브라우저에 남긴다.
+  // 첨부 저장 방식(AttachmentStorageSection)은 AttachmentsSection 이 `isBrowser()` 로 가린다.
+  "attachments",
   // 알림 및 일정(2026-09-15 R5): 알림·달력 키는 전부 원격 허용(PHONE_SETTINGS_KEYS 와 겹친다).
   // 시간축 루틴 표만 http:false 라 NotificationsSection 이 `isBrowser()` 로 따로 가린다.
   "notifications",

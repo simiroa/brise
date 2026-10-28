@@ -1,0 +1,24 @@
+/* 벨 숫자 배지 — 공용 `.badge` 모양에 위치만 얹는다. 아이콘 우상단을 덮고, 오른쪽 끝에 매달려
+   자리수가 늘면(최대 "999+") 왼쪽 = 아이콘 위로 자란다 — 오른쪽 구분선 쪽으로 넘치지 않는다.
+   색은 톤 틴트가 아니라 고정 밝은 빨강 채움(--badge-alert, 오너 2026-10-27) — 불투명이라 벨 획이
+   숫자 사이로 비치지 않는다. */
+.reminder-bell-badge{
+  position:absolute;
+  top:0;
+  right:0;
+  transform:translate(25%,-15%);
+  /* type-scale-exempt: 배지 세로 0 — 버튼(--ctrl-h) 안에 들어가야 해서 공용 .badge 의 1px 도 뺀다 */
+  padding:0 var(--space-2xs);
+  line-height:1.3;
+  min-width:1.4em;
+  text-align:center;
+  font-variant-numeric:tabular-nums;
+  pointer-events:none;
+  background:var(--badge-alert);
+  border-color:var(--badge-alert);
+  color:var(--on-solid);
+}
+
+/* 벨 행의 여는 단추 — 예전엔 컴포넌트 안 인라인 <style> 이었다. */
+.reminder-row-btn { background: transparent; transition: background var(--dur-fast); }
+.reminder-row-btn:hover { background: var(--hover); }

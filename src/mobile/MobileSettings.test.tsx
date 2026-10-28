@@ -215,14 +215,14 @@ describe("MobileSettings — AI 프리셋 노출 게이트 (aiEnabled read-only)
     render(<MobileSettings />);
     expect(screen.queryByText("Tap an action to edit its name and prompt.")).toBeNull();
     expect(screen.queryByText("Summarize")).toBeNull();
-    expect(screen.queryByText("Add preset")).toBeNull();
+    expect(screen.queryByText("Add prompt")).toBeNull();
   });
 
   it("shows the AI-actions editor once aiEnabled is on", () => {
     useSettingsStore.setState({ aiEnabled: true } as any);
     render(<MobileSettings />);
     expect(screen.getByText("Summarize")).toBeTruthy();
-    expect(screen.getByText("Add preset")).toBeTruthy();
+    expect(screen.getByText("Add prompt")).toBeTruthy();
   });
 });
 
@@ -543,11 +543,11 @@ describe("MobileSettings — AI 프리셋 편집", () => {
 
   it("the Add preset row opens a blank sheet; filling it in and saving calls addCustom", async () => {
     render(<MobileSettings />);
-    fireEvent.click(screen.getByText("Add preset"));
+    fireEvent.click(screen.getByText("Add prompt"));
     const dialog = screen.getByRole("dialog");
 
-    expect((within(dialog).getByPlaceholderText("Preset name") as HTMLInputElement).value).toBe("");
-    fireEvent.change(within(dialog).getByPlaceholderText("Preset name"), { target: { value: "Translate to French" } });
+    expect((within(dialog).getByPlaceholderText("Prompt name") as HTMLInputElement).value).toBe("");
+    fireEvent.change(within(dialog).getByPlaceholderText("Prompt name"), { target: { value: "Translate to French" } });
     fireEvent.change(within(dialog).getByPlaceholderText("Prompt"), { target: { value: "Translate this to French:" } });
     fireEvent.click(within(dialog).getByText("Save"));
 
@@ -559,17 +559,17 @@ describe("MobileSettings — AI 프리셋 편집", () => {
 
   it("Save is disabled while the name is empty", () => {
     render(<MobileSettings />);
-    fireEvent.click(screen.getByText("Add preset"));
+    fireEvent.click(screen.getByText("Add prompt"));
     const dialog = screen.getByRole("dialog");
     expect((within(dialog).getByText("Save") as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("Save stays disabled for a new custom action until BOTH name and prompt are filled (addCustom itself no-ops on an empty prompt)", () => {
     render(<MobileSettings />);
-    fireEvent.click(screen.getByText("Add preset"));
+    fireEvent.click(screen.getByText("Add prompt"));
     const dialog = screen.getByRole("dialog");
 
-    fireEvent.change(within(dialog).getByPlaceholderText("Preset name"), { target: { value: "Only a name" } });
+    fireEvent.change(within(dialog).getByPlaceholderText("Prompt name"), { target: { value: "Only a name" } });
     expect((within(dialog).getByText("Save") as HTMLButtonElement).disabled).toBe(true);
   });
 });

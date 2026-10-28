@@ -420,7 +420,7 @@ body{font-size:var(--text-lg)}
      같다(내용은 넘치면 가로 스크롤로 흡수, 절대 세로로 늘어나 헤더 전체 높이를 밀지 않는다). */
   --row-title-3:calc(12px + 14px*var(--fs));
   /* 제목 아래 메타 칩 높이 = --row-title-3 - 위아래 2px(칩 + 스트립 패딩이 행에 딱 맞는다). --tb-chip-pt: 한글이 위로 떠 보이는 것을 상쇄하는 위쪽 패딩(글자를 아래로 ~1px). */
-  --tb-chip-h:calc(8px + 14px*var(--fs));--tb-chip-pt:0px;--tb-chip-icon-dy:-1px;--tb-chip-dot-dy:-1.5px;
+  --tb-chip-h:calc(8px + 14px*var(--fs));--tb-chip-pt:4px;--tb-chip-icon-dy:-1px;--tb-chip-dot-dy:-1.5px;
 }
 
 :root[data-theme='light']{
@@ -812,13 +812,20 @@ body{font-size:var(--text-lg)}
      src/styles/tokensColorContract.test.ts 가 두 블록을 구조적으로 대조한다 —
      :root 에 --surface-base/--app-canvas 파생 토큰을 새로 추가하면 그 테스트가 여기에도
      추가하라고 빨개진다. */
+/* .content-surface(오너 2026-10-27): 본문이 사이드바보다 짙은 건 실사용 영역의 가독성 때문이다 —
+   그러니 사이드바가 없는 화면(집중모드의 메인 열, 섹션 분리 창)도 바탕 전체가 본문 색이어야 한다.
+   같은 틴트를 칠하고 같은 기준면 재정의를 받는 한 지점. 붙는 곳: App.tsx 메인 열(집중모드일 때),
+   AuxWindowChrome contentSurface. `.app` 자체엔 붙이지 않는다 — `.app` 의 다층 background-image 를
+   shorthand 가 지우고, data-theme 이 `.app` 에 있어 라이트 블록과 겹친다. */
 .modal-body,
+.content-surface,
 .content-canvas{
   --surface-base:color-mix(in srgb, var(--content-tint-color) var(--content-tint-amount), var(--app-sheet-base));
   --app-canvas:var(--surface-base);
   --surface:var(--surface-base);
   --surface-sunken: color-mix(in srgb, var(--surface-base) 92%, black);
 }
+.content-surface{background:var(--content-tint)}
 .content-canvas{
   border:1px solid var(--divider);
   border-right:0;
@@ -836,17 +843,10 @@ body{font-size:var(--text-lg)}
   border-color:transparent;
   border-radius:0;
   margin:0;
+  /* 틴트는 바깥 .content-surface(메인 열)가 창 전체에 칠한다 — 여기서 또 칠하면 두 겹이 된다.
+     기준면은 .content-canvas 가 이미 틴트 합성색으로 갈아끼운 그대로 둔다(눈에 보이는 바탕이 그 색이다).
+     2026-10-27 전까지는 틴트를 지우고 기준면을 시트로 되돌렸다 — 그래서 집중모드가 사이드바 색이었다. */
   background:none;
-  /* 틴트를 안 칠하므로 기준면도 틴트 이전으로 되돌린다 — 안 되돌리면 토큰만 어두워져 본문이
-     실제보다 어두운 바탕을 가정한다(위 블록이 고치려는 것과 정확히 반대 방향의 거짓말).
-     되돌릴 것은 **기준면 하나뿐**이다: 위 블록의 파생 6종은 전부 --surface-base(또는 그것을
-     가리키는 --app-canvas)를 읽으므로 함께 따라온다. 두 클래스는 같은 요소에 붙고
-     (App.tsx: `content-canvas content-canvas--focus`) 특이도가 같아 **소스 순서**로 이 블록이
-     이긴다 — 위 border-color/margin 재정의가 이미 같은 규칙에 기대고 있다.
-     --app-canvas 는 여기서도 --surface-base(= dim 이 반영된 시트)를 가리킨 채로 둔다. 포커스
-     모드에서 눈에 보이는 바탕이 정확히 그것이기 때문이고, bg_dim 기본값 0% 에서는 :root 의
-     생캔버스와 같은 색이다. */
-  --surface-base:var(--app-sheet-base);
 }
 
 /* W22 ⑦: 섹션 툴바·하단 상태줄 공용 크롬 — 리치텍스트(FixedToolbar)/시트(SheetToolbar)/
@@ -908,6 +908,23 @@ body{font-size:var(--text-lg)}
    감속(오너: 전부 같은 형식). 일반 팝오버/메뉴의 var(--dur-med) 는 그대로. */
 .attach-add-menu{animation-duration:var(--dur-slow)}
 @media (prefers-reduced-motion: reduce){.ghost-add{transition:none}.overlay{animation:none}.modal-scrim.closing,.modal-scrim.closing .overlay{transition:none !important}.view-tab-indicator{transition:none !important}.sidebar-view-pane{animation:none !important}}
+
+/* 전역 툴팁(lib/tooltip.ts) — 앱의 모든 title= 이 이 한 가지 모양으로 뜬다. 불투명 .overlay 표면 위에
+   작은 패딩·읽기 좋은 크기, 호버 뒤 아래로 스르륵(위로 뒤집히면 반대 방향). 오너 2026-10-27. */
+.tip{
+  position:fixed;z-index:var(--z-tooltip);pointer-events:none;
+  max-width:min(320px,calc(100vw - 16px));
+  padding:var(--space-1) var(--space-2);
+  font:400 var(--text-xs)/var(--lh-ui) var(--font-body);
+  color:var(--text);
+  white-space:pre-line;overflow-wrap:anywhere;
+  box-shadow:var(--shadow-lg);
+  animation:tipIn var(--dur-med) ease-out;
+}
+.tip[data-side="above"]{animation-name:tipInAbove}
+@keyframes tipIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+@keyframes tipInAbove{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+@media (prefers-reduced-motion: reduce){.tip{animation:none}}
 
 /* 데이터 관리 타일 대시보드(통계 3칸 + 백업/이동 기능 타일) 공용 테두리 — 배경 없음(SINGLE-SHEET
    계약, .card 와 동일 원칙), .card 보다 한 단계 옅은 --line 헤어라인만 소유한다. flex-basis/padding/
@@ -1151,6 +1168,9 @@ body{font-size:var(--text-lg)}
    이 결정 밖이다. */
 :root{--badge-fill:12%;--badge-edge:35%;--badge-accent-ink:100%}
 :root[data-theme='light']{--badge-accent-ink:40%}
+/* 벨 알림 개수 배지 — 테마·강조색과 무관하게 고정 밝은 빨강(오너 2026-10-27). 라이트에서도 같은 값이라
+   라이트 블록에 재정의하지 않는다. 글자는 --on-solid(흰색). */
+:root{--badge-alert:#ff3b30}
 .badge,
 .diagram-flow-group-chip,
 .diagram-legend-item,
@@ -2161,7 +2181,8 @@ button.askai-metapanel__tag:hover,button.askai-metapanel__tag:focus-visible{colo
   outline:none;
   font-family:var(--font-editor);
   font-weight:400;
-  font-size:calc(15px*var(--fs));
+  /* 15→14px(2026-10-27, 오너: "기본 상태에서 폰트 크기 살짝 작게") — 행간 배율은 그대로 */
+  font-size:calc(14px*var(--fs));
   line-height:var(--lh-read);
   color:var(--ink,var(--text));
   padding: 8px var(--space-6) 40px;
@@ -2214,7 +2235,9 @@ button.askai-metapanel__tag:hover,button.askai-metapanel__tag:focus-visible{colo
 .ProseMirror h1, .mdbody h1{font-family:var(--font-editor);font-size:1.65em;font-weight:600;line-height:var(--lh-tight);margin:.6em 0 .3em}
 .ProseMirror h2, .mdbody h2{font-family:var(--font-editor);font-size:1.32em;font-weight:600;line-height:var(--lh-tight);margin:.7em 0 .3em}
 .ProseMirror h3, .mdbody h3{font-family:var(--font-editor);font-size:1.1em;font-weight:600;line-height:var(--lh-ui);margin:.6em 0 .25em}
-.ProseMirror p, .mdbody p{margin:.7em 0}
+/* 문단 간격 .7em → .55em(2026-10-27, 오너: "문단 간 간격 약간 줄이자"). 14px 에서 7.7px — 줄 사이 여백
+   (0.45×14 ≈ 6.3px)보다는 여전히 커서 "단락 간격 > 줄 간격" 원칙(위 --lh-read 주석)은 지킨다. */
+.ProseMirror p, .mdbody p{margin:.55em 0}
 .ProseMirror ul, .mdbody ul, .ProseMirror ol, .mdbody ol{padding-left:1.35em;margin:.4em 0}
 .ProseMirror li, .mdbody li{margin:.22em 0}
 .ProseMirror blockquote, .mdbody blockquote{margin:.6em 0;padding:.25em 0 .25em .9em;border-left:3px solid var(--accent);color:var(--muted)}

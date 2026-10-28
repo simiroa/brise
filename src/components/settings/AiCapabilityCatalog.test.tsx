@@ -131,16 +131,17 @@ describe("AiCapabilityCatalog — 현대적 AI 관리 센터 UI & 상호작용",
     expect(screen.queryByTestId("ai-capability-tier-refine")).toBeNull();
   });
 
-  it("필터 칩은 aria-pressed 로 선택 상태를 알린다", async () => {
+  it("필터 칩은 aria-checked 로 선택 상태를 알린다", async () => {
     render(<AiCapabilityCatalog onNavigate={navigateMock} />);
     await userEvent.click(screen.getByTestId("ai-capability-filter-button"));
-    const all = screen.getByRole("button", { name: "전체" });
-    expect(all.getAttribute("aria-pressed")).toBe("true");
-    const chips = screen.getAllByRole("button").filter((b) => b.getAttribute("aria-pressed") === "false");
+    const all = screen.getByRole("radio", { name: "전체" });
+    expect(all.getAttribute("aria-checked")).toBe("true");
+    // 정책 수준 세그먼트의 라디오와 섞이지 않게 필터 띠 안에서만 고른다.
+    const chips = within(all.closest('[role="radiogroup"]') as HTMLElement).getAllByRole("radio", { checked: false });
     expect(chips.length).toBeGreaterThan(0);
     await userEvent.click(chips[0]);
-    expect(chips[0].getAttribute("aria-pressed")).toBe("true");
-    expect(all.getAttribute("aria-pressed")).toBe("false");
+    expect(chips[0].getAttribute("aria-checked")).toBe("true");
+    expect(all.getAttribute("aria-checked")).toBe("false");
   });
 
   it("실시간 검색창에 검색어를 입력하면 기능 행이 실시간으로 필터링된다", async () => {
@@ -169,18 +170,18 @@ describe("AiCapabilityCatalog — 현대적 AI 관리 센터 UI & 상호작용",
 
     // 필터 버튼 클릭하여 칩 표시
     await userEvent.click(filterBtn);
-    expect(screen.getByRole("button", { name: "에디터" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "폴더" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "에디터" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "폴더" })).toBeTruthy();
 
     // "폴더" 칩 클릭
-    await userEvent.click(screen.getByRole("button", { name: "폴더" }));
+    await userEvent.click(screen.getByRole("radio", { name: "폴더" }));
 
     // 폴더 타깃인 agent_folder는 보이고, 에디터 타깃인 list는 제외됨
     expect(screen.getByTestId("ai-capability-row-agent_folder")).toBeTruthy();
     expect(screen.queryByTestId("ai-capability-row-list")).toBeNull();
 
     // "전체" 클릭으로 복원
-    await userEvent.click(screen.getByRole("button", { name: "전체" }));
+    await userEvent.click(screen.getByRole("radio", { name: "전체" }));
     expect(screen.getByTestId("ai-capability-row-list")).toBeTruthy();
   });
 
@@ -232,12 +233,25 @@ describe("AiCapabilityCatalog — 현대적 AI 관리 센터 UI & 상호작용",
     const row = screen.getByTestId("ai-capability-row-list");
     expect(row.querySelector('[data-testid^="ai-capability-settings-btn-"]')).toBeNull();
     expect(row.querySelector('[data-testid^="ai-capability-link-"]')).toBeNull();
-    expect(within(row).getByTitle(t(cap.detailKey))).toBeTruthy();
+    // 한 줄 설명(readsKey)은 화면에서 내려가고 ⓘ 툴팁 앞에 붙는다.
+    expect(row.querySelector('[role="img"]')?.getAttribute("title")).toBe(`${t(cap.readsKey)}
+${t(cap.detailKey)}`);
   });
 
   // F2(PLAN-2026-09-15): 로드맵 배너는 통째로 사라졌다 — "보기" 버튼이 아무 데도 가지 않았다.
   it("하단 로드맵 배너가 더 이상 없다", () => {
     render(<AiCapabilityCatalog onNavigate={navigateMock} />);
     expect(screen.queryByTestId("ai-capability-roadmap-banner")).toBeNull();
+  });
+
+  it("제공자 한 줄 요약: 외부 제공자는 전송 사실을, 로컬은 PC 안 처리를 말하고 연결 페이지로 보낸다", async () => {
+    useSettingsStore.setState({ aiEnabled: true, uiLang: "en" } as never);
+    const { rerender } = render(<AiCapabilityCatalog provider="Gemini" onNavigate={navigateMock} />);
+    expect(screen.getByTestId("ai-provider-summary").textContent).toContain("Gemini");
+    expect(screen.getByTestId("ai-provider-summary").textContent).toContain("external");
+    rerender(<AiCapabilityCatalog provider="Ollama" onNavigate={navigateMock} />);
+    expect(screen.getByTestId("ai-provider-summary").textContent).toContain("on this PC");
+    screen.getByTestId("ai-provider-summary-go").click();
+    expect(navigateMock).toHaveBeenCalledWith("ai");
   });
 });

@@ -1,6 +1,6 @@
 [package]
 name = "brise"
-version = "0.5.3"
+version = "0.5.4"
 description = "Brise — History Content Notes"
 license = "Apache-2.0"
 authors = ["Brise"]
@@ -44,7 +44,9 @@ tauri-plugin-autostart = "2"
 tauri-plugin-clipboard-manager = "2"
 # 자동 업데이트(유료 판매 준비, docs/RELEASING.md) — GitHub 릴리스의 latest.json 을 확인하고
 # 서명된 아티팩트를 내려받아 설치한다. 서명 검증은 tauri.conf.json 의 plugins.updater.pubkey.
-tauri-plugin-updater = "2"
+# default-features 끔: 기본 "zip" 기능은 업데이터가 쓰지 않는 zip 4.x(RustSec 3건)를 끌어온다. 윈도우 설치 파일은
+# exe/msi 라 압축 해제 경로를 타지 않는다(createUpdaterArtifacts). 다른 OS 를 열 때(tar.gz/zip 번들) 다시 켠다.
+tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls"] }
 # 위 updater 가 설치를 마친 뒤 앱을 재시작(relaunch)하는 데 쓴다 — Windows 는 설치 자체가 앱을
 # 종료시키지만 다른 플랫폼 대비 명시적으로 필요.
 tauri-plugin-process = "2"
@@ -65,7 +67,9 @@ kamadak-exif = "0.6"
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 sha2 = "0.10"
 pdf-extract = "0.12.0"
-zip = "8.6.0"
+# deflate 만: 우리가 읽고 쓰는 zip(docx·hwpx·xlsx·노션 내보내기·백업·펫 패키지)은 전부 deflate/stored 다.
+# 기본 기능(bzip2·zstd·lzma·aes 등)을 끄면 크레이트 수십 개가 빠진다. 다른 압축 방식 zip 은 "지원하지 않는 압축"으로 거절된다.
+zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
 quick-xml = "0.41.0"
 # CSV/TSV 섹션 임포트(repo/csv_import.rs)의 인코딩 폴백 — 엑셀 한국어 저장본은 UTF-8이 아니라
 # CP949(EUC-KR 상위호환)로 떨어진다. 순수 Rust, 의존성 없음, 작다.
@@ -95,7 +99,7 @@ qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 include_dir = "0.7"
 # xlsx → 시트 임포트(section_import_file). "dates" 피처로 계산된 날짜 셀을 chrono::NaiveDateTime
 # 으로 받는다(계산된 값을 쓰는 이유: specs/commands/sections.yaml xlsx 규칙).
-calamine = { version = "0.36.1", features = ["dates"] }
+calamine = { version = "0.37.0", features = ["dates"] }
 # 좌표 → IANA 시간대(geo_timezone, repo/geocode.rs). 오프라인 조회(내장 경계 데이터) — 위치를
 # 외부로 보내지 않는다는 프라이버시 방침 때문에 API 붙는 서비스가 아니라 이 크레이트를 골랐다.
 # default(clap CLI 예제 + bundled 데이터)에서 clap 은 끄고 bundled 데이터만 켠다. "full"(전세계

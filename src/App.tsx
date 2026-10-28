@@ -3,10 +3,11 @@ import "./styles/tokens.css";
 import { useSettingsStore } from "./stores/settings";
 import { useAiStore } from "./stores/ai";
 import { HOME_TAB_ID, isHomeTab, isNoteTabId, useTabsStore } from "./stores/tabs";
-import { useNotesStore } from "./stores/notes";
+import { useNotesStore, displayTitle } from "./stores/notes";
 import { useSearchStore } from "./stores/search";
 import { useUiStore } from "./stores/ui";
 import { callSilent, emitNotice, flushAll } from "./lib/invoke";
+import { checkStorageAlertOnce } from "./lib/storageAlert";
 import { noteHasSaveFailure, retryFailedSaves } from "./lib/sectionSaveFailures";
 import { applyThemeGeometryAndShow, trackWindowGeometry } from "./lib/bootWindow";
 import { bootMark } from "./lib/bootMark";
@@ -26,25 +27,13 @@ function openSettingsWindow() {
   void callSilent("settings_window_open", {}).catch(() => {});
 }
 
-/**
- * 활동 이력 열기 — 2026-08-14 부터 모달이 아니라 **별도 OS 창**이다(이유: activity_window.rs).
- *
- * 데스크톱(Tauri) 전용 — 이 함수를 부르는 버튼은 App.tsx 에서 `!browser` 로 가려져 있어 동기화
- * 브라우저 탭(/app)에서는 아예 렌더되지 않는다(호출 자체가 없다). W5 는 한때 이걸 인앱
- * ActivityHistoryPanel 오버레이로 대체하려 했으나 W2b(WORKORDER 작업 B)에서 철회됐다 —
- * activity_list/note_snapshot_* 전부가 http:false 라(specs/commands/activity.yaml·snapshots.yaml,
- * docs/CLIENT-RULES.md §2-5) 원격 클라이언트에서 영원히 도달 불가능하고, 열어봐야 빈 목록 +
- * 복원 404 뿐이었다. 되돌리려면 먼저 그 백엔드 결정(CLIENT-RULES.md §8 갱신)부터 바뀌어야 한다.
- */
-function openActivityWindow() {
-  void callSilent("activity_window_open", {}).catch(() => {});
-}
 
 import { listenDataReplaced, listenRemoteNoteWrite } from "./lib/remoteNoteWrite";
 import { notifyDesktopRemoteChange } from "./components/RemoteChangeBanner";
 import { listenSettingsChanged } from "./lib/settingsChanged";
 import { listenWorkspacesChanged } from "./lib/workspacesChanged";
 import { listenActivityWindowBridge } from "./lib/activityWindowBridge";
+import { HistoryMenu } from "./components/HistoryMenu";
 import { listenPetSuggestionsBridge } from "./plugins/pet/bridge/petSuggestionsBridge";
 import { listenPetClipboardBridge } from "./plugins/pet/bridge/petClipboardBridge";
 import { listenPetScreenshotBridge } from "./plugins/pet/bridge/petScreenshotBridge";
@@ -71,7 +60,7 @@ import { PetSuggestionReviewBridge } from "./components/PetSuggestionReviewBridg
 import { PetChatPlanReviewBridge } from "./components/PetChatPlanReviewBridge";
 import { useTrashStore } from "./stores/trash";
 import { useArchiveStore } from "./stores/archive";
-import { IconSettings, IconMinimize, IconMaximize, IconCaret, IconLock, IconFocus, IconExitFocus, IconPin, IconHistory, IconSmile } from "./components/icons";
+import { IconSettings, IconMinimize, IconMaximize, IconCaret, IconLock, IconFocus, IconExitFocus, IconPin, IconSmile } from "./components/icons";
 import { ReminderBell } from "./components/home/ReminderBell";
 import { BriefingButton } from "./briefing/BriefingButton";
 import { WindowCloseButton } from "./components/common/WindowCloseButton";
@@ -148,6 +137,11 @@ export function diagNoticeMessage(notice: DiagNotice): string {
       return t("common.diag_notice_worker_stopped", {
         worker: diagWorkerDisplayName(notice.params.worker ?? ""),
       });
+    // 교체 스왑(복원·초기화)이 실패해 되돌리기마저 어긋난 경우(Rust backup.rs::swap_live_state) — 재시작 안내 + 스냅샷 파일 이름.
+    case "db_connection_lost":
+      return t("common.diag_notice_db_connection_lost", { snapshot: notice.params.snapshot ?? "" });
+    case "swap_recovery_failed":
+      return t("common.diag_notice_swap_recovery_failed", { snapshot: notice.params.snapshot ?? "" });
     default:
       return t("common.diag_notice_generic", { feature: notice.feature, code: notice.code });
   }
@@ -187,6 +181,7 @@ function App() {
   const loadTree = useNotesStore((s) => s.loadTreeForBoot);
   // Activity button (frame-top) doubles as the save-state indicator — see activityButtonInfo().
   const hasActiveNote = useNotesStore((s) => !!s.activeNote);
+  const activeTitle = useNotesStore((s) => s.activeNote?.note.title);
   const savedState = useNotesStore((s) => s.savedState);
   // §2.6 HANDOFF-calendar-onboarding.md: reactive gate, not a one-time boot check — reading this
   // live (rather than snapshotting it once at boot) is what lets Settings' "redo onboarding"
@@ -524,6 +519,14 @@ function App() {
     ]);
   }, []);
 
+  // 앱 데이터 용량 한도(설정 › 데이터 관리) — 부팅이 끝난 뒤 세션당 한 번만 비교한다. 브라우저 모드는 db_stats 가 데스크톱 전용이라 건너뛴다.
+  useEffect(() => {
+    if (!booted || browser) return;
+    void checkStorageAlertOnce().catch(() => {
+      // silent-ok: db_stats 실패는 callSilent 가 진단 로그에 남겼다 — 알림은 있으면 보여주는 성격이다.
+    });
+  }, [booted, browser]);
+
   // AUDIT-2026-09-26-fallback-observability.md §7 item 6 — Rust 쪽 diag::notify_user()/
   // worker_stopped() 가 쌓아 둔 사용자 알림 대기열을 메인 창이 drain 해 표시한다(부팅 알림 —
   // P0 DB 자동복구 등). 대기열은 diag_take_notices 가 부를 때마다 통째로 비우므로(drain, diag.rs
@@ -725,8 +728,10 @@ function App() {
       {/* Main column: window strip / tab row / title bar / body split / attachments.
           No background of its own — it sits directly over .app's own --bg (single sheet,
           SINGLE-SHEET ACRYLIC CONTRACT in tokens.css); giving this div a background too would
-          just repaint the identical layer a second time for zero visual difference. */}
+          just repaint the identical layer a second time for zero visual difference.
+          집중모드에선 사이드바가 없으므로 열 전체(프레임 줄 포함)가 본문 색을 칠한다 — tokens.css .content-surface. */}
       <div
+        className={focusMode ? "content-surface" : undefined}
         style={{
           flex: 1,
           minWidth: 0,
@@ -768,15 +773,39 @@ function App() {
             </div>
           )}
 
+          {/* 집중모드: TitleBar 를 걷는 대신 노트 제목을 프레임 줄 왼쪽에 작게 — 텍스트도 드래그
+              영역이라(Tauri v2 는 속성이 달린 요소에서만 끈다) 창 이동과 겹치지 않는다. */}
+          {focusMode && hasActiveNote && (
+            <span
+              data-tauri-drag-region=""
+              data-testid="focus-frame-title"
+              style={{
+                flex: "0 1 auto",
+                minWidth: 0,
+                paddingLeft: "var(--space-7)",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                userSelect: "none",
+                fontSize: "var(--text-sm)",
+                color: "var(--muted)",
+              }}
+            >
+              {displayTitle(activeTitle ?? "")}
+            </span>
+          )}
+
           {/* Draggable spacer */}
           <div data-tauri-drag-region="" style={{ flex: 1, height: "100%" }} />
 
           <div style={{ display: "flex", height: "100%", alignItems: "center", gap: "var(--space-2)", paddingRight: "var(--space-3)" }} data-tauri-drag-region="false">
-            {/* ── 플러그인 아이콘 영역 (PLAN-2026-08-27-space-plugin-rebuild §2) ──────────
-                동봉 플러그인의 진입점만 사는 구간. 그룹 맨 앞에 서고 뒤 구분선으로 기능
-                아이콘들과 갈린다. 표시할 플러그인이 0이면 구분선까지 통째로 렌더하지 않는다. */}
-            {!browser && petEnabled && (
+            {/* 프레임 아이콘 순서(오너 2026-10-27) — 이 줄이 유일한 정의다:
+                브리프 · 펫 | 잠금 · 확장 · 상단고정 · 히스토리 · 알림 | 설정
+                첫 그룹(브리프·펫 플러그인 진입점)은 데스크톱 전용 — 브리프가 늘 있어 구분선도 데스크톱이면 늘 선다. */}
+            {!browser && (
               <>
+                <BriefingButton />
+                {petEnabled && (
                 <button
                   type="button"
                   className="icon-btn"
@@ -788,6 +817,7 @@ function App() {
                 >
                   <IconSmile size={16} strokeWidth={1.8} />
                 </button>
+                )}
                 <div style={{ width: 1, height: 20, background: "var(--divider)", margin: "0 var(--space-2)" }} />
               </>
             )}
@@ -795,39 +825,6 @@ function App() {
                 항상 조작 가능해야 한다(TitleBar의 rowDisabledStyle을 여기 적용하지 않는다).
                 단, 잠금은 집중 모드에선 숨긴다 — 잠그는 대상(사이드바/스플릿/첨부 그립)이
                 전부 집중 모드에서 이미 숨어 있어 조작할 게 없다. */}
-            {/* QA8 Wave 4A — app-wide activity history (moved from TitleBar note-favorite area).
-                Same "global toggles that work without active note" contract as the lock button.
-                Also doubles as the save-state indicator (moved off TitleBar) — see
-                activityButtonInfo() above for the saving/failed/saved → color+tooltip mapping.
-                W2b: desktop-OS-window only, same `!browser` pattern as pin/minimize/maximize below —
-                activity_list/note_snapshot_* are all http:false (BrowserAuxOverlay.tsx header), so a
-                browser tab has nothing to show here; the button itself is hidden rather than routed
-                to a permanently-empty overlay. */}
-            {!browser && (
-              <button
-                type="button"
-                className="icon-btn"
-                onClick={
-                  savedState === "failed"
-                    ? async () => {
-                        await retryFailedSaves();
-                        await flushAll();
-                        const n = useNotesStore.getState().activeNote;
-                        if (n && !noteHasSaveFailure(n.note.id, n.sections.map((s) => s.id))) {
-                          useNotesStore.getState().setSavedState("saved");
-                        }
-                      }
-                    : openActivityWindow
-                }
-                title={activityBtn.title}
-                aria-label={activityBtn.ariaLabel ?? activityBtn.title}
-                style={{ color: activityBtn.color }}
-              >
-                {/* 저장 중에도 아이콘을 돌리지 않는다 — 자동저장이 잦아 쉬지 않고 도는 게 거슬렸다(오너
-                    2026-10-13). 저장 상태는 색(강조/위험)과 툴팁으로만 알린다. */}
-                <IconHistory size={16} strokeWidth={1.8} />
-              </button>
-            )}
             {chrome && (
               <button
                 type="button"
@@ -899,7 +896,33 @@ function App() {
                 <IconPin size={16} strokeWidth={1.8} />
               </button>
             )}
-            {!browser && <BriefingButton />}
+            {/* QA8 Wave 4A — app-wide activity history (moved from TitleBar note-favorite area).
+                Same "global toggles that work without active note" contract as the lock button.
+                Also doubles as the save-state indicator (moved off TitleBar) — see
+                activityButtonInfo() above for the saving/failed/saved → color+tooltip mapping.
+                W2b: desktop-OS-window only, same `!browser` pattern as pin/minimize/maximize below —
+                activity_list/note_snapshot_* are all http:false (BrowserAuxOverlay.tsx header), so a
+                browser tab has nothing to show here; the button itself is hidden rather than routed
+                to a permanently-empty overlay. */}
+            {!browser && (
+              <HistoryMenu
+                title={activityBtn.title}
+                ariaLabel={activityBtn.ariaLabel ?? activityBtn.title}
+                color={activityBtn.color}
+                onRetry={
+                  savedState === "failed"
+                    ? async () => {
+                        await retryFailedSaves();
+                        await flushAll();
+                        const n = useNotesStore.getState().activeNote;
+                        if (n && !noteHasSaveFailure(n.note.id, n.sections.map((s) => s.id))) {
+                          useNotesStore.getState().setSavedState("saved");
+                        }
+                      }
+                    : undefined
+                }
+              />
+            )}
             <ReminderBell />
 
             <div style={{ width: 1, height: 20, background: "var(--divider)", margin: "0 var(--space-2)" }} />
@@ -996,6 +1019,10 @@ function App() {
                   W23: 제목-스트립 아래 구분선 — content-canvas 안쪽이라 캔버스 외곽선과 겹치지
                   않는다(오너 확정). 래퍼가 캔버스 전폭이라 양끝이 캔버스 외곽선 안쪽 면에 자동으로
                   닿는다(풀블리드). TitleBar 컴포넌트 내부는 건드리지 않는다. */}
+              {/* 집중모드에선 제목이 프레임 줄로 올라가므로(위 focus-frame-title) 이 줄을 통째로 걷는다.
+                  `false` 도 자식 자리를 차지해 아래 본문 split 의 위치가 안 밀린다 — 밀리면 EditorPanel 이
+                  리마운트돼 TipTap 이 파괴된다(CLAUDE.md 함정 #2). */}
+              {!focusMode && (
               <div style={{ flex: "none", margin: 0, height: "var(--row-header)", borderBottom: "1px solid var(--divider)" }}>
                 {/* W13: boundary wraps TitleBar from the outside — its own internals stay untouched
                     (hook-order pitfall, CLAUDE.md 함정 #1). A crash here used to bubble to the root
@@ -1004,6 +1031,7 @@ function App() {
                   <TitleBar />
                 </ErrorBoundary>
               </div>
+              )}
 
               {/* body split: source | editor */}
               <div

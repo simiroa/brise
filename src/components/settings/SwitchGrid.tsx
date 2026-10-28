@@ -1,7 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
-import { HintBadge } from "./HintBadge";
+import { SettingsRow } from "./SettingsRow";
 import { Toggle } from "./Toggle";
-import { anchorId } from "./settingsAnchor";
 
 export interface SwitchGridItem {
   /** 안정적인 키. data-testid 를 따로 주지 않으면 `switch-grid-cell-<id>` 로도 쓰인다. */
@@ -22,80 +21,47 @@ export interface SwitchGridItem {
   "data-testid"?: string;
 }
 
+const gridStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  width: "100%",
+  boxSizing: "border-box",
+};
+const labelWrapStyle: CSSProperties = { minWidth: 0, wordBreak: "keep-all", overflowWrap: "anywhere" };
+
 interface SwitchGridProps {
   items: SwitchGridItem[];
   /** 그리드 자체의 접근 이름 — `role="group"` 과 짝이다. 무엇들의 묶음인지 말한다. */
   "aria-label": string;
   "data-testid"?: string;
-  /** 고정 열 수. 없으면 auto-fit(210px 최소)으로 붕괴한다. */
-  columns?: number;
 }
 
-/** 셀 최소 폭. 본문 740px 에서 3열, 좁히면 2열 → 1열로 자동 붕괴한다
- *  (설정 창 최소 폭 560px 에서 본문 ≈400px = 1열). */
-const MIN_COL = "210px";
-export const SWITCH_GRID_COLUMNS = `repeat(auto-fit, minmax(${MIN_COL}, 1fr))`;
-
 /**
- * 독립 on/off 토글 **3개 이상**을 병렬로 놓는 부품 (PLAN-2026-09-12 §3, D3).
+ * 독립 on/off 토글 **3개 이상**을 한 묶음(`role="group"`)으로 놓는 얇은 래퍼 — 항목마다 `SettingsRow`(라벨 | 토글 한 줄)를 그린다.
  *
- * 왜 `SettingsRow` 를 여러 개 쌓지 않는가: 서로 독립인 스위치가 한 줄에 하나씩 서면 세로로만
- * 길어지고, 라벨과 토글 사이에 폭만큼의 빈 강이 생겨 둘이 같은 행인지 눈으로 다시 확인해야 한다.
- * 그래서 **셀 안에서 토글은 라벨 바로 뒤에 붙는다** — 우측 정렬하지 않는다. 폭이 고정인
- * 컨트롤은 우측 정렬의 이득이 0이고 거리만 만든다.
+ * 예전엔 좌우 2단 그리드였고 셀 구조·비활성 처리(title·aria-disabled·opacity)를 여기서 따로 들고 있었다. 2026-10-27 개편으로 한 열이
+ * 되면서 `SettingsRow` 와 같은 구조가 됐으므로, 이제 행 그리기는 `SettingsRow` 한 곳이다 — 꺼진 행의 `inert`(컨트롤 조작 차단) 와
+ * 사유의 `aria-describedby` 도 거기서 한 번에 처리한다. 이 부품이 더하는 것은 묶음 접근 이름(`role="group"`), 테스트 id 규칙
+ * (`switch-grid-cell-<id>`·`switch-grid-toggle-<id>`), 라벨 줄바꿈 규칙뿐이다.
  *
- * 여기 넣지 **않는** 것: 값 컨트롤(셀렉트·슬라이더·입력). 그것들은 폭이 필요하고, 우측 정렬이
- * 값 비교를 돕는다 — 1열 `SettingsRow` + 220px 우측 정렬을 그대로 쓴다.
+ * 여기 넣지 **않는** 것: 값 컨트롤(셀렉트·슬라이더·입력). 그것들은 `SettingsRow` + 220px 우측 정렬을 그대로 쓴다.
  */
-export function SwitchGrid({ items, "aria-label": ariaLabel, "data-testid": testId, columns }: SwitchGridProps) {
-  const gridStyle: CSSProperties = {
-    display: "grid",
-    gridTemplateColumns: columns ? `repeat(${columns}, minmax(0, 1fr))` : SWITCH_GRID_COLUMNS,
-    columnGap: "var(--space-5)",
-    rowGap: "var(--space-2)",
-    width: "100%",
-    boxSizing: "border-box",
-  };
-
+export function SwitchGrid({ items, "aria-label": ariaLabel, "data-testid": testId }: SwitchGridProps) {
   return (
     <div role="group" aria-label={ariaLabel} data-testid={testId ?? "switch-grid"} style={gridStyle}>
-      {items.map((it) => {
-        const blocked = !!it.disabled;
-        return (
-          <div
-            key={it.id}
-            id={it.anchor ? anchorId(it.anchor) : undefined}
-            data-testid={it["data-testid"] ?? `switch-grid-cell-${it.id}`}
-            title={blocked ? it.disabledReason : undefined}
-            data-disabled-reason={blocked ? it.disabledReason : undefined}
-            aria-disabled={blocked || undefined}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "var(--space-3)",
-              minWidth: 0,
-              minHeight: "calc(var(--ctrl-h-lg) + var(--space-2) * 2)",
-              boxSizing: "border-box",
-              padding: "var(--space-2) 0",
-              // 규칙 ④: 사유는 title 로, 표현은 행 전체 opacity 로.
-              ...(blocked ? { opacity: "var(--dim-disabled)" } : {}),
-            }}
-          >
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "var(--space-1)",
-                minWidth: 0,
-                fontSize: "var(--text-md)",
-              }}
-            >
-              {/* 라벨은 줄바꿈한다(말줄임 아님, 2026-10-18 화면 보드 31-settings-ai_chat/ai_permissions). 한 줄 말줄임이면
-                  2열 셀(≈200px)에서 "사용자 폴더와 파일을 봅니다" 가 "…봅…" 으로 잘려 무엇을 켜는지 읽을 수 없었다.
-                  한국어는 어절 단위로 먼저 끊고(keep-all), 한 어절이 셀보다 길면(en/fr 긴 낱말) 아무 데서나 끊는다(anywhere). */}
-              <span style={{ minWidth: 0, wordBreak: "keep-all", overflowWrap: "anywhere" }}>{it.label}</span>
-              {it.hint && <HintBadge hint={it.hint} />}
-            </span>
+      {items.map((it) => (
+        <SettingsRow
+          key={it.id}
+          anchor={it.anchor}
+          data-testid={it["data-testid"] ?? `switch-grid-cell-${it.id}`}
+          // 라벨은 줄바꿈한다(말줄임 아님, 2026-10-18 화면 보드 31-settings-ai_chat/ai_permissions). 한 줄 말줄임이면 좁은 셀에서
+          // "사용자 폴더와 파일을 봅니다" 가 "…봅…" 으로 잘려 무엇을 켜는지 읽을 수 없었다. 한국어는 어절 단위로 먼저 끊고(keep-all),
+          // 한 어절이 폭보다 길면(en/fr 긴 낱말) 아무 데서나 끊는다(anywhere).
+          label={<span style={labelWrapStyle}>{it.label}</span>}
+          hint={it.hint}
+          disabled={it.disabled}
+          disabledReason={it.disabledReason}
+          control={
             <Toggle
               checked={it.checked}
               disabled={it.disabled}
@@ -104,9 +70,9 @@ export function SwitchGrid({ items, "aria-label": ariaLabel, "data-testid": test
               aria-label={it.ariaLabel ?? (typeof it.label === "string" ? it.label : it.id)}
               data-testid={`switch-grid-toggle-${it.id}`}
             />
-          </div>
-        );
-      })}
+          }
+        />
+      ))}
     </div>
   );
 }

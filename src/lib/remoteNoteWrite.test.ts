@@ -39,7 +39,61 @@ vi.mock("@tauri-apps/api/event", () => ({
 // 이 창의 라벨 — events.rs 가 payload.window 에 싣는 값과 비교된다.
 vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow: () => ({ label: "main" }) }));
 
-import { handleRemoteNoteWrite, listenDataReplaced, listenRemoteNoteWrite, REMOTE_WRITE_COALESCE_MS } from "./remoteNoteWrite";
+import {
+  classifyWrite,
+  handleRemoteNoteWrite,
+  LIGHT_TREE_DEBOUNCE_MS,
+  LIGHT_TREE_MAX_WAIT_MS,
+  listenDataReplaced,
+  listenRemoteNoteWrite,
+  REMOTE_WRITE_COALESCE_MS,
+  type RemoteNoteWritePayload,
+  type WriteContext,
+} from "./remoteNoteWrite";
+
+// 루프 방지·재조회 규칙의 단일 판정 함수 — 규칙표를 그대로 검증한다(백엔드 규칙: src-tauri/src/events.rs 헤더).
+describe("classifyWrite", () => {
+  const desktop: WriteContext = { browser: false, ownLabel: "main", clientId: "me-1" };
+  const browser: WriteContext = { browser: true, ownLabel: null, clientId: "me-1" };
+  const w = (p: Partial<RemoteNoteWritePayload>): RemoteNoteWritePayload => ({ note_id: "n1", created: false, ...p });
+
+  it("데스크톱: 내 창 라벨이 찍힌 쓰기는 메아리라 ignore — 동기든 라벨을 싣는 async 커맨드든 같다", () => {
+    expect(classifyWrite(w({ origin: "local", window: "main" }), desktop)).toBe("ignore");
+    expect(classifyWrite(w({ origin: "local", window: "main", note_id: null }), desktop)).toBe("ignore");
+  });
+
+  it("데스크톱: 다른 창(설정·브리핑)의 쓰기는 반영한다 — 노트 id 가 있으면 body, 없으면 tree", () => {
+    expect(classifyWrite(w({ origin: "local", window: "settings" }), desktop)).toBe("body");
+    expect(classifyWrite(w({ origin: "local", window: "briefing" }), desktop)).toBe("body");
+    expect(classifyWrite(w({ origin: "local", window: "settings", note_id: null }), desktop)).toBe("tree");
+  });
+
+  it("데스크톱: 낸 창을 모르는 local 쓰기(백그라운드 워커·라벨 없는 async 커맨드)는 tree — 열린 노트는 건드리지 않는다", () => {
+    expect(classifyWrite(w({ origin: "local", window: null }), desktop)).toBe("tree");
+    expect(classifyWrite(w({ origin: "local" }), desktop)).toBe("tree");
+  });
+
+  it("섹션 분리 창의 쓰기는 light — 본문 재로드도 트리 전수 재조회도 안 한다(데스크톱 한정)", () => {
+    expect(classifyWrite(w({ origin: "local", window: "section-abc" }), desktop)).toBe("light");
+    // 노트를 못 좁히면 light 가 아니라 tree.
+    expect(classifyWrite(w({ origin: "local", window: "section-abc", note_id: null }), desktop)).toBe("tree");
+    // 브라우저(태블릿·폰)에선 이 규칙을 안 탄다 — 남의 쓰기라 그대로 반영.
+    expect(classifyWrite(w({ origin: "local", window: "section-abc" }), browser)).toBe("body");
+  });
+
+  it("내 client id 의 메아리·note_id 없는 coarse 는 tree, 그 밖의 원격 쓰기는 body", () => {
+    expect(classifyWrite(w({ origin: "remote", client: "me-1" }), browser)).toBe("tree");
+    expect(classifyWrite(w({ origin: "remote", client: "me-1" }), desktop)).toBe("tree");
+    expect(classifyWrite(w({ origin: "remote", note_id: null }), browser)).toBe("tree");
+    expect(classifyWrite(w({ origin: "remote", client: "someone-else" }), browser)).toBe("body");
+    expect(classifyWrite(w({}), desktop)).toBe("body"); // origin 없음 = remote(구버전 서버)
+  });
+
+  it("브라우저는 자기 라벨 개념이 없다 — window 가 무엇이든 데스크톱 쓰기를 반영한다", () => {
+    expect(classifyWrite(w({ origin: "local", window: "main" }), { ...browser, ownLabel: "main" })).toBe("body");
+    expect(classifyWrite(w({ origin: "local", window: null }), browser)).toBe("body");
+  });
+});
 
 describe("handleRemoteNoteWrite", () => {
   beforeEach(() => {
@@ -136,12 +190,13 @@ describe("handleRemoteNoteWrite", () => {
     expect(onFocusSkipped).not.toHaveBeenCalled();
   });
 
-  // 섹션 분리 창은 본 창이 플레이스홀더로 두는 섹션만 쓴다 — 타이핑마다 열린 노트를 다시 그리지 않는다.
-  it("treats a write from a detached section window as coarse: tree only, no reload, no banner", () => {
+  // 섹션 분리 창은 본 창이 플레이스홀더로 두는 섹션만 쓴다 — 타이핑마다 열린 노트를 다시 그리지 않고, 트리 전수 재조회도 안 한다(light).
+  it("treats a write from a detached section window as light: query version only — no tree reload, no note reload, no banner", () => {
     activeNote = { note: { id: "n1" } };
     const onFocusSkipped = vi.fn();
     handleRemoteNoteWrite({ note_id: "n1", created: false, origin: "local", window: "section-s1" }, { onFocusSkipped });
-    expect(loadTreeMock).toHaveBeenCalledTimes(1);
+    expect(loadTreeMock).not.toHaveBeenCalled();
+    expect(bumpNoteQueryVersionMock).toHaveBeenCalledTimes(1);
     expect(reloadActiveMock).not.toHaveBeenCalled();
     expect(onFocusSkipped).not.toHaveBeenCalled();
   });
@@ -367,6 +422,64 @@ describe("listenRemoteNoteWrite", () => {
     fire({ note_id: "n1", created: false, origin: "remote", client: "someone-else" });
     await vi.advanceTimersByTimeAsync(REMOTE_WRITE_COALESCE_MS);
     expect(onFocusSkipped).toHaveBeenCalledWith("n1");
+  });
+
+  // 섹션 분리 창의 자동저장은 타이핑 내내 쏟아진다 — 예전엔 300ms 마다 LIMIT 없는 folder_list(10만 노트 ≈594ms)가 돌았다.
+  describe("섹션 분리 창 자동저장(light)", () => {
+    const typing = (n: number, everyMs: number) => async () => {
+      for (let i = 0; i < n; i++) {
+        fire({ note_id: "n1", created: false, origin: "local", window: "section-s1" });
+        await vi.advanceTimersByTimeAsync(everyMs);
+      }
+    };
+
+    it("타이핑 내내 트리를 다시 읽지 않고 질의 캐시만 올리다가, 조용해진 뒤 한 번만 트리를 읽는다", async () => {
+      activeNote = { note: { id: "n1" } };
+      await registered();
+      await typing(10, 500)(); // 5초 동안 쓰는 중
+      expect(loadTreeMock).not.toHaveBeenCalled();
+      expect(bumpNoteQueryVersionMock).toHaveBeenCalled(); // 질의 캐시는 합쳐서 올라간다
+      expect(bumpNoteQueryVersionMock.mock.calls.length).toBeLessThanOrEqual(17); // 5초/300ms 창 — 쓰기마다가 아니다
+      expect(reloadActiveMock).not.toHaveBeenCalled(); // 열린 노트 본문도 안 건드린다
+
+      await vi.advanceTimersByTimeAsync(LIGHT_TREE_DEBOUNCE_MS - 500 + REMOTE_WRITE_COALESCE_MS); // 마지막 쓰기 뒤 3초 + 합치기 창
+      expect(loadTreeMock).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(LIGHT_TREE_DEBOUNCE_MS * 3);
+      expect(loadTreeMock).toHaveBeenCalledTimes(1); // 더 쓰지 않았으니 다시 안 읽는다
+    });
+
+    it("계속 쳐도 트리는 첫 쓰기 기준 최대 대기 안에 한 번은 갱신된다", async () => {
+      await registered();
+      // 1초마다 쓰는데 LIGHT_TREE_DEBOUNCE_MS(3초)는 영영 안 지나간다 — 최대 대기가 끊어 준다.
+      await typing(LIGHT_TREE_MAX_WAIT_MS / 1000 - 1, 1000)();
+      expect(loadTreeMock).not.toHaveBeenCalled();
+      await typing(3, 1000)();
+      expect(loadTreeMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("light 와 일반(tree) 쓰기가 섞이면 일반 쓰기가 낸 창에서 트리를 읽는다(기다리지 않는다)", async () => {
+      await registered();
+      fire({ note_id: "n1", created: false, origin: "local", window: "section-s1" });
+      fire({ note_id: "n2", created: false, origin: "local", window: "settings" });
+      await vi.advanceTimersByTimeAsync(REMOTE_WRITE_COALESCE_MS);
+      expect(loadTreeMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("정리하면 미룬 트리 재조회도 취소된다", async () => {
+      const cleanup = await registered();
+      fire({ note_id: "n1", created: false, origin: "local", window: "section-s1" });
+      cleanup();
+      await vi.advanceTimersByTimeAsync(LIGHT_TREE_DEBOUNCE_MS * 2);
+      expect(loadTreeMock).not.toHaveBeenCalled();
+    });
+
+    it("브라우저에선 섹션 분리 창 쓰기도 보통 쓰기처럼 합친 창 뒤에 트리를 읽는다(규칙 불변)", async () => {
+      browserMode = true;
+      await registered();
+      fire({ note_id: "n1", created: false, origin: "local", window: "section-s1" });
+      await vi.advanceTimersByTimeAsync(REMOTE_WRITE_COALESCE_MS);
+      expect(loadTreeMock).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("drops the desktop's own echoes before they open a window", async () => {

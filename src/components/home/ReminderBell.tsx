@@ -8,18 +8,18 @@
  * into an overdue section on top (badge count now covers both, not just today) so a fired-and-
  * forgotten reminder doesn't just vanish (owner's biggest pain point, see the grill doc §1).
  */
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
+import React, { useMemo } from "react";
 import { useSettingsStore } from "../../stores/settings";
-import { useNotesStore } from "../../stores/notes";
+import { useNotesStore, displayTitle } from "../../stores/notes";
 import { t } from "../../i18n/t";
-import { callSilent, emitNotice } from "../../lib/invoke";
-import { patchDateRow } from "../../lib/primaryDate";
-import type { DueReminder, ScheduleTodayResult } from "../../lib/commands.gen";
-import { IconBell, IconCheck } from "../icons";
+import { dismissNotice, runNoticeAction, useFrameNotices } from "../../lib/frameNotices";
+import type { DueReminder } from "../../lib/commands.gen";
+import { IconBell, IconCheck, IconClose } from "../icons";
 import { Toggle } from "../settings/Toggle";
-import { useFloatingPopover } from "../../lib/ui";
-import { displayTitle } from "../../stores/notes";
+import { FrameMenuPop, useFrameMenu } from "../FrameMenu";
+import { useDueReminders } from "./useDueReminders";
+import { useFrameNoticeProducers } from "./useFrameNoticeProducers";
+import "./reminderBell.css";
 
 const rowButtonStyle: React.CSSProperties = {
   display: "flex",
@@ -86,36 +86,27 @@ function Row({
   );
 }
 
+/** 배지 문구 — 세 자리까지, 넘으면 999+. */
+export function badgeLabel(n: number): string {
+  return n > 999 ? "999+" : String(n);
+}
+
 export function ReminderBell() {
   const workspaceId = useSettingsStore((s) => s.activeWorkspaceId);
   const notificationsEnabled = useSettingsStore((s) => s.notificationsEnabled);
   const setNotificationsEnabled = useSettingsStore((s) => s.setNotificationsEnabled);
-  const [items, setItems] = useState<DueReminder[]>([]);
-  const [open, setOpen] = useState(false);
-  const close = useCallback(() => setOpen(false), []);
-  const { anchorRef, popRef, x, y } = useFloatingPopover(open, close);
-  const [reloadToken, setReloadToken] = useState(0);
+  const menu = useFrameMenu();
+  const { open, setOpen, anchorRef } = menu;
 
-  useEffect(() => {
-    if (!workspaceId) {
-      setItems([]);
-      return;
-    }
-    let cancelled = false;
-    void callSilent<ScheduleTodayResult>("schedule_today", { workspace_id: workspaceId })
-      .then((r) => {
-        if (!cancelled) setItems(r.items);
-      })
-      .catch(() => {
-        if (!cancelled) setItems([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [workspaceId, reloadToken]);
+  // 일정 알림(오늘 + 지난 것) — 조회·끄기·롤백은 훅이 갖고, 울린 알림(app-notice)이 오면 스스로 다시 읽는다.
+  const { items, reload, dismiss: dismissReminder } = useDueReminders(workspaceId);
+  // 앱 알림(백업 권유·펫 제안·용량 한도) — 목록과 "처음 한 번 토스트"는 lib/frameNotices.ts 가 갖고, 생산자는 각자 모듈이다.
+  // 여기는 생산자를 걸고(마운트 지점) 스토어를 그리기만 한다.
+  useFrameNoticeProducers();
+  const notices = useFrameNotices((s) => s.notices);
 
-  // Badge count now means "needs your attention" (today + overdue), not just today — D5.
-  const count = items.length;
+  // Badge count now means "needs your attention" (today + overdue + app notices), not just today — D5.
+  const count = items.length + notices.length;
   const overdueItems = useMemo(() => items.filter((r) => r.kind === "overdue"), [items]);
   const dueItems = useMemo(() => items.filter((r) => r.kind !== "overdue"), [items]);
 
@@ -130,43 +121,8 @@ export function ReminderBell() {
   // optimistic removal wipes them all.
   const rowKey = (r: DueReminder) => `${r.note_id}:${r.related_date_id ?? "note"}`;
 
-  // PLAN-2026-09-08-dates-rebuild.md §1.5: completion means the same thing for every row now —
-  // turning that row's own remind off — never note_set_status(done). The "mark the note done"
-  // path is gone: state control owns done-ness, the bell only ever silences a reminder.
-  // PLAN-2026-09-10 D6: 대표 분기(note_update{remind})도 사라졌다 — W4b 이후 대표 행에도 진짜
-  // note_dates.id 가 있으므로 `related_date_id` 가 null 이면 patchDateRow 가 position 0 행을
-  // 찾는다. 한 길이라 투영(project_primary)을 반드시 지난다.
-  const dismissReminder = async (r: DueReminder) => {
-    const snapshot = items;
-    setItems((prev) =>
-      prev.filter((x) => !(x.note_id === r.note_id && x.related_date_id === r.related_date_id)),
-    );
-    try {
-      await patchDateRow(r.note_id, r.related_date_id ?? null, { remind: false });
-      // 대표 행일 때만 notes.remind 투영이 바뀐다 — 트리 요약과 열려 있는 노트에 반영.
-      if (!r.related_date_id) {
-        useNotesStore.getState().patchNoteSummary(r.note_id, { remind: false });
-        if (useNotesStore.getState().activeNote?.note.id === r.note_id) {
-          await useNotesStore.getState().reloadActive();
-        }
-      }
-    } catch (e) {
-      setItems(snapshot);
-      // call() 의 AppError 는 이미 토스트됐고 {code,message} 평범한 객체라 instanceof Error 가
-      // 거짓이다 — 그대로 String(e) 하면 "[object Object]" 토스트가 하나 더 뜬다.
-      // (useAttachmentActions.ts::addFile 과 같은 판정. 롤백은 위 setItems 가 이미 했다.)
-      if (!(e && typeof e === "object" && "code" in e)) {
-        emitNotice((e as Error)?.message ?? String(e));
-      }
-    }
-  };
-
   return (
     <div ref={anchorRef} style={{ flex: "none", display: "flex" }}>
-      <style>{`
-        .reminder-row-btn { background: transparent; transition: background var(--dur-fast); }
-        .reminder-row-btn:hover { background: var(--hover); }
-      `}</style>
       <button
         type="button"
         className="icon-btn"
@@ -175,44 +131,26 @@ export function ReminderBell() {
         title={t("home.reminder_today")}
         aria-label={t("home.reminder_today")}
         onClick={() => {
-          if (!open) setReloadToken((n) => n + 1);
+          if (!open) reload();
           setOpen((v) => !v);
         }}
-        style={{ display: "flex", alignItems: "center", gap: "var(--space-2xs)" }}
+        style={{ position: "relative" }}
       >
         <IconBell
           size={16}
           strokeWidth={1.8}
           style={{ fill: count > 0 ? "var(--accent)" : "none" }}
         />
+        {/* 아이콘 크기는 그대로, 숫자는 우상단을 덮는다 — 예전엔 버튼 폭 안에 아이콘과 나란히 들어가
+            아이콘이 혼자 작아졌다. 오른쪽 끝에 매달아 자리수가 늘면 왼쪽(아이콘 위)으로 자란다. */}
         {count > 0 && (
-          <span style={{ fontSize: "var(--text-label)", fontVariantNumeric: "tabular-nums" }}>
-            {count}
+          <span className="badge reminder-bell-badge" data-testid="home-reminder-badge">
+            {badgeLabel(count)}
           </span>
         )}
       </button>
-      {open &&
-        createPortal(
-          <div
-            ref={popRef}
-            className="overlay"
-            role="dialog"
-            aria-label={t("home.reminder_today")}
-            data-testid="home-reminder-pop"
-            style={{
-              position: "fixed",
-              left: x,
-              top: y,
-              zIndex: "var(--z-popover)",
-              width: 260,
-              maxHeight: 320,
-              overflowY: "auto",
-              padding: "var(--space-4)",
-              display: "flex",
-              flexDirection: "column",
-              gap: "var(--space-3)",
-            }}
-          >
+      <FrameMenuPop menu={menu} label={t("home.reminder_today")} testId="home-reminder-pop">
+          <div className="frame-menu__body">
             {/* 설정 창과 같은 키(setNotificationsEnabled) — 설정까지 가지 않고 여기서 바로 켜고 끈다. */}
             <div
               data-testid="home-reminder-app-notify"
@@ -233,6 +171,50 @@ export function ReminderBell() {
                 data-testid="home-reminder-app-toggle"
               />
             </div>
+
+            {notices.length > 0 && (
+              <div
+                data-testid="home-reminder-notices"
+                style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}
+              >
+                {notices.map((n) => (
+                  <div
+                    key={n.key}
+                    data-testid={`home-notice-${n.key}`}
+                    style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}
+                  >
+                    <span style={{ fontSize: "var(--text-sm)", color: "var(--text)" }}>{n.text}</span>
+                    <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "var(--space-2)" }}>
+                      <button
+                        type="button"
+                        className="icon-btn icon-btn--sm"
+                        data-testid={`home-notice-dismiss-${n.key}`}
+                        title={n.dismissLabel}
+                        aria-label={n.dismissLabel}
+                        onClick={() => dismissNotice(n.key)}
+                      >
+                        <IconClose size={12} strokeWidth={2.2} />
+                      </button>
+                      {n.onAction && (
+                        <button
+                          type="button"
+                          className="icon-btn icon-btn--sm"
+                          data-testid={`home-notice-action-${n.key}`}
+                          disabled={n.busy}
+                          onClick={() => {
+                            setOpen(false);
+                            runNoticeAction(n.key);
+                          }}
+                          style={{ width: "auto", padding: "0 var(--space-2)", whiteSpace: "nowrap", color: "var(--accent)" }}
+                        >
+                          {n.actionLabel}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {overdueItems.length > 0 && (
               <div
@@ -268,9 +250,8 @@ export function ReminderBell() {
                 ))
               )}
             </div>
-          </div>,
-          document.body,
-        )}
+          </div>
+      </FrameMenuPop>
     </div>
   );
 }

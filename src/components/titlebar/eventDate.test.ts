@@ -178,6 +178,10 @@ describe("toDateInputValue", () => {
     expect(toDateInputValue(1592, null, null)).toBe("");
     expect(toDateInputValue(1592, 5, null)).toBe("");
   });
+  it("treats a missing (undefined) field like null — IPC 를 건너온 항목이 필드를 빠뜨려도 가짜 날짜를 만들지 않는다", () => {
+    expect(toDateInputValue(undefined as unknown as number, 5, 13)).toBe("");
+    expect(toDateInputValue(2026, undefined as unknown as number, 13)).toBe("");
+  });
   it("returns empty for BCE or year-0 — outside what the native picker supports", () => {
     expect(toDateInputValue(-350, 1, 1)).toBe("");
     expect(toDateInputValue(0, 1, 1)).toBe("");

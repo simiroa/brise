@@ -1,3 +1,4 @@
+import type { ReactElement } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, act, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -5,13 +6,19 @@ import { SettingsHeader } from "./SettingsHeader";
 import { useSettingsStore } from "../../stores/settings";
 import { t } from "../../i18n/t";
 import { searchSettings } from "./searchSettings";
+import { IconCrown, IconWorkspace } from "../icons";
+import { isOverlayOpen } from "../../lib/overlayStack";
 import { SETTINGS_SEARCH_INDEX } from "./settingsSearchIndex";
 
 const callSilentMock = vi.fn();
+const noticeMock = vi.fn();
 vi.mock("../../lib/invoke", () => ({
   call: vi.fn(),
   callSilent: (...args: unknown[]) => callSilentMock(...args),
+  emitNotice: (m: string) => noticeMock(m),
 }));
+const emitMock = vi.fn().mockResolvedValue(undefined);
+vi.mock("@tauri-apps/api/event", () => ({ emit: (...a: unknown[]) => emitMock(...a) }));
 
 const LIST = {
   workspaces: [
@@ -63,9 +70,77 @@ describe("SettingsHeader (PLAN-2026-10-24 D1·D5)", () => {
     callSilentMock.mockResolvedValue({ workspaces: [{ id: "ws-1", name: "아주 ".repeat(40) }], active_id: "ws-1" });
     render(<SettingsHeader scope="notebook" busy={false} onClose={() => {}} />);
     const chip = await screen.findByTestId("settings-scope-chip");
-    expect(chip.style.textOverflow).toBe("ellipsis");
-    expect(chip.style.whiteSpace).toBe("nowrap");
-    expect(chip.style.minWidth).toBe("0px");
+    // 말줄임은 메인 창 칩과 같은 CSS(.ws-trigger-name)가 맡는다 — 여기선 그 클래스와 폭 상한만 본다.
+    expect(chip.querySelector(".ws-trigger-name")).not.toBeNull();
+    expect(chip.style.width).toBe("100%"); // 레일 칸을 채운다 — 폭 상한은 레일(--settings-rail-w)이 쥔다
+  });
+
+  it("칩을 눌러 다른 노트북을 고르면 본 창에 전환을 요청하고 알림을 한 번 띄운다", async () => {
+    useSettingsStore.setState({ activeWorkspaceId: "ws-1" } as never);
+    emitMock.mockClear();
+    noticeMock.mockClear();
+    render(<SettingsHeader scope="notebook" busy={false} onClose={() => {}} />);
+    await userEvent.click(await screen.findByTestId("settings-scope-chip"));
+    await userEvent.click(await screen.findByTestId("settings-notebook-option-ws-2"));
+    expect(emitMock).toHaveBeenCalledWith("workspaces-changed", { activate: "ws-2" });
+    expect(noticeMock).toHaveBeenCalledTimes(1);
+    // 이미 활성인 노트북을 다시 고르면 아무 일도 없다.
+    await userEvent.click(screen.getByTestId("settings-scope-chip"));
+    await userEvent.click(await screen.findByTestId("settings-notebook-option-ws-1"));
+    expect(emitMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("트리거 아이콘은 칩을 열기 전에도 활성 노트북의 아이콘이다(같은 workspace_list 한 번으로)", async () => {
+    // 비교 기준 — 같은 크기로 직접 그린 두 아이콘의 svg 안쪽.
+    const innerOf = (el: ReactElement) => {
+      const r = render(el);
+      const inner = r.container.querySelector("svg")!.innerHTML;
+      r.unmount();
+      return inner;
+    };
+    const crown = innerOf(<IconCrown size={16} strokeWidth={2} />);
+    const fallback = innerOf(<IconWorkspace size={16} strokeWidth={2} />);
+    expect(crown).not.toBe(fallback);
+
+    callSilentMock.mockResolvedValue({
+      workspaces: [
+        { id: "ws-1", name: "첫 노트북", icon: "crown" },
+        { id: "ws-2", name: "둘째 노트북", icon: null },
+      ],
+      active_id: "ws-1",
+    });
+    render(<SettingsHeader scope="notebook" busy={false} onClose={() => {}} />);
+    const chip = await screen.findByTestId("settings-scope-chip");
+    expect(chip.querySelector("svg")!.innerHTML).toBe(crown); // 열지 않았다 — 목록 재조회 없이
+    expect(callSilentMock.mock.calls.filter((c) => c[0] === "workspace_list")).toHaveLength(1);
+
+    // 아이콘이 없는 노트북이 활성이면 기본 아이콘.
+    act(() => {
+      useSettingsStore.setState({ activeWorkspaceId: "ws-2" } as never);
+    });
+    await waitFor(() => expect(screen.getByTestId("settings-scope-chip").textContent).toBe("둘째 노트북"));
+    expect(screen.getByTestId("settings-scope-chip").querySelector("svg")!.innerHTML).toBe(fallback);
+  });
+
+  it("드롭다운은 바깥을 누르면 닫히고 칩 안을 누르면 닫히지 않는다", async () => {
+    render(<SettingsHeader scope="notebook" busy={false} onClose={() => {}} />);
+    await userEvent.click(await screen.findByTestId("settings-scope-chip"));
+    const list = await screen.findByRole("listbox");
+    fireEvent.mouseDown(list);
+    expect(screen.queryByRole("listbox")).not.toBeNull();
+    fireEvent.mouseDown(document.body);
+    await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
+  });
+
+  it("Escape 로 닫히고, 열려 있는 동안 오버레이 스택에 올라 창 닫기보다 먼저 이 드롭다운이 닫힌다", async () => {
+    render(<SettingsHeader scope="notebook" busy={false} onClose={() => {}} />);
+    expect(isOverlayOpen()).toBe(false);
+    await userEvent.click(await screen.findByTestId("settings-scope-chip"));
+    await screen.findByRole("listbox");
+    expect(isOverlayOpen()).toBe(true);
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
+    expect(isOverlayOpen()).toBe(false);
   });
 
   it("검색 입력은 자리표시·aria-label 을 갖는 combobox 이고 처음엔 닫혀 있다", () => {

@@ -129,17 +129,34 @@ pub fn window_surface_support() -> SurfaceSupport {
     SurfaceSupport { acrylic: acrylic_supported() }
 }
 
-/// 이 창에 표면 효과를 걸어도 되는가. 세 규칙이 전부 여기 있다.
+/// 효과 요청 하나를 창 하나에 어떻게 처리할지 — `effect_decision` 의 답.
+#[derive(Debug, PartialEq, Eq)]
+pub enum EffectDecision {
+    /// 지금 건다.
+    Apply,
+    /// 걸지 않는다(펫 창, 숨은 남의 창).
+    Skip,
+    /// 트레이에 숨은 본 창이 스스로 불렀다 — 마지막 요청을 기억했다가 `tray::show_and_focus` 가 show() 뒤에 건다.
+    Defer,
+}
+
+/// 이 창에 표면 효과를 지금 걸어도 되는가. 네 규칙이 전부 여기 있다(위에서부터 먼저 맞는 것).
 ///
 /// 1. **펫 창은 언제나 제외** — 스프라이트용 투명 창이라 Acrylic 을 얹으면 캐릭터 주변에
 ///    사각형 판이 생긴다.
-/// 2. **부른 창은 언제나 포함** — 살아 있는 웹뷰가 스스로 요청한 것이다. 여기서 가시성을
+/// 2. **트레이에 숨은 본 창이 스스로 부르면 보류** — 숨은 본 창의 웹뷰는 살아
+///    있어서 스스로 효과를 다시 건다: 설정 창 노트북 칩 → `workspaces-changed` → 본 창 `switchTo` →
+///    `reloadAppearance`, 또는 "시스템" 테마에서 OS 다크/라이트 전환. 예전 규칙("부른 창은 언제나")은
+///    이걸 막지 못해 숨은 HWND 에 아크릴이 걸렸다(2026-10-28 조사). 판단은 가시성이 아니라
+///    `parked`(= `tray::hide_to_tray` 가 세우고 `tray::show_and_focus` 가 내리는 플래그)로 한다 —
+///    부팅은 이 플래그를 세우지 않으므로 아래 3번의 사고가 재발하지 않는다.
+/// 3. **부른 창은 언제나 포함** — 살아 있는 웹뷰가 스스로 요청한 것이다. 여기서 가시성을
 ///    따지면 show() 직후 is_visible 이 아직 false 로 보이는 순간에 걸려 본 창이 매 부팅
 ///    flat 으로 떨어진다(2026-08-14 에 결과를 AND 로 묶었다가 겪은 그 증상과 같은 부류).
-/// 3. **그 밖의 창은 보일 때만** — 숨긴 HWND 에 window-vibrancy 를 걸면 핸들이 깨져 그 창은
+/// 4. **그 밖의 창은 보일 때만** — 숨긴 HWND 에 window-vibrancy 를 걸면 핸들이 깨져 그 창은
 ///    다시는 보이지 않는다. 트레이/펫에서 메인 창이 안 열리는 버그의 정체가 이것이다.
 ///
-/// 3번은 docs/PET.md 에 "하지 말 것"으로 오래 적혀 있었지만 **문서에만** 있었다. 지키는 것은
+/// 4번은 docs/PET.md 에 "하지 말 것"으로 오래 적혀 있었지만 **문서에만** 있었다. 지키는 것은
 /// 호출부들이었고(App.tsx 는 show 뒤로 미루고 AuxWindowChrome 도 그렇다), 정작 효과를 거는
 /// 이 함수는 창이 보이는지 묻지 않은 채 펫이 아닌 **모든 창**에 걸었다. 그래서 호출부를 아무리
 /// 고쳐도 새 팬아웃 경로가 생길 때마다 되살아났다 — 마지막이 2026-08-14 의 별도 설정 창이다:
@@ -149,18 +166,90 @@ pub fn window_surface_support() -> SurfaceSupport {
 /// `visible` 은 `is_visible()` 의 Result 를 그대로 받는다. **판단이 불가능하면 건다** —
 /// 잘못 건너뛰면 창이 아무 효과 없이 남고 그건 조용한 시각 회귀다.
 ///
-/// ponytail: 숨어 있는 동안 바뀐 프리셋은 그 창에 반영되지 않는다 — 다시 보일 때 **이전
-/// 효과 그대로** 나온다(핸들은 멀쩡하다). 죽은 창보다 낫고, 다음에 그 창이 보이는 상태에서
-/// 테마·표면을 바꾸면 맞춰진다. 이게 거슬리면 show 직후 프런트가 `applySurfaceEffectAfterShow`
-/// 를 한 번 더 부르게 하면 된다(tray::show_and_focus 에서 이벤트를 쏘는 자리).
-pub fn should_apply_effect(label: &str, is_caller: bool, visible: Result<bool, tauri::Error>) -> bool {
+/// ponytail: 남이 퍼뜨린 요청(설정 창에서 테마·표면을 바꾼 경우)은 숨은 창에 4번대로 건너뛴다 — 숨어
+/// 있는 동안 바뀐 프리셋은 그 창이 다시 보일 때 **이전 효과 그대로** 나온다(핸들은 멀쩡하다). 죽은
+/// 창보다 낫고, 다음에 그 창이 보이는 상태에서 테마·표면을 바꾸면 맞춰진다. 본 창은 2번의 보류 장치가
+/// 이미 있어서, 이게 거슬리면 2번 갈래의 `is_caller` 조건만 빼면 남의 요청도 보류됐다가 다시 보일 때
+/// 걸린다(`tray::show_and_focus`).
+pub fn effect_decision(
+    label: &str,
+    is_caller: bool,
+    main_parked: bool,
+    visible: Result<bool, tauri::Error>,
+) -> EffectDecision {
     if crate::pet_window::is_pet_label(label) {
-        return false;
+        return EffectDecision::Skip;
     }
-    if is_caller {
-        return true;
+    if main_parked && is_caller && label == crate::tray::MAIN_LABEL {
+        return EffectDecision::Defer;
     }
-    visible.unwrap_or(true)
+    if is_caller || visible.unwrap_or(true) {
+        EffectDecision::Apply
+    } else {
+        EffectDecision::Skip
+    }
+}
+
+/// 효과 요청 하나 — 보류했다가 그대로 다시 거는 데 필요한 전부.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EffectRequest {
+    pub style: String,
+    pub tint: Option<(u8, u8, u8, u8)>,
+}
+
+/// 본 창이 트레이에 숨어 있는 동안의 효과 보류(`tray::TrayHandles::main_effect`). 플래그와 보류 요청을
+/// **한 잠금 아래** 둔다 — 따로 두면 "보류하려고 플래그를 본 직후 표시가 플래그를 내려" 그 요청이 다음
+/// 숨김까지 묻힌다. 부팅 failsafe 의 `hidden_to_tray`(한 번 서면 안 내린다)와는 수명이 달라 별개다.
+/// 세우는 곳은 `tray::hide_to_tray`, 내리는 곳은 `tray::show_and_focus` 뿐이다.
+#[derive(Debug, Default)]
+pub struct MainEffectGate {
+    parked: bool,
+    pending: Option<EffectRequest>,
+}
+
+impl MainEffectGate {
+    pub fn park(&mut self) {
+        self.parked = true;
+    }
+
+    pub fn is_parked(&self) -> bool {
+        self.parked
+    }
+
+    /// 숨어 있으면 마지막 요청으로 덮어쓰고 true. 그 사이 표시돼 내려갔으면 false — 호출자가 지금 건다.
+    pub fn defer(&mut self, req: EffectRequest) -> bool {
+        if self.parked {
+            self.pending = Some(req);
+        }
+        self.parked
+    }
+
+    /// 표시됐다 — 플래그를 내리고 보류분을 (한 번만) 넘긴다.
+    pub fn unpark(&mut self) -> Option<EffectRequest> {
+        self.parked = false;
+        self.pending.take()
+    }
+}
+
+/// 보류한 요청에 대해 부른 창에 돌려줄 `applied` — 지금 걸었다면 `apply_style` 이 돌려줄 값을 미리 본다
+/// (flat 은 언제나 true, 아크릴은 이 OS 빌드가 지원하면 true). 프런트는 이 값으로 CSS 폴백을 고르므로
+/// false 를 돌려주면 숨어 있는 동안 본 창 CSS 가 flat(불투명)으로 떨어지고, 다시 보일 때 Rust 가 아크릴을
+/// 걸어도 그 위를 덮는다. "직전 값"이 아니라 예측인 이유: 숨은 동안 노트북 전환으로 프리셋 자체가 바뀔 수
+/// 있다(flat 노트북 → acrylic 노트북이면 직전 값은 flat 의 true 라 우연히 맞을 뿐이다).
+/// ponytail: 지원 빌드에서 `apply_acrylic` 이 실제로 실패하면(드묾) 프런트는 true 를 믿은 채 남는다 —
+/// show 때의 실제 결과는 `tray::show_and_focus` 가 진단(`tray/reveal_state`)에 남긴다. 어긋남이 보이면
+/// 그때 본 창에 이벤트를 쏴 `applySurfaceEffectAfterShow` 를 다시 부르게 한다.
+fn expected_applied(style: &str) -> bool {
+    match action_for_style(style) {
+        PresetAction::Acrylic => acrylic_supported(),
+        PresetAction::ClearAll => true,
+    }
+}
+
+/// `tray::show_and_focus` 가 show() 뒤에 보류분을 건다 — window_set_effect 와 같은 핸들(웹뷰 창 안의
+/// Window)로. 반드시 창이 **보인 뒤** 메인 스레드에서 부른다(숨긴 HWND 규칙, 위 4번).
+pub(crate) fn apply_effect_request<R: Runtime>(window: &tauri::WebviewWindow<R>, req: &EffectRequest) -> bool {
+    apply_style(&window.as_ref().window(), &req.style, req.tint)
 }
 
 /// 표면 프리셋은 **앱 전체**의 성질이지 한 창의 성질이 아니다 — 그래서 호출한 창이 아니라 펫이
@@ -180,14 +269,25 @@ pub fn window_set_effect<R: Runtime>(
     // 않은 보조 창 하나 때문에 본 창이 통째로 flat 이 된다(2026-08-14 실측: AND 로 묶었더니
     // 부팅 직후 본 창이 항상 flat 이었다).
     let caller = window.label().to_string();
+    let gate = app.try_state::<crate::tray::TrayHandles>();
+    let parked = gate.as_ref().is_some_and(|h| h.main_effect.lock().is_parked());
     let mut applied = false;
     for (label, target) in app.webview_windows() {
-        if !should_apply_effect(&label, label == caller, target.is_visible()) {
-            continue;
-        }
-        // WebviewWindow 가 아니라 그 안의 Window 핸들로 건다 — 부팅 직후에는 WebviewWindow
-        // 핸들로 apply 하면 실패한다(2026-08-14 실측: 본 창이 매 부팅 flat 으로 떨어졌다).
-        let ok = apply_style(&target.as_ref().window(), &style, tint);
+        let ok = match effect_decision(&label, label == caller, parked, target.is_visible()) {
+            EffectDecision::Skip => continue,
+            // 잠금 안에서 한 번 더 본다 — 그 사이 표시돼 플래그가 내려갔으면(defer 가 false) 이제 보이는
+            // 창이니 아래 Apply 와 같이 지금 건다.
+            EffectDecision::Defer
+                if gate.as_ref().is_some_and(|h| {
+                    h.main_effect.lock().defer(EffectRequest { style: style.clone(), tint })
+                }) =>
+            {
+                expected_applied(&style)
+            }
+            // WebviewWindow 가 아니라 그 안의 Window 핸들로 건다 — 부팅 직후에는 WebviewWindow
+            // 핸들로 apply 하면 실패한다(2026-08-14 실측: 본 창이 매 부팅 flat 으로 떨어졌다).
+            EffectDecision::Defer | EffectDecision::Apply => apply_style(&target.as_ref().window(), &style, tint),
+        };
         if label == caller {
             applied = ok;
         }
@@ -327,37 +427,112 @@ mod tests {
 
     #[test]
     fn hidden_window_is_skipped() {
-        assert!(!should_apply_effect("main", false, Ok(false)));
+        assert_eq!(effect_decision("main", false, false, Ok(false)), EffectDecision::Skip);
+        assert_eq!(effect_decision("settings", false, false, Ok(false)), EffectDecision::Skip);
     }
 
     #[test]
     fn visible_window_gets_effect() {
-        assert!(should_apply_effect("main", false, Ok(true)));
+        assert_eq!(effect_decision("main", false, false, Ok(true)), EffectDecision::Apply);
     }
 
     #[test]
     fn caller_is_never_gated_on_visibility() {
         // 부팅 직후 show() 직후의 is_visible 이 아직 false 로 보여도 본 창은 flat 으로
-        // 떨어지면 안 된다.
-        assert!(should_apply_effect("main", true, Ok(false)));
+        // 떨어지면 안 된다. 부팅은 parked 를 세우지 않는다(tray::hide_to_tray 만 세운다).
+        assert_eq!(effect_decision("main", true, false, Ok(false)), EffectDecision::Apply);
     }
 
     #[test]
     fn unknown_visibility_falls_back_to_applying() {
-        assert!(should_apply_effect(
-            "main",
-            false,
-            Err(tauri::Error::WebviewNotFound)
-        ));
+        assert_eq!(
+            effect_decision("main", false, false, Err(tauri::Error::WebviewNotFound)),
+            EffectDecision::Apply
+        );
     }
 
     #[test]
     fn pet_window_is_always_excluded() {
-        // is_pet_label 이 참인 라벨이면 무엇이든 제외된다.
+        // is_pet_label 이 참인 라벨이면 무엇이든 제외된다 — 본 창이 숨어 있어도(parked) 마찬가지.
         let pet = "pet";
         assert!(crate::pet_window::is_pet_label(pet));
-        assert!(!should_apply_effect(pet, false, Ok(true)));
-        assert!(!should_apply_effect(pet, true, Ok(true)));
+        for parked in [false, true] {
+            assert_eq!(effect_decision(pet, false, parked, Ok(true)), EffectDecision::Skip);
+            assert_eq!(effect_decision(pet, true, parked, Ok(true)), EffectDecision::Skip);
+        }
+    }
+
+    // ── 트레이에 숨은 본 창은 보류 ───────────────────────────────────────────────────
+    // 숨은 본 창의 웹뷰가 스스로 효과를 다시 걸면(설정 창 노트북 칩 → switchTo → reloadAppearance)
+    // 예전 규칙 "부른 창은 언제나"가 숨은 HWND 에 아크릴을 걸었다(2026-10-28 조사).
+
+    #[test]
+    fn parked_main_defers_even_when_it_is_the_caller() {
+        assert_eq!(effect_decision("main", true, true, Ok(false)), EffectDecision::Defer);
+        // 가시성은 보지 않는다 — 플래그가 서 있으면 보이는 것처럼 읽혀도 보류한다(숨기기 직전 구간).
+        assert_eq!(effect_decision("main", true, true, Ok(true)), EffectDecision::Defer);
+        assert_eq!(effect_decision("main", true, true, Err(tauri::Error::WebviewNotFound)), EffectDecision::Defer);
+    }
+
+    #[test]
+    fn parked_main_skips_fan_out_from_other_windows() {
+        // 설정 창이 퍼뜨린 요청은 예전처럼 숨은 본 창을 건너뛴다(4번) — 보류는 본 창 자신의 요청만.
+        assert_eq!(effect_decision("main", false, true, Ok(false)), EffectDecision::Skip);
+    }
+
+    #[test]
+    fn parked_flag_only_concerns_the_main_window() {
+        // 부른 설정 창은 그대로 걸리고, 숨은 보조 창은 예전처럼 건너뛴다.
+        assert_eq!(effect_decision("settings", true, true, Ok(true)), EffectDecision::Apply);
+        assert_eq!(effect_decision("activity", false, true, Ok(true)), EffectDecision::Apply);
+        assert_eq!(effect_decision("activity", false, true, Ok(false)), EffectDecision::Skip);
+    }
+
+    fn req(style: &str) -> EffectRequest {
+        EffectRequest { style: style.to_string(), tint: Some((1, 2, 3, 4)) }
+    }
+
+    #[test]
+    fn gate_starts_unparked_so_boot_applies_directly() {
+        let gate = MainEffectGate::default();
+        assert!(!gate.is_parked());
+        assert_eq!(effect_decision("main", true, gate.is_parked(), Ok(false)), EffectDecision::Apply);
+    }
+
+    #[test]
+    fn gate_keeps_the_last_deferred_request_and_hands_it_over_once() {
+        let mut gate = MainEffectGate::default();
+        gate.park();
+        assert!(gate.defer(req("flat")));
+        assert!(gate.defer(req("acrylic")), "마지막 요청이 앞의 것을 덮는다");
+        assert_eq!(gate.unpark(), Some(req("acrylic")));
+        assert!(!gate.is_parked());
+        assert_eq!(gate.unpark(), None, "보류분은 한 번만 넘긴다");
+    }
+
+    #[test]
+    fn gate_unparked_meanwhile_tells_caller_to_apply_now() {
+        let mut gate = MainEffectGate::default();
+        gate.park();
+        let _ = gate.unpark();
+        assert!(!gate.defer(req("acrylic")), "표시된 뒤의 요청은 보류하지 않는다");
+        assert_eq!(gate.unpark(), None);
+    }
+
+    #[test]
+    fn gate_unpark_without_requests_is_empty() {
+        let mut gate = MainEffectGate::default();
+        gate.park();
+        assert_eq!(gate.unpark(), None);
+    }
+
+    #[test]
+    fn deferred_result_predicts_apply_style() {
+        // flat 은 언제나 true, 아크릴은 OS 빌드 판정을 따른다 — 숨어 있는 동안 본 창 CSS 가 flat 으로
+        // 떨어지지 않게 하는 값.
+        assert!(expected_applied("flat"));
+        assert!(expected_applied("mica"), "알 수 없는 값은 ClearAll 이라 true");
+        assert_eq!(expected_applied("acrylic"), acrylic_supported());
     }
 
     #[test]

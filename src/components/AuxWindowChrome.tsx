@@ -69,9 +69,11 @@ export function AuxWindowChrome(props: {
   escapeCloses?: boolean;
   /** 제목줄 오른쪽, 닫기 버튼 앞에 렌더할 컨트롤(브리핑 창의 "편집" 토글). 안 넘기면 아무것도 추가되지 않는다. */
   actions?: ReactNode;
+  /** 창 전체 바탕을 본문 색(tokens.css .content-surface)으로 — 섹션 분리 창. 설정·이력 창은 안 넘긴다. */
+  contentSurface?: boolean;
   children: ReactNode;
 }): JSX.Element {
-  const { title, closeTestId, onReady, hideHeader, titleSlot, escapeCloses = true, actions, children } = props;
+  const { title, closeTestId, onReady, hideHeader, titleSlot, escapeCloses = true, actions, contentSurface, children } = props;
 
   useEffect(() => {
     // 이 창들은 숨긴 채 만들어진다(src-tauri/src/aux_window.rs) — 설정을 읽고, 그 모습이 한 프레임
@@ -128,6 +130,11 @@ export function AuxWindowChrome(props: {
 
   return (
     <div className="app" style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+      {/* .content-surface 는 `.app` 에 직접 못 붙인다(다층 background-image 를 shorthand 가 지운다) — 안쪽 한 겹. */}
+      <div
+        className={contentSurface ? "content-surface" : undefined}
+        style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}
+      >
       {!hideHeader && (
         // 머리줄은 메인 창 스트립과 같은 높이(--row-chrome) · 아래 구분선 없음 · 제목 크기는 설정 레일
         // 헤더와 같은 --text-lg/600 하나(GRILL-2026-10-19 R1-E). 높이가 고정이라 세로 패딩은 두지
@@ -159,6 +166,7 @@ export function AuxWindowChrome(props: {
         </div>
       )}
       {children}
+      </div>
     </div>
   );
 }

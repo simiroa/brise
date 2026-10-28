@@ -8,6 +8,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import type {
+  CalendarResult,
   NoteDetail,
   NoteGetManyOutput,
   TimelineRoutine,
@@ -26,6 +27,9 @@ import {
   parseTasksFromSections,
 } from "../../../lib/inlineSchedule";
 import { extractChipChecklist, type ChipChecklist } from "./TimeChip";
+import { useNoteQueryVersion } from "../../../lib/noteQuery";
+import { parseIsoDay, planTimedDay, type TimedDayPlan } from "../calendarLayout";
+import { addDaysIso } from "../dateFmt";
 
 /**
  * 시간축 배경 루틴(그릴 2026-09-13 W3) — 노트에 안 묶이는 "출퇴근"류 반복 일정 중 **그 날**에
@@ -309,4 +313,58 @@ function firstLines(body: string | undefined): string {
     .filter(Boolean)
     .slice(0, 2)
     .join("\n");
+}
+
+/** 부모가 이미 읽어 둔 한 달치 일정(대시보드 달력 탭의 월 조회). 다음 날이 이 달이면 익일 구간은 이것을 그대로 쓴다 — 같은 `dashboard_calendar` 를 또 부르지 않는다. */
+export type ParentMonthItems = { year: number; month: number; items: CalendarItem[] };
+
+/**
+ * 시간축 익일 구간의 데이터 — `day` 다음 날의 plan(없으면 null). 기존 `dashboard_calendar` 를 그대로 재사용한다(새 IPC 없음):
+ * 다음 날이 속한 달 한 번. 세 마운트 중 대시보드·사이드바(DayDetailBody)가 쓰고, 브리핑 창은 useDayItems 가 같은 달 조회를
+ * 이미 하고 있어 거기서 같은 plan 을 만든다(`TimeAxis` 의 `tailPlan` 입력 하나로 모인다).
+ *
+ * 조회 키는 **(연, 월)** 이다 — 예전엔 다음 날(nextDay)이 키라 날짜를 누를 때마다 같은 달 전체를 다시 받았다. 지금은 달이 바뀔 때만 받고,
+ * 같은 달 안에서 날을 옮기면 받아 둔 월 데이터에서 plan 만 다시 만든다. 부모가 그 달 데이터를 이미 들고 있으면(`parentMonth`, 대시보드 달력
+ * 탭) 조회 자체를 하지 않는다 — 그 달이 다음 날의 달과 같을 때만이다(월말이라 다음 날이 다음 달이면 스스로 받는다). 부모가 데이터를 안
+ * 넘기는 마운트(사이드바)는 예전처럼 스스로 받는다.
+ * 노트가 바뀌면(noteQueryVersion) 다시 읽는다 — 익일 구간에서 옮긴 일정이 곧바로 반영된다(부모 데이터를 쓰는 달은 부모가 다시 읽는다).
+ * 실패는 조용히 빈 구간(callSilent).
+ */
+export function useNextDayPlan(
+  day: string | null,
+  tailHours: number,
+  parentMonth: ParentMonthItems | null = null,
+): TimedDayPlan | null {
+  const workspaceId = useSettingsStore((s) => s.activeWorkspaceId);
+  const version = useNoteQueryVersion();
+  const nextDay = day && tailHours > 0 ? addDaysIso(day, 1) : null;
+  const parsed = nextDay ? parseIsoDay(nextDay) : null;
+  const year = parsed?.year ?? null;
+  const month = parsed?.month ?? null;
+  const monthKey = year !== null && month !== null ? `${year}-${month}` : null;
+  const fromParent = parentMonth !== null && parentMonth.year === year && parentMonth.month === month;
+  const [loaded, setLoaded] = useState<{ key: string; items: CalendarItem[] } | null>(null);
+  useEffect(() => {
+    if (year === null || month === null || !workspaceId || fromParent) {
+      setLoaded(null);
+      return;
+    }
+    let cancelled = false;
+    void callSilent<CalendarResult>("dashboard_calendar", {
+      workspace_id: workspaceId,
+      year,
+      month,
+    })
+      .then((res) => {
+        if (!cancelled) setLoaded({ key: `${year}-${month}`, items: res?.items ?? [] });
+      })
+      .catch(() => {
+        if (!cancelled) setLoaded(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [year, month, workspaceId, version, fromParent]);
+  const items = fromParent ? parentMonth.items : loaded?.key === monthKey ? loaded.items : null;
+  return useMemo(() => (nextDay && items ? planTimedDay(items, nextDay) : null), [nextDay, items]);
 }

@@ -68,6 +68,7 @@ import {
   minorTickStepForView,
   nearestTick,
   resolveTimelineView,
+  timelinePresetView,
   shiftTriple,
   shouldShowLabels,
   startDateAtBoundary,
@@ -420,7 +421,9 @@ export function TimelineTab() {
         setFullRange(full);
         if (seededForRef.current !== workspaceId) {
           seededForRef.current = workspaceId;
-          const fit = fitViewToItems(fitRanges(r, useUiStore.getState().dashboardFolderFilter), full);
+          // 설정 › 대시보드 › 타임라인의 첫 화면 범위 — 'fit' 이 아니면 그 구간이 노트 맞춤보다 앞선다(사이드바 기간 필터는 그 위).
+          const preset = timelinePresetView(useSettingsStore.getState().timelineDefaultRange);
+          const fit = preset ?? fitViewToItems(fitRanges(r, useUiStore.getState().dashboardFolderFilter), full);
           setView(resolveTimelineView(useSearchStore.getState(), full, undefined, fit));
         }
       } catch (e) {

@@ -67,13 +67,10 @@ function FolderTooltip({
       ref={ref}
       role="tooltip"
       data-testid="folder-dot-tooltip"
-      className="overlay folder-dot-tooltip"
+      className="overlay tip"
       style={{
-        position: "fixed",
         left: pos ? pos.left : initialLeft,
         top: pos ? pos.top : initialTop,
-        zIndex: "var(--z-tooltip)",
-        pointerEvents: "none",
       }}
     >
       {name}

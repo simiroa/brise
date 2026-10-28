@@ -928,7 +928,7 @@ pub struct PetOpenMainResult {
 /// 펫 창은 별 웹뷰라 메인 앱의 스토어에 직접 닿을 수 없다 — 이벤트가 유일한 경로다.
 #[tauri::command(rename_all = "snake_case")]
 pub async fn pet_open_main(note_id: Option<String>, app: tauri::AppHandle) -> AppResult<PetOpenMainResult> {
-    crate::tray::show_and_focus(&app);
+    crate::tray::show_and_focus(&app, crate::tray::RevealVia::Pet);
     if let Some(id) = note_id {
         if let Some(main) = app.get_webview_window("main") {
             let _ = main.emit("pet-open-note", serde_json::json!({ "note_id": id }));
@@ -1226,7 +1226,8 @@ pub async fn capture_to_inbox(app: &tauri::AppHandle) -> AppResult<String> {
     let created = pet_note_create(body, title, state.clone())?;
     // ponytail: base64 왕복은 attachment_add_bytes 를 그대로 쓰려는 값 — 캡처 1장이라 무시할 비용.
     let data = base64::engine::general_purpose::STANDARD.encode(&capture.png);
-    crate::commands::attachments::attachment_add_bytes(state, created.note_id.clone(), name, data).await?;
+    // 트레이 경로라 호출 창이 없다 — 라벨 없이(출처 모름) 알린다.
+    crate::commands::attachments::attachment_add_bytes_in(state, None, created.note_id.clone(), name, data).await?;
     Ok(created.note_id)
 }
 

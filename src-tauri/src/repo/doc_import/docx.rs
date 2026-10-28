@@ -1502,8 +1502,11 @@ pub fn parse_file(path: &Path) -> AppResult<Parsed> {
     }
     file.seek(SeekFrom::Start(0)).map_err(io_err)?;
     let archive = ZipArchive::new(file).map_err(|e| AppError::Validation(format!("not a valid docx (zip): {e}")))?;
-    let entries: BTreeMap<String, String> =
-        archive.file_names().map(|n| (n.replace('\\', "/").to_lowercase(), n.to_string())).collect();
+    let entries: BTreeMap<String, String> = archive
+        .file_names()
+        .map(|n| n.map(|n| (n.replace('\\', "/").to_lowercase(), n.to_string())))
+        .collect::<Result<_, _>>()
+        .map_err(|e| AppError::Validation(format!("not a valid docx (zip): {e}")))?;
     let mut pkg = Package { archive, entries, budget: MAX_DECOMPRESSED_BYTES };
 
     // 본문 파트는 패키지 관계(`_rels/.rels`)의 officeDocument 가 알려 준다 — 없으면 관례 경로.

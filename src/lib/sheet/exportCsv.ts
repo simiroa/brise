@@ -1,3 +1,4 @@
+import { withExportDir } from "../exportDir";
 import { call, emitNotice } from "../invoke";
 import { t } from "../../i18n/t";
 import { toCsv } from "./csv";
@@ -14,7 +15,7 @@ export async function exportSheetAsCsv(doc: SheetDoc, defaultName: string): Prom
     const csvStr = toCsv(doc);
     const { save } = await import("@tauri-apps/plugin-dialog");
     const dest = await save({
-      defaultPath: defaultName,
+      defaultPath: withExportDir(defaultName),
       filters: [{ name: "CSV", extensions: ["csv"] }],
     });
     if (!dest) return;

@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { call, callSilent, emitNotice } from "../../lib/invoke";
 import { reportFallback } from "../../lib/diag";
+import { copyWithNotice } from "../../lib/clipboard";
 import type { SyncStatusOutput } from "../../lib/commands.gen";
 import { t } from "../../i18n/t";
 import { useFeatureBriefTrigger } from "../../lib/useFeatureBrief";
-import { groupCardStyle } from "./shared";
 import { Badge } from "./Badge";
-import { SectionHeader } from "./SectionHeader";
+import { DisabledGroup } from "./DisabledGroup";
 import { SettingsRow } from "./SettingsRow";
+import { PageLead } from "./PageLead";
 import { Toggle } from "./Toggle";
 import { isBrowser } from "../../lib/env";
 import { ModalShell } from "../ModalShell";
@@ -15,6 +16,8 @@ import { PromptDialog } from "../PromptDialog";
 import { Banner } from "./Banner";
 import { IconCopy, IconLink, IconRefresh } from "../icons";
 import { IconAction } from "./IconAction";
+import { AgentConnectCard } from "./AgentConnectCard";
+import { SettingsCard } from "./SettingsCard";
 
 // Tailscale CGNAT 대역(100.64.0.0/10) — sync_server::bind::pick_bind_addr 가 이 대역 밖이면
 // loopback으로 폴백한다. bound_addr이 loopback이면 "이 PC에서만 접속 가능" 경고를 보여준다
@@ -186,12 +189,7 @@ export function SyncSection() {
   // 주소·URL·토큰 복사 한 길 — 실패하면 알리지 않고 넘어가던 것을 "복사했습니다"로 거짓 안내하지 않는다.
   const copyValue = async (value: string | null | undefined, label: string) => {
     if (!value) return;
-    try {
-      await navigator.clipboard.writeText(value);
-      emitNotice(t("settings.sync_value_copied", { label }));
-    } catch {
-      emitNotice(t("settings.sync_copy_failed"));
-    }
+    await copyWithNotice(value, t("settings.sync_value_copied", { label }));
   };
 
   // 연결 활성화 스위치는 페이지 첫 줄 설정 행(PLAN-2026-10-24 D4) — 상태 배지(베타·경고)는 라벨 옆.
@@ -199,8 +197,9 @@ export function SyncSection() {
     !!status &&
     status.enabled &&
     (!status.running || isLoopback(status.bound_addr) || status.bind_stale);
+  // 프레임(.card)을 벗겼다(2026-10-27) — 마스터 스위치는 박스가 아니라 페이지 맨 위 한 줄이다.
   const hero = (
-    <div className="card" style={groupCardStyle} data-testid="settings-sync-master-card">
+    <PageLead testId="settings-sync-master-card">
       <SettingsRow
         anchor="sync_enable"
         label={
@@ -227,17 +226,16 @@ export function SyncSection() {
           )
         }
       />
-    </div>
+    </PageLead>
   );
 
   if (browser) {
     return (
       <>
         {hero}
-        <div className="card" style={groupCardStyle}>
-          <SectionHeader title={t("settings.sync_title")} icon={<IconLink size={14} strokeWidth={2} />} />
+        <SettingsCard title={t("settings.sync_title")} icon={<IconLink size={14} strokeWidth={2} />}>
           <div style={{ fontSize: "var(--text-sm)", color: "var(--muted)" }}>{t("common.desktop_only")}</div>
-        </div>
+        </SettingsCard>
       </>
     );
   }
@@ -247,8 +245,7 @@ export function SyncSection() {
     return (
       <>
         {hero}
-        <div className="card" style={groupCardStyle}>
-          <SectionHeader title={t("settings.sync_title")} icon={<IconLink size={14} strokeWidth={2} />} />
+        <SettingsCard title={t("settings.sync_title")} icon={<IconLink size={14} strokeWidth={2} />}>
           <Banner
             tone="danger"
             role="alert"
@@ -264,7 +261,7 @@ export function SyncSection() {
           >
             {t("settings.sync_status_failed")}
           </Banner>
-        </div>
+        </SettingsCard>
       </>
     );
   }
@@ -272,8 +269,9 @@ export function SyncSection() {
   return (
     <>
     {hero}
-    <div className="card" style={groupCardStyle}>
-      <SectionHeader title={t("settings.sync_title")} icon={<IconLink size={14} strokeWidth={2} />} />
+    {/* 꺼짐이어도 아래 구성을 흐리게 잠가 보여 준다(2026-10-27) — 빈 카드 머리만 남아 상태가 읽히지 않던 것을 막는다. */}
+    <DisabledGroup disabled={!status.enabled} reason={t("settings.sync_off_reason")} testId="settings-sync-locked">
+    <SettingsCard title={t("settings.sync_title")} icon={<IconLink size={14} strokeWidth={2} />}>
 
       {status.enabled && (
         <>
@@ -305,6 +303,8 @@ export function SyncSection() {
               )}
             </div>
           )}
+        </>
+      )}
 
           {(() => {
             const controls = (
@@ -369,7 +369,7 @@ export function SyncSection() {
               </>
             );
 
-            if (!status.qr_svg) return controls;
+            if (!status.enabled || !status.qr_svg) return controls;
 
             return (
               <div style={{ display: "flex", gap: "var(--space-4)" }}>
@@ -417,9 +417,9 @@ export function SyncSection() {
           <div style={{ fontSize: "var(--text-xs)", color: "var(--muted)", marginTop: "var(--space-2)", lineHeight: 1.6 }}>
             {t("settings.sync_steps_hint")}
           </div>
-        </>
-      )}
-    </div>
+    </SettingsCard>
+    </DisabledGroup>
+    {status.enabled && <AgentConnectCard />}
 
       {/* 토큰을 바꾸면 지금 붙어 있는 모든 기기(폰·브라우저 탭)가 끊긴다 — 한 번 묻는다. */}
       {confirmRegenerate && (

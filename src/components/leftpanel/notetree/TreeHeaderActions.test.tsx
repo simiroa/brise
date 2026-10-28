@@ -44,6 +44,6 @@ describe("TreeHeaderActions", () => {
     expect(screen.getByText("Blank note")).toBeTruthy();
     // 진입점 일원화(2026-09-27) — 같은 모달이 노트 프리셋과 AI 프리셋을 둘 다 다룬다.
     expect(screen.getByRole("tab", { name: "Note presets" })).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "AI presets" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Custom prompts" })).toBeTruthy();
   });
 });

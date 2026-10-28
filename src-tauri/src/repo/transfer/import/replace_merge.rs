@@ -6,10 +6,22 @@ use crate::error::{db as dberr, io, AppResult};
 use crate::repo::fts;
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
+use super::super::swap::{discard_old_tree, sibling_of, swap_tree};
 use super::super::bundle::{AttachmentRow, Bundle};
 use super::ImportResult;
+
+/// 교체 가져오기의 첨부 스왑에 쓰는 (스테이징, 옛 첨부) 자리 — 둘 다 **실제 첨부 폴더(`data_att`)의 형제**다.
+/// 저장 위치 재정의(db::set_dir_overrides)로 attachments/ 가 data_dir 밖(다른 볼륨)에 있으면 data_dir 아래 자리로는
+/// rename 이 볼륨을 건너 실패하는데, 커밋 **뒤**에야 터져 DB 는 번들·첨부는 옛 파일인 채 남는다(복원·초기화의
+/// `attachments_sibling` 과 같은 이유 — backup.rs). 재정의가 없으면 부모 = data_dir 그대로다.
+fn att_swap_paths(data_dir: &Path, data_att: &Path) -> (PathBuf, PathBuf) {
+    (
+        sibling_of(data_att, data_dir, &format!("attachments.incoming-{}", crate::util::new_id())),
+        sibling_of(data_att, data_dir, &format!("attachments.old-{}", crate::util::new_id())),
+    )
+}
 
 /// `replace` — 스냅샷 백업 → 첨부 스테이징 복사(실패해도 기존 상태 보존) → 단일 트랜잭션으로
 /// wipe + insert_all → 커밋 후 attachments/ rename 스왑.
@@ -28,7 +40,7 @@ pub(super) fn import_replace(
         // 커밋됐는데 기존 첨부 파일은 통째로 사라진 채 복구 불가능했다. 이 순서면 복사가
         // 실패해도 DB/기존 attachments/ 모두 그대로이고, 커밋 뒤에는 rename 스왑만 남아
         // 실패 가능성이 훨씬 낮다.
-        let staging_att = data_dir.join(format!("attachments.incoming-{}", crate::util::new_id()));
+        let (staging_att, old_att) = att_swap_paths(data_dir, data_att);
         std::fs::create_dir_all(&staging_att).map_err(io)?;
         if let Err(e) = super::copy_attachments(&bundle.attachments, &bundle_att, &staging_att) {
             let _ = std::fs::remove_dir_all(&staging_att);
@@ -77,15 +89,10 @@ pub(super) fn import_replace(
 
         // 커밋은 끝났으니 여기서부터는 되돌릴 수 없다. 남은 건 rename 뿐이라(복사와 달리)
         // 실패 확률이 낮고, 설령 실패해도 기존 파일들은 data_att 또는 old_att 위치에 그대로
-        // 남아 있어 유실로 이어지지 않는다.
-        let old_att = data_dir.join(format!("attachments.old-{}", crate::util::new_id()));
-        if data_att.exists() {
-            std::fs::rename(&data_att, &old_att).map_err(io)?;
-        }
-        std::fs::rename(&staging_att, &data_att).map_err(io)?;
-        if old_att.exists() {
-            let _ = std::fs::remove_dir_all(&old_att);
-        }
+        // 남아 있어 유실로 이어지지 않는다. 그래도 실패하면 DB 는 번들·attachments/ 는 옛 파일인 채
+        // 어긋나므로 반드시 기록한다(릴리즈엔 콘솔이 없다 — diag).
+        swap_tree(data_att, &staging_att, &old_att, "import attachments")?;
+        discard_old_tree(&old_att, "import attachments.old");
 
         Ok(ImportResult {
             imported_notes: bundle.notes.len() as i64,
@@ -639,6 +646,88 @@ mod tests {
             })
             .count();
         assert_eq!(leftovers, 0);
+    }
+
+    // 리그레션: 첨부 위치 재정의로 attachments/ 가 data_dir 밖(다른 볼륨)에 있으면 스테이징·옛 첨부 자리도 그 **형제**여야
+    // 한다 — data_dir 아래에 두면 rename 이 볼륨을 건너 실패하는데 그건 커밋 뒤라 DB 는 번들·첨부는 옛 파일인 채 남는다.
+    // 볼륨 교차 자체는 테스트로 만들 수 없어 경로 생성 규칙을 검증한다(재정의가 없으면 부모 = data_dir 그대로).
+    #[test]
+    fn att_swap_paths_are_siblings_of_the_live_attachments_dir_not_of_data_dir() {
+        let data_dir = Path::new("C:/data");
+        let live_elsewhere = Path::new("D:/cloud/brise-attachments");
+        let (staging, old) = att_swap_paths(data_dir, live_elsewhere);
+        assert_eq!(staging.parent(), Some(Path::new("D:/cloud")));
+        assert_eq!(old.parent(), Some(Path::new("D:/cloud")));
+        assert!(staging.file_name().unwrap().to_string_lossy().starts_with("attachments.incoming-"));
+        assert!(old.file_name().unwrap().to_string_lossy().starts_with("attachments.old-"));
+        assert_ne!(staging, old);
+
+        // 재정의가 없을 때(live = data_dir/attachments)는 예전과 같은 자리다.
+        let live_default = data_dir.join("attachments");
+        let (staging, old) = att_swap_paths(data_dir, &live_default);
+        assert_eq!(staging.parent(), Some(data_dir));
+        assert_eq!(old.parent(), Some(data_dir));
+    }
+
+    // 첨부 폴더가 data_dir 밖에 있어도 교체 가져오기가 번들 첨부를 그 폴더로 스왑하고, data_dir·첨부 부모에 잔여물을 안 남긴다.
+    #[test]
+    fn replace_import_swaps_attachments_that_live_outside_data_dir() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        migrations::run(&mut conn).unwrap();
+        let now = now_iso();
+        let version = migrations::current_version(&conn).unwrap();
+
+        let mut bundle = bundle_with_dangling_internal("folder1", version);
+        bundle.workspaces.push(WorkspaceRow { id: "ws1".to_string(), name: "Workspace".to_string(), created_at: now.clone() });
+        bundle.folders.push(FolderRow {
+            id: "folder1".to_string(),
+            workspace_id: "ws1".to_string(),
+            name: "Notes".to_string(),
+            position: 0,
+            is_open: 1,
+            created_at: now.clone(),
+            color_hue: None,
+            icon: None,
+            rules: None,
+            search_excluded: false,
+            ai_excluded: false,
+        });
+        bundle.attachments.push(AttachmentRow {
+            id: "att-file".to_string(),
+            note_id: "noteA".to_string(),
+            name: "a.txt".to_string(),
+            kind: "doc".to_string(),
+            rel_path: Some("a.txt".to_string()),
+            url: None,
+            size_bytes: None,
+            position: 5,
+            created_at: now,
+        });
+
+        let bundle_dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(bundle_dir.path().join("attachments")).unwrap();
+        std::fs::write(bundle_dir.path().join("attachments").join("a.txt"), b"from bundle").unwrap();
+        let data_dir = tempfile::tempdir().unwrap();
+        // 첨부는 data_dir 밖(예: 다른 드라이브의 클라우드 폴더)에 산다 — 부모(cloud)는 data_dir 의 부모가 아니다.
+        let cloud = tempfile::tempdir().unwrap();
+        let data_att = cloud.path().join("brise-attachments");
+        std::fs::create_dir_all(&data_att).unwrap();
+        std::fs::write(data_att.join("existing.txt"), b"old").unwrap();
+
+        import_replace(&mut conn, data_dir.path(), &bundle, &bundle_dir.path().join("attachments"), &data_att).unwrap();
+
+        assert_eq!(std::fs::read(data_att.join("a.txt")).unwrap(), b"from bundle");
+        assert!(!data_att.join("existing.txt").exists(), "교체이므로 옛 첨부는 사라진다");
+        // 스테이징·옛 폴더 잔여물이 어디에도 없다(data_dir 에도, 첨부 부모에도).
+        for dir in [data_dir.path(), cloud.path()] {
+            let strays: Vec<String> = std::fs::read_dir(dir)
+                .unwrap()
+                .filter_map(|e| e.ok())
+                .map(|e| e.file_name().to_string_lossy().to_string())
+                .filter(|n| n.starts_with("attachments."))
+                .collect();
+            assert!(strays.is_empty(), "stray swap folders in {}: {strays:?}", dir.display());
+        }
     }
 
     #[test]

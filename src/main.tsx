@@ -89,6 +89,9 @@ async function boot() {
     return;
   }
 
+  // 전역 툴팁(title= 위임) — 펫 캐릭터 창을 뺀 모든 창. 동적 청크라 부팅 번들에 안 붙는다.
+  void import("./lib/tooltip").then((m) => m.installTooltips());
+
   // 언어 사전 — 펫 캐릭터 창(위) 말고는 모든 창이 t() 로 그리므로 렌더 전에 지금 언어 사전 하나를 받는다
   // (i18n/locales.ts 헤더). 앱 청크와 병렬로 받기 시작하고, 각 분기가 root.render 직전에 기다린다.
   const localeReady = Promise.all([import("./i18n/locales"), import("./stores/settings")]).then(

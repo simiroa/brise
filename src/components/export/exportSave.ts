@@ -2,6 +2,7 @@
  * 내보내기 모달의 "내보내는" 쪽 — 저장 대화상자 · export_hwpx / export_docx / export_html 호출 · 서식 복사(클립보드) ·
  * 완료 토스트 · 열기. Markdown 은 기존 lib/noteActions.ts(exportNote · exportSectionMd)가 그대로 맡는다.
  */
+import { withExportDir } from "../../lib/exportDir";
 import { call, emitNotice } from "../../lib/invoke";
 import { showToastOnly } from "../../lib/undo";
 import { reportFallback, safeErrorDetail } from "../../lib/diag";
@@ -25,7 +26,7 @@ const SAVED_TOAST_TTL_MS = 10_000;
 export async function pickSavePath(defaultName: string, label: string, ext: string): Promise<string | null> {
   try {
     const { save } = await import("@tauri-apps/plugin-dialog");
-    const dest = await save({ defaultPath: defaultName, filters: [{ name: label, extensions: [ext] }] });
+    const dest = await save({ defaultPath: withExportDir(defaultName), filters: [{ name: label, extensions: [ext] }] });
     return dest || null;
   } catch (e) {
     reportFallback("export", "save_dialog_unavailable", safeErrorDetail(e));

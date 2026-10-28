@@ -31,7 +31,10 @@ describe("ReorderList (W23-a)", () => {
     );
     const off = screen.getByTestId("chip-item-c");
     expect(off.style.opacity).toBe("var(--dim-disabled)");
-    expect(off.style.border).toContain("var(--divider)");
+    expect(off.style.borderColor).toBe("var(--divider)");
+    // 켜짐은 배지가 아니라 칩 자체의 밝기(강조 테두리)로 — 켜짐/꺼짐 글자 배지는 없다(오너 2026-10-28).
+    expect(screen.getByTestId("chip-item-a").style.borderColor).toBe("var(--accent)");
+    expect(screen.queryByTestId("chip-state-a")).toBeNull();
     for (const el of Array.from(container.querySelectorAll<HTMLElement>("*"))) {
       expect(el.getAttribute("style") ?? "").not.toContain("var(--line)");
     }
@@ -66,7 +69,7 @@ describe("ReorderList (W23-a)", () => {
     const { unmount } = render(
       <ReorderList items={lastOn} onReorder={() => {}} onToggle={() => {}} testIdPrefix="chip" />,
     );
-    expect(screen.getByTestId("chip-keyboard-hint").textContent).toMatch(/←|arrow/i);
+    expect(screen.getByTestId("chip-keyboard-hint").textContent).toMatch(/↑|←|arrow/i);
     await userEvent.click(screen.getByTestId("chip-item-a"));
     clearSpy.mockClear();
     unmount();
@@ -74,7 +77,7 @@ describe("ReorderList (W23-a)", () => {
     clearSpy.mockRestore();
   });
 
-  it("drop indicator sits on the side the chip will land: right edge when dragging forward", () => {
+  it("drop indicator sits on the side the chip will land: right edge when dragging forward (one-row strip, 2026-10-28)", () => {
     const original = document.elementFromPoint;
     const target = () => screen.getByTestId("chip-item-c");
     (document as any).elementFromPoint = () => target();
@@ -85,7 +88,7 @@ describe("ReorderList (W23-a)", () => {
       fireEvent.pointerMove(a, { pointerId: 1, clientX: 80, clientY: 0 });
       fireEvent.pointerMove(a, { pointerId: 1, clientX: 90, clientY: 0 });
       expect(target().getAttribute("data-drop")).toBe("after");
-      expect(target().style.boxShadow).toContain("inset -2px");
+      expect(target().style.boxShadow).toContain("inset -2px 0");
     } finally {
       (document as any).elementFromPoint = original;
     }

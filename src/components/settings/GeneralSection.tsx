@@ -7,10 +7,8 @@ import { isBrowser } from "../../lib/env";
 import { call, callSilent, emitNotice } from "../../lib/invoke";
 import { reportFallback } from "../../lib/diag";
 import type { DbStatsOutput } from "../../lib/commands.gen";
-import { groupCardStyle } from "./shared";
 import { IconAction } from "./IconAction";
 import { SettingsRow } from "./SettingsRow";
-import { SectionHeader } from "./SectionHeader";
 import { Select } from "../Select";
 import {
   IconSettings,
@@ -23,6 +21,9 @@ import {
 import { ProductUpdateCard } from "./ProductUpdateCard";
 import { SwitchGrid } from "./SwitchGrid";
 import { MetricTileGroup } from "./MetricTileGroup";
+import { NotificationsCard } from "./NotificationsCard";
+import { FolderShortcutsCard } from "./FolderShortcutsCard";
+import { SettingsCard } from "./SettingsCard";
 
 interface GeneralSectionProps {
   onClose: () => void;
@@ -33,8 +34,8 @@ interface GeneralSectionProps {
  *
  * 1. 맨 위 제품·업데이트 카드(페이지 히어로는 PLAN-2026-10-24 D3 로 없앴다).
  * 2. 페이지 위 통계 띠: 3열 MetricTileGroup — 카드 밖(R1: 통계 띠는 박스에 넣지 않는다).
- * 3. 카드(`settings-app-behavior`): 앱 동작 — 언어 선택, 2열 SwitchGrid(시작/트레이/캡처),
- *    화면 저장 폴더, 온보딩 다시 시작 행. 알림 행은 "알림 및 일정"(NotificationsSection)에,
+ * 3. 카드(`settings-app-behavior`): 앱 동작 — 언어 선택, SwitchGrid(시작/트레이/캡처; 한 열),
+ *    화면 저장 폴더, 온보딩 다시 시작 행. 그 아래 알림 카드(NotificationsCard, 2026-10-27 이사).
  *    날짜·지역 제안과 원본 처리는 "에디터"(EditorSection)에 있다.
  *
  * PLAN-2026-10-24 D6·D7: 저장 공간 게이지와 "저장 및 백업" 카드는 "데이터 관리"(DataManagementSection)로,
@@ -141,7 +142,7 @@ export function GeneralSection({ onClose }: GeneralSectionProps) {
 
   return (
     <>
-      {/* 제품·업데이트 카드(PLAN-2026-10-24 D2) — 이름·버전·업데이트·자동 확인. 레일 하단에서 이사했다. */}
+      {/* 히어로 — 제품·업데이트 카드(PLAN-2026-10-24 D2): 이름·버전·업데이트·변경 로그·자동 확인. 첫 페이지라 통계 띠보다 위(PLAN-2026-10-27 §1). */}
       <ProductUpdateCard />
 
       {/* 1. 저장소 통계 — 오너 규칙 R1(2026-09-15 QA): 통계 띠는 카드에 넣지 않고
@@ -172,8 +173,7 @@ export function GeneralSection({ onClose }: GeneralSectionProps) {
 
       {/* 앱 동작 — 언어 · 토글 2열 격자(시작/트레이/캡처) · 온보딩. 브라우저(태블릿)에는
           데스크톱 전용 셋의 대응물이 없어 격자가 통째로 빠진다. */}
-      <div className="card" style={groupCardStyle} data-testid="settings-app-behavior">
-        <SectionHeader title={t("settings.app_behavior")} icon={<IconSettings size={14} strokeWidth={2} />} />
+      <SettingsCard title={t("settings.app_behavior")} icon={<IconSettings size={14} strokeWidth={2} />} testId="settings-app-behavior">
 
         <SettingsRow
           anchor="ui_language"
@@ -197,7 +197,7 @@ export function GeneralSection({ onClose }: GeneralSectionProps) {
           // 선은 영역 경계(카드·SubGroup)에만 긋는다 — 격자는 다른 행들처럼 여백으로 갈린다(D2).
           <SwitchGrid
             aria-label={t("settings.app_behavior")}
-            columns={2}
+           
             items={[
               {
                 id: "autostart",
@@ -288,7 +288,13 @@ export function GeneralSection({ onClose }: GeneralSectionProps) {
             </button>
           }
         />
-      </div>
+      </SettingsCard>
+
+      {/* 알림 — 앱 동작 아래(PLAN-2026-10-27). 달력 및 일정 페이지에서 이사. */}
+      <NotificationsCard />
+
+      {/* 폴더 바로가기 — 데스크톱 전용(열기 커맨드가 http:false). 위치 변경은 데이터 관리 > 저장 및 백업. */}
+      {!browser && <FolderShortcutsCard />}
     </>
   );
 }

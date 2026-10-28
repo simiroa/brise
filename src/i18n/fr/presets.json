@@ -14,7 +14,7 @@
   "ai_disabled_hint": "Configurez l'IA dans les paramètres pour utiliser ce préréglage.",
   "ai_checking": "Vérification de la connexion IA…",
   "ai_unreachable": "Impossible de se connecter à l'IA — vérifiez les paramètres",
-  "ai_actions_title": "Préréglages IA",
+  "ai_actions_title": "Prompts personnalisés",
   "assist_autorun": "Exécution auto",
   "style_title": "Icône et couleur",
   "color_default": "Couleur par défaut",

@@ -14,5 +14,6 @@
   "view_snapshots": "Autosaves",
   "view_snapshots_hint": "View autosaved versions - pick a saved point of this note to restore",
   "back_to_activity": "Back to activity",
-  "restore_failed": "Snapshot restore failed: {{message}}"
+  "restore_failed": "Snapshot restore failed: {{message}}",
+  "open_window": "Open in a window"
 }

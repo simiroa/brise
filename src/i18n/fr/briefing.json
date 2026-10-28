@@ -43,7 +43,6 @@
   "habits_done": "{{done}}/{{total}} faites",
   "habits_empty": "Aucune habitude pour l’instant. Ajoutez-en une ici.",
   "habits_title": "Habitudes du jour",
-  "hourly_aria": "Météo heure par heure",
   "load_failed": "Impossible de charger.",
   "loading": "Chargement…",
   "notify_body": "{{n}} événements aujourd'hui · habitudes {{done}}/{{total}}",

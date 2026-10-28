@@ -5,13 +5,23 @@
 // PLAN-2026-10-19-briefing-rewrite.md W2: 시간축에서 일정 만들기(block_create, §4.1)와 문구 팩 '내 노트 인용'
 // (note_quote, §6)도 여기 둔다 — 둘 다 브리핑 창 전용이고 specs/commands/briefing.yaml 과 1:1.
 use crate::error::{db as dberr, AppError, AppResult};
-use crate::models::{CollectedNote, RecentCollected};
+use crate::models::{CollectHistoryNote, CollectedNote, RecentCollected};
 use crate::repo::{activity, checklist, folders, notes, schedule};
 use chrono::{DateTime, Duration, SecondsFormat, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
 
 const EXCERPT_CHARS: usize = 120;
+
+/// 수집으로 들어온 살아있는 노트의 뼈대(`FROM notes n` 뒤에 붙는 JOIN + 공통 WHERE, `?1` = workspace_id) — 브리핑 카드(`recent_collected`)와 설정의
+/// 수집 이력 표(`collect_history`)가 같은 뼈대를 쓴다. 브리핑은 여기에 `show_in_briefing` 조건을 더하고, 이력은 더하지 않는다
+/// (브리핑에서 끈 소스의 노트도 "이 소스가 만든 노트" 이력엔 남아야 한다). 소스가 삭제됐으면 `cs` 가 NULL 이다.
+const COLLECTED_NOTES_BASE: &str = "JOIN folders f ON f.id = n.folder_id
+             LEFT JOIN collect_sources cs ON cs.id = n.origin_source_id
+             WHERE f.workspace_id = ?1 AND n.deleted_at IS NULL AND n.collected_at IS NOT NULL";
+
+/// 브리핑에서 꺼진 소스의 노트를 뺀다 — 단 소스가 삭제된(조인 NULL) 노트는 더 끌 수 없으니 계속 보인다(E3).
+const BRIEFING_SHOWN: &str = "(cs.id IS NULL OR cs.show_in_briefing = 1)";
 
 /// 수집이 이 노트를 썼다(새로 만들었거나 기존 하루 노트에 줄을 붙였다)고 표시한다. 소스가 사라져도 남는다(FK 없음).
 pub fn stamp_collected(conn: &Connection, note_id: &str, source_id: &str) -> AppResult<()> {
@@ -44,15 +54,13 @@ pub fn recent_collected(
 
     // 별칭은 notes 컬럼명과 겹치지 않게(src_name/src_kind) — HANDOFF §2.3.
     let mut stmt = conn
-        .prepare(
+        .prepare(&format!(
             "SELECT n.id, n.title, n.origin_source_id, cs.name AS src_name, cs.kind AS src_kind, n.collected_at,
                     (SELECT substr(s.body_md, 1, 400) FROM sections s WHERE s.note_id = n.id ORDER BY s.position LIMIT 1) AS excerpt_raw
-             FROM notes n JOIN folders f ON f.id = n.folder_id
-             LEFT JOIN collect_sources cs ON cs.id = n.origin_source_id
-             WHERE f.workspace_id = ?1 AND n.deleted_at IS NULL AND n.collected_at IS NOT NULL
-               AND (cs.id IS NULL OR cs.show_in_briefing = 1)
-             ORDER BY n.collected_at DESC LIMIT ?2",
-        )
+             FROM notes n {COLLECTED_NOTES_BASE}
+               AND {BRIEFING_SHOWN}
+             ORDER BY n.collected_at DESC LIMIT ?2"
+        ))
         .map_err(dberr)?;
     let rows = stmt
         .query_map(params![workspace_id, limit], |r| {
@@ -88,15 +96,40 @@ pub fn recent_collected(
 
     let new_count: i64 = conn
         .query_row(
-            "SELECT COUNT(*) FROM notes n JOIN folders f ON f.id = n.folder_id
-             LEFT JOIN collect_sources cs ON cs.id = n.origin_source_id
-             WHERE f.workspace_id = ?1 AND n.deleted_at IS NULL AND n.collected_at > ?2
-               AND (cs.id IS NULL OR cs.show_in_briefing = 1)",
+            &format!("SELECT COUNT(*) FROM notes n {COLLECTED_NOTES_BASE} AND n.collected_at > ?2 AND {BRIEFING_SHOWN}"),
             params![workspace_id, since],
             |r| r.get(0),
         )
         .map_err(dberr)?;
     Ok(RecentCollected { items, new_count })
+}
+
+/// 설정 > 수집 > 수집 이력 표 — 수집 소스가 만든 노트를 최근 수집순으로 `limit`(1..=100) 개. 표가 쓰는 필드(노트·제목·소스 이름·
+/// 수집 시각)만 돌려준다: 브리핑 카드용 발췌 서브쿼리·행마다 태그 조회(N+1)·`new_count` 집계를 하지 않는다.
+/// `recent_collected` 와 뼈대(`COLLECTED_NOTES_BASE`)는 같지만 **`show_in_briefing` 조건이 없다** — 브리핑에서 끈 소스의 노트도
+/// 이력엔 나온다("이 소스가 뭘 가져왔나"를 보는 표다). 삭제된 노트·다른 노트북은 제외, 원본 소스가 삭제된 노트는 이름 null 로 남는다.
+/// 정렬은 부분 인덱스 idx_notes_collected_alive(collected_at)를 따른다 — `INDEXED BY` 로 고정한다: 통계가 없는 부팅 직후의 플래너는
+/// 폴더 → notes(folder_id) 로 내려가 그 노트북의 수집 노트 전부를 임시 B-tree 로 정렬했다(EXPLAIN 으로 확인). 고정하면 최근 것부터
+/// 읽다가 LIMIT 에서 끊는다(부분 인덱스 술어 `collected_at IS NOT NULL AND deleted_at IS NULL` 은 공통 WHERE 가 충족한다).
+fn collect_history_sql() -> String {
+    format!(
+        "SELECT n.id, n.title, cs.name, n.collected_at
+         FROM notes n INDEXED BY idx_notes_collected_alive {COLLECTED_NOTES_BASE}
+         ORDER BY n.collected_at DESC LIMIT ?2"
+    )
+}
+
+pub fn collect_history(conn: &Connection, workspace_id: &str, limit: i64) -> AppResult<Vec<CollectHistoryNote>> {
+    let limit = limit.clamp(1, 100);
+    let mut stmt = conn.prepare(&collect_history_sql()).map_err(dberr)?;
+    let rows = stmt
+        .query_map(params![workspace_id, limit], |r| {
+            Ok(CollectHistoryNote { note_id: r.get(0)?, title: r.get(1)?, source_name: r.get(2)?, collected_at: r.get(3)? })
+        })
+        .map_err(dberr)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(dberr)?;
+    Ok(rows)
 }
 
 // ── 최근 작업 노트 (briefing_recent_notes) ───────────────────────────────────────────────────
@@ -502,6 +535,61 @@ mod tests {
         conn.execute("UPDATE notes SET origin_source_id='src2' WHERE id='hidden'", []).unwrap();
         let r = recent_collected(&conn, &ws, None, 10, now()).unwrap();
         assert_eq!((r.new_count, r.items.len()), (1, 1));
+    }
+
+    /// B7: 수집 이력은 브리핑에서 끈 소스의 노트도 보여 준다(브리핑 카드와 달리).
+    #[test]
+    fn collect_history_includes_notes_of_sources_hidden_from_the_briefing() {
+        let (conn, ws, f) = setup();
+        source(&conn, &ws, "src1", Some(0)); // 브리핑에서 꺼진 소스
+        note(&conn, &f, "hidden", Some("2026-10-01T11:00:00.000Z"));
+        assert_eq!(recent_collected(&conn, &ws, None, 10, now()).unwrap().items.len(), 0, "브리핑 카드에선 빠진다");
+        let h = collect_history(&conn, &ws, 10).unwrap();
+        assert_eq!(h.len(), 1);
+        assert_eq!(h[0].note_id, "hidden");
+        assert_eq!(h[0].source_name.as_deref(), Some("src1"));
+        assert_eq!(h[0].collected_at, "2026-10-01T11:00:00.000Z");
+    }
+
+    /// 최근 수집순 · limit(1..=100 클램프) · 삭제된 노트/다른 노트북/수집 아닌 노트 제외 · 소스가 삭제됐으면 이름만 null.
+    #[test]
+    fn collect_history_orders_newest_first_limits_and_excludes_trash_other_notebooks_and_non_collected() {
+        let (conn, ws, f) = setup();
+        note(&conn, &f, "a", Some("2026-10-01T09:00:00.000Z"));
+        note(&conn, &f, "b", Some("2026-10-01T10:00:00.000Z"));
+        note(&conn, &f, "c", Some("2026-10-01T11:00:00.000Z"));
+        note(&conn, &f, "plain", None);
+        note(&conn, &f, "trashed", Some("2026-10-01T12:00:00.000Z"));
+        conn.execute("UPDATE notes SET deleted_at='2026-10-01T12:30:00.000Z' WHERE id='trashed'", []).unwrap();
+        conn.execute_batch("PRAGMA foreign_keys=OFF;").unwrap();
+        conn.execute("INSERT INTO folders(id, workspace_id, name, position, created_at) VALUES ('f2','ws2','x',0,'2026-01-01T00:00:00.000Z')", []).unwrap();
+        note(&conn, "f2", "foreign", Some("2026-10-01T13:00:00.000Z"));
+
+        let ids = |limit| collect_history(&conn, &ws, limit).unwrap().into_iter().map(|n| n.note_id).collect::<Vec<_>>();
+        assert_eq!(ids(10), ["c", "b", "a"]);
+        assert_eq!(ids(2), ["c", "b"]);
+        assert_eq!(ids(0), ["c"], "limit 은 1 로 클램프");
+        // 원본 소스 행이 없어도(삭제됨) 이력엔 남고 이름만 null.
+        assert!(collect_history(&conn, &ws, 10).unwrap().iter().all(|n| n.source_name.is_none()));
+        // 다른 노트북의 이력엔 그 노트북 것만.
+        let other = collect_history(&conn, "ws2", 10).unwrap();
+        assert_eq!(other.iter().map(|n| n.note_id.as_str()).collect::<Vec<_>>(), ["foreign"]);
+    }
+
+    /// 이력 정렬은 collected_at 부분 인덱스를 탄다 — 임시 B-tree 정렬 없이 LIMIT 이 일찍 끊긴다(플랜은 보고용으로 남긴다).
+    #[test]
+    fn collect_history_order_by_follows_the_collected_at_index() {
+        let (conn, _ws, _f) = setup();
+        let sql = format!("EXPLAIN QUERY PLAN {}", collect_history_sql());
+        let mut st = conn.prepare(&sql).unwrap();
+        let plan: Vec<String> = st
+            .query_map(params!["ws", 30], |r| r.get::<_, String>(3))
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect();
+        eprintln!("[plan collect_history] {plan:?}");
+        assert!(plan.iter().any(|d| d.contains("idx_notes_collected_alive")), "must read the collected_at index: {plan:?}");
+        assert!(!plan.iter().any(|d| d.contains("TEMP B-TREE")), "no sort step expected: {plan:?}");
     }
 
     #[test]

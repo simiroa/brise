@@ -27,13 +27,6 @@ vi.mock("../../plugins/pet/bridge/petChatSection", () => ({
   PET_APPLY_CHAT_SECTION_EVENT: "pet-apply-chat-section",
 }));
 
-// C(AUDIT-2026-09-26): accept-collect-suggestion's card-restore-on-failure test needs to control
-// whether the compound accept function succeeds or fails.
-const acceptCollectSuggestionMock = vi.fn().mockResolvedValue(undefined);
-vi.mock("../../plugins/pet/bridge/petCollectBridge", () => ({
-  acceptCollectSuggestion: (...args: unknown[]) => acceptCollectSuggestionMock(...args),
-}));
-
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn((event: string, handler: (e: { payload?: unknown }) => void) => {
     listenHandlers[event] = handler;
@@ -57,8 +50,6 @@ describe("SidebarChat", () => {
     emitNoticeMock.mockReset();
     applyChatSectionMock.mockReset();
     applyChatSectionMock.mockResolvedValue(true);
-    acceptCollectSuggestionMock.mockReset();
-    acceptCollectSuggestionMock.mockResolvedValue(undefined);
     resetChatExtrasCache();
     for (const key of Object.keys(listenHandlers)) delete listenHandlers[key];
     emitMock.mockResolvedValue(undefined);
@@ -820,6 +811,56 @@ describe("SidebarChat", () => {
     expect(screen.queryByTestId("chat-tool-clear_session")).toBeNull();
   });
 
+  describe("기억 추출(도구 메뉴)", () => {
+    const mockHistory = (generate: () => Promise<unknown>) => {
+      useSettingsStore.setState({ aiEnabled: true } as never);
+      callMock.mockImplementation(async (cmd: string) => {
+        if (cmd === "pet_chat_history") {
+          return {
+            messages: [
+              { role: "user", text: "나는 디자이너야", created_at: "t1" },
+              { role: "assistant", text: "반가워요", created_at: "t2" },
+            ],
+          };
+        }
+        if (cmd === "settings_get_all") return { settings: {} };
+        if (cmd === "ai_generate_from_prompt") return generate();
+        return {};
+      });
+    };
+    const runExtract = async () => {
+      render(<SidebarChat />);
+      await waitFor(() => expect(screen.getByText("나는 디자이너야")).toBeTruthy());
+      fireEvent.click(screen.getByTestId("chat-tools-btn"));
+      fireEvent.click(screen.getByTestId("chat-tool-extract_memory"));
+      await waitFor(() => expect(callMock).toHaveBeenCalledWith("ai_generate_from_prompt", expect.anything()));
+      // 요청이 끝나고 상태가 정리될 때까지 흘려보낸다.
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 30));
+      });
+    };
+
+    it("모델 호출이 실패하면 모달을 열지 않는다 — '후보 없음' 으로 보이면 안 된다", async () => {
+      mockHistory(async () => {
+        throw new Error("403 forbidden");
+      });
+      await runExtract();
+      expect(screen.queryByTestId("chat-memory-extract-modal")).toBeNull();
+    });
+
+    it("성공했지만 후보가 없으면 '후보 없음' 모달을 연다", async () => {
+      mockHistory(async () => ({ generated: "[]" }));
+      await runExtract();
+      expect(await screen.findByTestId("chat-memory-extract-empty")).toBeTruthy();
+    });
+
+    it("후보가 있으면 체크 목록 모달을 연다", async () => {
+      mockHistory(async () => ({ generated: '["사용자는 디자이너다"]' }));
+      await runExtract();
+      expect(await screen.findByTestId("chat-memory-extract-item-0")).toBeTruthy();
+    });
+  });
+
   it("persona dropdown: reuses pet_persona keys, custom deep-links to settings", async () => {
     callMock.mockImplementation(async (cmd: string) => {
       if (cmd === "settings_get_all") {
@@ -921,57 +962,5 @@ describe("SidebarChat", () => {
       );
     });
     expect(screen.getByText("요청을 구체화했습니다.")).toBeTruthy();
-  });
-
-  // C(AUDIT-2026-09-26): accepting the "collect" suggestion card removed the card BEFORE the
-  // async acceptCollectSuggestion() call — a failure there vanished with no trace and no way to
-  // retry (the card was already gone). It must now restore the card on failure.
-  describe("collect suggestion card — accept failure restores the card (C, AUDIT-2026-09-26)", () => {
-    function fireCollectSuggestion() {
-      const suggestions = [
-        {
-          id: "sug-1",
-          kind: "collect_post_process",
-          note_id: "note-collected",
-          note_title: "수집된 노트",
-          related_note_id: "note-collected",
-          related_note_title: "",
-          payload: JSON.stringify({ source_name: "RSS 피드", post_process_model: null }),
-          score: 1,
-          created_at: "2026-09-26T00:00:00.000Z",
-        },
-      ];
-      act(() => {
-        listenHandlers["pet-suggestions-pending"]?.({ payload: { suggestions } });
-      });
-    }
-
-    it("restores the card when acceptCollectSuggestion fails, so the user can retry", async () => {
-      acceptCollectSuggestionMock.mockRejectedValue(new Error("organize failed"));
-      render(<SidebarChat />);
-      await waitFor(() => expect(callMock).toHaveBeenCalledWith("pet_chat_history", {}));
-
-      fireCollectSuggestion();
-      const card = await screen.findByTestId("sidebar-chat-suggestion");
-      fireEvent.click(card.querySelector(".pet-suggestion__review") as HTMLButtonElement);
-
-      // The card disappears immediately (optimistic), then must reappear once the failure lands.
-      await waitFor(() => expect(acceptCollectSuggestionMock).toHaveBeenCalledTimes(1));
-      await waitFor(() => expect(screen.queryByTestId("sidebar-chat-suggestion")).not.toBeNull());
-    });
-
-    it("keeps the card gone when acceptCollectSuggestion succeeds", async () => {
-      acceptCollectSuggestionMock.mockResolvedValue(undefined);
-      render(<SidebarChat />);
-      await waitFor(() => expect(callMock).toHaveBeenCalledWith("pet_chat_history", {}));
-
-      fireCollectSuggestion();
-      const card = await screen.findByTestId("sidebar-chat-suggestion");
-      fireEvent.click(card.querySelector(".pet-suggestion__review") as HTMLButtonElement);
-
-      await waitFor(() => expect(acceptCollectSuggestionMock).toHaveBeenCalledTimes(1));
-      await new Promise((r) => setTimeout(r, 0));
-      expect(screen.queryByTestId("sidebar-chat-suggestion")).toBeNull();
-    });
   });
 });

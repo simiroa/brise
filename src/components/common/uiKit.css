@@ -1,0 +1,190 @@
+/*
+ * 공용 UI 3종 — SegmentedControl · ThinkingLoader · NumberTicker(시안으로 들어왔고 625b204c 이후 전부 화면에 연결됨).
+ * 외부 라이브러리(affectui) 코드는 쓰지 않았다. 패턴만 가져와 앱 토큰(--accent·--divider·--muted·--dur-*·
+ * --space-*·--text-*)으로 새로 썼다 — 색 리터럴 0, 자체 변수 0, 굵기는 400/600 두 단.
+ * 움직임은 전부 prefers-reduced-motion 에서 꺼진다.
+ */
+
+/* ── SegmentedControl ─────────────────────────────────────────────────────────────────────── */
+.seg {
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+  max-width: 100%;
+  box-sizing: border-box;
+  /* 좁으면 가로로 구르되 막대는 숨긴다 — 활성 칸은 스크립트가 보이게 맞춘다. */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.seg::-webkit-scrollbar { display: none; }
+.seg--fill { display: flex; width: 100%; }
+.seg--fill .seg__opt { flex: 1 1 0; min-width: 0; }
+.seg--tray {
+  padding: var(--space-1);
+  gap: var(--space-1);
+  background: var(--surface-raised);
+  border-radius: var(--radius-sm);
+}
+.seg--underline {
+  gap: var(--space-5);
+  border-bottom: 1px solid var(--divider);
+}
+/* 미끄러지는 표시 — 위치·폭은 실제 칸을 재서 인라인으로 준다(칸 폭이 달라도 맞는다). */
+.seg__indicator {
+  position: absolute;
+  pointer-events: none;
+  transition:
+    transform var(--dur-med) cubic-bezier(0.2, 0, 0, 1),
+    width var(--dur-med) cubic-bezier(0.2, 0, 0, 1);
+}
+.seg--tray .seg__indicator {
+  top: var(--space-1);
+  bottom: var(--space-1);
+  left: 0;
+  background: var(--accent);
+  border-radius: calc(var(--radius-sm) - 1px);
+}
+.seg--underline .seg__indicator {
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: var(--accent);
+}
+.seg__opt {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  flex: none;
+  min-height: var(--ctrl-h-lg);
+  box-sizing: border-box;
+  padding: 0 var(--space-5);
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  border-radius: calc(var(--radius-sm) - 1px);
+  transition: color var(--dur-fast) ease;
+}
+.seg--underline .seg__opt { padding: 0 var(--space-1); border-radius: 0; }
+.seg__opt:hover:not([aria-disabled="true"]) { color: var(--text); }
+.seg__opt[aria-checked="true"] { color: var(--text); }
+.seg--tray .seg__opt[aria-checked="true"] { color: var(--on-accent); }
+.seg__opt[aria-disabled="true"] { opacity: var(--dim-disabled); cursor: not-allowed; }
+.seg__opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.seg__count {
+  font-size: var(--text-2xs);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+/* ── ThinkingLoader ───────────────────────────────────────────────────────────────────────── */
+.think {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--ctrl-h-lg);
+  box-sizing: border-box;
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+.think--pill {
+  padding: 0 var(--space-4);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-pill);
+}
+.think__spin {
+  position: relative;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  animation: think-spin 0.9s steps(8) infinite;
+}
+.think__spin i {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  width: 2px;
+  height: 4px;
+  margin: 0 auto;
+  border-radius: 1px;
+  background: var(--accent);
+  transform-origin: 50% 7px;
+}
+.think__spin i:nth-child(1) { transform: rotate(0deg); opacity: 1; }
+.think__spin i:nth-child(2) { transform: rotate(45deg); opacity: 0.85; }
+.think__spin i:nth-child(3) { transform: rotate(90deg); opacity: 0.7; }
+.think__spin i:nth-child(4) { transform: rotate(135deg); opacity: 0.55; }
+.think__spin i:nth-child(5) { transform: rotate(180deg); opacity: 0.4; }
+.think__spin i:nth-child(6) { transform: rotate(225deg); opacity: 0.3; }
+.think__spin i:nth-child(7) { transform: rotate(270deg); opacity: 0.2; }
+.think__spin i:nth-child(8) { transform: rotate(315deg); opacity: 0.12; }
+.think__check {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--ok);
+}
+/* 라벨 위로 빛이 한 번씩 훑는다 — 글자색은 muted, 빛은 text. */
+.think__label {
+  background: linear-gradient(
+      100deg,
+      var(--muted) 35%,
+      var(--text) 50%,
+      var(--muted) 65%
+    )
+    0 0 / 250% 100% no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation:
+    think-roll var(--dur-slow) cubic-bezier(0.2, 0, 0, 1),
+    think-sweep 1.8s linear infinite;
+}
+.think--done .think__label {
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  animation: think-roll var(--dur-slow) cubic-bezier(0.2, 0, 0, 1);
+}
+@keyframes think-spin { to { transform: rotate(360deg); } }
+@keyframes think-sweep { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+@keyframes think-roll {
+  from { opacity: 0; transform: translateY(0.6em); filter: blur(2px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+
+/* ── NumberTicker ─────────────────────────────────────────────────────────────────────────── */
+.ticker {
+  display: inline-flex;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+/* 한 자리 = 높이 1em 창 안에서 0~9 를 세로로 쌓은 기둥이 translateY 로 굴러간다. */
+.ticker__digit {
+  display: inline-block;
+  height: 1em;
+  overflow: hidden;
+}
+.ticker__col {
+  display: flex;
+  flex-direction: column;
+  transition: transform var(--dur-slow) cubic-bezier(0.2, 0, 0, 1);
+}
+.ticker__col > span { height: 1em; display: block; text-align: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  .seg__indicator,
+  .seg__opt,
+  .ticker__col { transition: none; }
+  .think__spin { animation: none; }
+  .think__label,
+  .think--done .think__label { animation: none; }
+}

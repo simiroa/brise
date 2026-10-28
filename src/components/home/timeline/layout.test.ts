@@ -18,6 +18,7 @@ import {
   yearTicks,
   clampView,
   defaultTimelineView,
+  timelinePresetView,
   isYearFilterNarrowed,
   resolveTimelineView,
   zoomView,
@@ -965,5 +966,21 @@ describe("bucketByStep — 월 눈금은 달력의 달로 묶는다", () => {
     expect(b.map((x) => [formatBucketLabel(x.year, x.endYear), x.count])).toEqual([["2026-04", 1], ["2026-05", 2]]);
     expect(b[1].year).toBeCloseTo(may1, 8);
     expect(b[1].endYear).toBeCloseTo(dateToFractionalYear(2026, 6, 1), 8);
+  });
+});
+
+describe("timelinePresetView (설정 › 대시보드 › 타임라인 첫 화면 범위)", () => {
+  const now = new Date(2026, 9, 28); // 2026-10-28
+  it("fit 은 null — 노트에 맞추는 기존 동작을 그대로 둔다", () => {
+    expect(timelinePresetView("fit", now)).toBeNull();
+  });
+  it("around_now 는 올해 ±1, recent_* 는 오늘을 끝에 둔 고정 구간", () => {
+    expect(timelinePresetView("around_now", now)).toEqual({ from: 2025, to: 2027 });
+    const m3 = timelinePresetView("recent_3m", now)!;
+    const y1 = timelinePresetView("recent_1y", now)!;
+    expect(m3.to - m3.from).toBeCloseTo(0.28, 2);
+    expect(y1.to - y1.from).toBeCloseTo(1.08, 2);
+    expect(m3.to).toBeGreaterThan(2026.8);
+    expect(m3.to).toBeLessThan(2027);
   });
 });

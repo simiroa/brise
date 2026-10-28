@@ -10,6 +10,7 @@
  */
 import { lazyPreload } from "./lib/lazyPreload";
 
+export const LazyActivityHistoryPanel = lazyPreload(() => import("./components/ActivityHistoryPanel").then((m) => ({ default: m.ActivityHistoryPanel })), { name: "LazyActivityHistoryPanel" });
 export const AiActionsCard = lazyPreload(() => import("./components/settings/AiActionsCard").then((m) => ({ default: m.AiActionsCard })), { name: "AiActionsCard", idle: "settings" });
 export const AiAgentReviewModal = lazyPreload(() => import("./components/AiAgentReviewModal").then((m) => ({ default: m.AiAgentReviewModal })), { name: "AiAgentReviewModal" });
 export const AiBatchOrganizeModal = lazyPreload(() => import("./components/AiBatchOrganizeModal").then((m) => ({ default: m.AiBatchOrganizeModal })), { name: "AiBatchOrganizeModal" });
@@ -25,6 +26,7 @@ export const ChartEditor = lazyPreload(() => import("./components/sheet/ChartEdi
 export const ChartRefPreview = lazyPreload(() => import("./components/preview/ChartRefPreview").then((m) => ({ default: m.ChartRefPreview })), { name: "ChartRefPreview" });
 export const CollectSection = lazyPreload(() => import("./components/settings/CollectSection").then((m) => ({ default: m.CollectSection })), { name: "CollectSection", idle: "settings" });
 export const DashboardTabsSection = lazyPreload(() => import("./components/settings/DashboardTabsSection").then((m) => ({ default: m.DashboardTabsSection })), { name: "DashboardTabsSection", idle: "settings" });
+export const AttachmentsSection = lazyPreload(() => import("./components/settings/AttachmentsSection").then((m) => ({ default: m.AttachmentsSection })), { name: "AttachmentsSection", idle: "settings" });
 export const DataManagementSection = lazyPreload(() => import("./components/settings/DataManagementSection").then((m) => ({ default: m.DataManagementSection })), { name: "DataManagementSection", idle: "settings" });
 export const DiagramSection = lazyPreload(() => import("./components/diagram/DiagramSection").then((m) => ({ default: m.DiagramSection })), { name: "DiagramSection", idle: "main" });
 export const DocPreview = lazyPreload(() => import("./components/preview/DocPreview").then((m) => ({ default: m.DocPreview })), { name: "DocPreview" });

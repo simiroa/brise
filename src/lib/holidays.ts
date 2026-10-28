@@ -21,7 +21,7 @@
 import type { HolidayRegion } from "../stores/settings";
 import { reportFallback } from "./diag";
 
-export const HOLIDAY_REGIONS = ["none", "kr"] as const;
+export const HOLIDAY_REGIONS = ["none", "kr", "fr"] as const;
 
 /** Rows are [MM-DD, name]. One row per day; a day shared by two holidays gets one merged label. */
 const KR: Record<number, [string, string][]> = {
@@ -70,6 +70,38 @@ const KR: Record<number, [string, string][]> = {
   ],
 };
 
+/** 프랑스 법정 공휴일(2026-10-28 추가, PLAN-2026-10-27). 고정일 8개 + 부활절 기준 이동 3개(부활절 월요일·예수 승천일·성령강림 월요일).
+ *  표가 아니라 계산이라 연도 상한이 없지만, 번들 범위(2026–2030)만 노출한다 — KR 표와 같은 범위로 맞춘다. */
+const FR_FIXED: [string, string][] = [
+  ["01-01", "Jour de l'An"], ["05-01", "Fête du Travail"], ["05-08", "Victoire 1945"], ["07-14", "Fête nationale"],
+  ["08-15", "Assomption"], ["11-01", "Toussaint"], ["11-11", "Armistice 1918"], ["12-25", "Noël"],
+];
+const FR_YEARS: readonly [number, number] = [2026, 2030];
+
+/** 그레고리력 부활절(Meeus/Jones/Butcher) → [월, 일]. */
+function easterSunday(year: number): [number, number] {
+  const a = year % 19, b = Math.floor(year / 100), c = year % 100;
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  return [month, ((h + l - 7 * m + 114) % 31) + 1];
+}
+
+function frHolidays(year: number): ReadonlyMap<string, string> {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const out = new Map<string, string>(FR_FIXED.map(([md, name]) => [`${year}-${md}`, name]));
+  const [em, ed] = easterSunday(year);
+  const easter = Date.UTC(year, em - 1, ed);
+  for (const [offset, name] of [[1, "Lundi de Pâques"], [39, "Ascension"], [50, "Lundi de Pentecôte"]] as const) {
+    const d = new Date(easter + offset * 86_400_000);
+    const key = `${year}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+    out.set(key, out.has(key) ? `${out.get(key)} · ${name}` : name);
+  }
+  return out;
+}
+
 const EMPTY: ReadonlyMap<string, string> = new Map();
 
 // A(AUDIT-2026-09-26): 표 밖 연도는 매 호출(달력 렌더마다 몇 번씩)마다 조용히 빈 맵을 돌려준다 —
@@ -79,6 +111,14 @@ const reportedMissingYears = new Set<number>();
 
 /** ISO day (YYYY-MM-DD) → holiday name for one year. Empty for region "none" or a year past the table. */
 export function holidaysForYear(region: HolidayRegion, year: number): ReadonlyMap<string, string> {
+  if (region === "fr") {
+    if (year >= FR_YEARS[0] && year <= FR_YEARS[1]) return frHolidays(year);
+    if (!reportedMissingYears.has(year)) {
+      reportedMissingYears.add(year);
+      reportFallback("holidays", "year_out_of_table", `region=fr year=${year}`);
+    }
+    return EMPTY;
+  }
   if (region !== "kr") return EMPTY;
   const rows = KR[year];
   if (!rows) {

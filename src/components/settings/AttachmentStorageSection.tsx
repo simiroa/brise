@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { useSettingsStore } from "../../stores/settings";
+import type { AttachmentStorageMode } from "../../stores/prefs";
 import { isBrowser } from "../../lib/env";
 import { t } from "../../i18n/t";
-import { groupCardStyle } from "./shared";
-import { SectionHeader } from "./SectionHeader";
+import { attachmentStorageOptions } from "./enumLabels";
 import { SettingsRow } from "./SettingsRow";
 import { Select } from "../Select";
 import { IconFolderOpen, IconPaperclip } from "../icons";
 import { IconAction } from "./IconAction";
+import { SettingsCard } from "./SettingsCard";
 
 /**
  * 첨부 저장 방식.
@@ -41,11 +42,11 @@ export function AttachmentStorageSection() {
   };
 
   return (
-    <div className="card" style={groupCardStyle} data-testid="settings-attachment-storage">
-      <SectionHeader
-        title={t("settings.attachment_storage_section")}
-        icon={<IconPaperclip size={14} strokeWidth={2} />}
-      />
+    <SettingsCard
+      title={t("settings.attachment_storage_section")}
+      icon={<IconPaperclip size={14} strokeWidth={2} />}
+      testId="settings-attachment-storage"
+    >
 
       <SettingsRow
         anchor="attachment_storage_mode"
@@ -58,13 +59,9 @@ export function AttachmentStorageSection() {
         control={
           <Select
             value={attachmentStorageMode}
-            onChange={(v) => void setAttachmentStorageMode(v as any)}
+            onChange={(v) => void setAttachmentStorageMode(v as AttachmentStorageMode)}
             ariaLabel={t("settings.attachment_storage_mode")}
-            options={[
-              { value: "copy", label: t("settings.attachment_storage_mode_copy") },
-              { value: "link", label: t("settings.attachment_storage_mode_link") },
-              { value: "reference", label: t("settings.attachment_storage_mode_reference") },
-            ]}
+            options={attachmentStorageOptions()}
           />
         }
       />
@@ -118,6 +115,6 @@ export function AttachmentStorageSection() {
           </div>
         }
       />
-    </div>
+    </SettingsCard>
   );
 }

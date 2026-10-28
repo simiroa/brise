@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Brise",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "identifier": "com.brise.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -23,13 +23,14 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tiles.openfreemap.org asset: http://asset.localhost https://asset.localhost; media-src 'self' asset: http://asset.localhost https://asset.localhost; font-src 'self'; connect-src 'self' https://tiles.openfreemap.org ipc: http://ipc.localhost asset: http://asset.localhost https://asset.localhost; frame-src 'self' asset: http://asset.localhost https://asset.localhost https://www.youtube-nocookie.com; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tiles.openfreemap.org asset: http://asset.localhost https://asset.localhost; media-src 'self' asset: http://asset.localhost https://asset.localhost; font-src 'self' asset: http://asset.localhost https://asset.localhost; connect-src 'self' https://tiles.openfreemap.org ipc: http://ipc.localhost asset: http://asset.localhost https://asset.localhost; frame-src 'self' asset: http://asset.localhost https://asset.localhost https://www.youtube-nocookie.com; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
       "assetProtocol": {
         "enable": true,
         "scope": [
           "$APPDATA/attachments/**",
           "$APPDATA/workspace_bg/**",
           "$APPDATA/emoji/**",
+          "$APPDATA/fonts/**",
           "$APPDATA/slide_previews/**",
           "$RESOURCE/**"
         ]
@@ -48,7 +49,11 @@
     "targets": "all",
     "createUpdaterArtifacts": true,
     "resources": {
-      "resources/THIRD-PARTY-NOTICES.html": "THIRD-PARTY-NOTICES.html"
+      "resources/THIRD-PARTY-NOTICES.html": "THIRD-PARTY-NOTICES.html",
+      "../cli/brise.mjs": "cli/brise.mjs",
+      "../cli/mcp.mjs": "cli/mcp.mjs",
+      "../cli/commands.gen.json": "cli/commands.gen.json",
+      "../cli/agent-tools.gen.json": "cli/agent-tools.gen.json"
     },
     "icon": [
       "icons/32x32.png",

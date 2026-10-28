@@ -1,7 +1,7 @@
 // 데이터 초기화(db_reset) = "빈 상태로 복원". 예전엔 import::wipe() 의 손으로 관리하는 DELETE 목록을
 // 돌렸는데, 새 테이블이 생길 때마다 목록이 뒤처져 suggestions·ai_usage·수집 소스 등이 초기화를 넘어
 // 살아남았다(파일 쪽도 workspace_bg/ 는 아예 안 지웠다). 이제 갓 마이그레이션한 빈 DB 와 빈
-// attachments/·workspace_bg/ 를 스테이징해 backup_restore 와 **같은 스왑**(backup::swap_live_state)으로
+// attachments/·workspace_bg/ 를 스테이징해 backup_restore 와 **같은 스왑**(swap::swap_live_state)으로
 // 갈아끼운다 — 목록이 없으니 빠뜨릴 테이블도 없다. wipe() 는 replace 가져오기용으로 그대로 남는다.
 use crate::db::{self, migrations};
 use crate::error::{db as dberr, io, AppError, AppResult};
@@ -10,7 +10,7 @@ use rusqlite::Connection;
 use serde::Serialize;
 use std::path::Path;
 
-use super::backup::{attachments_sibling, swap_live_state, Staged};
+use super::swap::{attachments_sibling, swap_live_state, Staged};
 
 #[derive(Debug, Serialize)]
 pub struct ResetResult {
@@ -70,12 +70,7 @@ fn stage_empty(data_dir: &Path) -> AppResult<Staged> {
         Ok(())
     })();
     if let Err(e) = result {
-        let _ = std::fs::remove_file(&staged.db_path); // silent-ok: 실패한 스테이징 사본 정리
-        for ext in ["-wal", "-shm"] {
-            let _ = std::fs::remove_file(data_dir.join(format!("brise.reset-incoming-{id}.db{ext}"))); // silent-ok: 같은 이유
-        }
-        let _ = std::fs::remove_dir_all(&staged.att_path); // silent-ok: 같은 이유
-        let _ = std::fs::remove_dir_all(&staged.bg_path); // silent-ok: 같은 이유
+        staged.discard();
         return Err(e);
     }
     Ok(staged)

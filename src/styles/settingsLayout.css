@@ -1,0 +1,72 @@
+/* 설정 창 공통 레이아웃 규칙 — 한 곳에서 모든 페이지가 따라온다(2026-10-27 설정 디자인 개편).
+   인라인 스타일로 박아 둔 것(SectionHeader · SettingsRow · 헤더 그리드)이 이 파일의 변수·클래스를 읽는다. */
+
+/* ── 카드 제목은 박스 밖 ───────────────────────────────────────────────────────────────────
+   `.card` 의 **첫 자식**인 SectionHeader 는 박스 위로 올라가 옅은 색으로 선다. 여러 줄 그룹이 박스 안에서
+   제목과 뒤섞여 구분이 안 되던 것을, 제목은 박스 밖 · 항목은 박스 안으로 가른다. 페이지마다 손대지 않는다 —
+   카드 안 첫 자식이 아닌 SectionHeader(표 위 제목 등)는 원래 박스 밖이라 그대로 인라인이다.
+   제목이 차지하는 높이만큼 카드가 위 여백을 갖는다(절대 배치라 흐름에 안 잡히므로). */
+:root { --settings-title-h: 24px; }
+.settings-section-header { margin-bottom: var(--space-4); min-height: var(--settings-title-h); --settings-title-color: var(--muted); }
+.card > .settings-section-header:first-child > div { height: 100%; }
+.card:has(> .settings-section-header:first-child) {
+  position: relative;
+  margin-top: calc(var(--settings-title-h) + var(--space-2));
+}
+.card > .settings-section-header:first-child {
+  /* 높이를 고정한다 — 우측에 아이콘 버튼(IconAction)이 붙은 제목은 줄이 더 커서, 박스 밖으로 올라간 제목의 글자 자리가
+     페이지마다 달랐다(테마 재질 ↔ 달력, 2026-10-28). 제목 줄은 늘 --settings-title-h 이고 큰 버튼은 가운데 기준으로 넘친다. */
+  height: var(--settings-title-h);
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  margin-bottom: var(--space-2);
+}
+
+/* ── 정보성 스트립(지표 타일 · 저장 게이지 · 지역 시계) ─────────────────────────────────────
+   아크릴에서 혼자 완전 불투명한 짙은 면이 튀던 것을, 파묻힌 면(--surface-sunken)을 70% 만 칠해 바탕이 30% 비치게 한다.
+   프리셋과 무관하게 같은 규칙이다 — flat 에서는 비치는 바탕이 본문 틴트라 눈에 띄는 차이가 거의 없고, 아크릴에서만 바탕화면이
+   배어 나와 주변과 같은 결이 된다. 떠 있는 표면(.overlay)이 아니라 본문 안의 인-플로우 면이라 "항상 불투명" 원칙의 대상이 아니다.
+   글자는 --text/--muted 그대로 — 면이 바탕보다 약간 어두운 쪽이라 대비는 오히려 같거나 낫다. */
+.settings-strip {
+  background: color-mix(in srgb, var(--surface-sunken) 70%, transparent);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-md);
+}
+
+/* ── 창 그리드의 공유 열 ──────────────────────────────────────────────────────────────────
+   레일 폭 한 값 · 본문 열(검색 줄과 페이지 본문이 같은 클래스)의 폭/안쪽 여백 한 값. 창 폭이 바뀌어도 둘이 같은 규칙을 따른다. */
+:root {
+  --settings-rail-w: 168px;
+  --settings-column-max: 960px;
+  --settings-column-pad: var(--space-8);
+}
+.settings-column {
+  width: 100%;
+  max-width: var(--settings-column-max);
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding-left: var(--settings-column-pad);
+  padding-right: var(--settings-column-pad);
+}
+/* 검색 줄은 본문 캔버스(.content-canvas)와 같은 왼쪽 인셋(margin-left + 1px 외곽선)과 같은 스크롤바 자리를 비운다. */
+.settings-column-host {
+  box-sizing: border-box;
+  padding-left: calc(var(--space-3) + 1px); /* type-scale-exempt: .content-canvas 의 1px 외곽선 두께(간격이 아니라 테두리) */
+  padding-right: var(--settings-sb-w, 0px);
+}
+
+/* 헤더 검색창 — 구분선(.settings-column-host 의 왼쪽 인셋)에 붙고, 쉬는 동안은 좁아서 헤더 나머지가 창 드래그 자리가 된다.
+   포커스·입력 중에만 넓어진다(PLAN-2026-10-27 C1). */
+.settings-search-box { width: 210px; max-width: 100%; transition: width var(--dur-fast) ease; }
+.settings-search-box:focus-within,
+.settings-search-box[data-filled] { width: 420px; }
+
+/* ── 페이지 맨 위 단일 컨트롤 줄(PageLead) ───────────────────────────────────────────────── */
+.settings-page-lead { padding: 0 var(--space-6); }
+
+/* AI 기능 등급 머리줄 — SectionHeader(제목·개수 뱃지·펼침 화살표) + 한 줄 설명을 한 단추로 묶는다(접기/펼치기 전체가 클릭 영역). */
+.ai-tier-head { display: flex; flex-direction: column; width: 100%; background: transparent; border: none; padding: 0; cursor: pointer; text-align: left; }
+.ai-tier-head > .settings-section-header { margin-bottom: var(--space-1); }
+.ai-tier-head__hint { margin: 0; font-size: var(--text-xs); color: var(--muted); font-weight: 400; }

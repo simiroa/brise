@@ -55,16 +55,15 @@ describe("EditorSection — 에디터 (2026-09-18 신설, 2026-09-20 3단 제안
     } as any);
   });
 
-  it("자동 제안·붙여넣기·드롭·입력·새 노트·표시 다섯 카드가 이 순서로 선다", () => {
+  it("표시·새 노트·자동 제안·입력 네 카드가 이 순서로 선다 (붙여넣기·드롭은 첨부파일 페이지로 이사, 2026-10-27)", () => {
     const { container } = render(<EditorSection />);
 
     const cards = container.querySelectorAll(".card");
     expect(Array.from(cards).map((c) => c.getAttribute("data-testid"))).toEqual([
-      "settings-editor-auto-suggest",
-      "settings-editor-paste-drop",
-      "settings-editor-input",
-      "settings-editor-new-note",
       "settings-editor-display",
+      "settings-editor-new-note",
+      "settings-editor-auto-suggest",
+      "settings-editor-input",
     ]);
   });
 
@@ -151,50 +150,6 @@ describe("EditorSection — 에디터 (2026-09-18 신설, 2026-09-20 3단 제안
     expect(callMock).toHaveBeenLastCalledWith("settings_set", { entries: { region_nudge_enabled: false } });
   });
 
-  it("source_original_policy 셀렉트가 붙여넣기·드롭 카드에 있고 고르면 settings_set 을 부른다", async () => {
-    render(<EditorSection />);
-
-    const card = screen.getByTestId("settings-editor-paste-drop");
-    const trigger = screen.getByLabelText("파일 드롭 시 원본 처리");
-    expect(card.contains(trigger)).toBe(true);
-    expect(trigger.textContent).toContain("놓을 때마다 묻기");
-
-    fireEvent.click(trigger);
-    fireEvent.click(await screen.findByText("원본 보관"));
-
-    expect(callMock).toHaveBeenCalledWith("settings_set", { entries: { source_original_policy: "keep" } });
-  });
-
-  it("붙여넣기 제안 토글 세 개가 붙여넣기·드롭 카드에 있고 클릭하면 각자의 스토어 값과 settings_set 을 함께 바꾼다", () => {
-    render(<EditorSection />);
-
-    const card = screen.getByTestId("settings-editor-paste-drop");
-    const linkToggle = screen.getByTestId("settings-paste-link-nudge-toggle");
-    const pathToggle = screen.getByTestId("settings-paste-path-inline-code-toggle");
-    const tableToggle = screen.getByTestId("settings-paste-table-sheet-suggest-toggle");
-    expect(card.contains(linkToggle)).toBe(true);
-    expect(card.contains(pathToggle)).toBe(true);
-    expect(card.contains(tableToggle)).toBe(true);
-
-    act(() => {
-      fireEvent.click(linkToggle);
-    });
-    expect(useSettingsStore.getState().pasteLinkNudge).toBe(false);
-    expect(callMock).toHaveBeenCalledWith("settings_set", { entries: { paste_link_nudge: false } });
-
-    act(() => {
-      fireEvent.click(pathToggle);
-    });
-    expect(useSettingsStore.getState().pastePathInlineCode).toBe(false);
-    expect(callMock).toHaveBeenCalledWith("settings_set", { entries: { paste_path_inline_code: false } });
-
-    act(() => {
-      fireEvent.click(tableToggle);
-    });
-    expect(useSettingsStore.getState().pasteTableSheetSuggest).toBe(false);
-    expect(callMock).toHaveBeenCalledWith("settings_set", { entries: { paste_table_sheet_suggest: false } });
-  });
-
   it("마크다운 자동 서식 토글이 입력 카드에 있고 클릭하면 스토어 값과 settings_set 을 함께 바꾼다", () => {
     render(<EditorSection />);
 
@@ -253,13 +208,13 @@ describe("EditorSection — 에디터 (2026-09-18 신설, 2026-09-20 3단 제안
     expect(callMock).toHaveBeenCalledWith("settings_set", { entries: { link_open_on_click: true } });
   });
 
-  it("새 노트 카드가 입력과 표시 사이에 있고 기본 날짜 세그먼트가 newNoteDatePrecision 을 반영한다", () => {
+  it("새 노트 카드가 표시와 자동 제안 사이에 있고 기본 날짜 세그먼트가 newNoteDatePrecision 을 반영한다", () => {
     useSettingsStore.setState({ newNoteDatePrecision: "month" } as any);
     const { container } = render(<EditorSection />);
 
     const cards = Array.from(container.querySelectorAll(".card")).map((c) => c.getAttribute("data-testid"));
-    expect(cards.indexOf("settings-editor-input")).toBeLessThan(cards.indexOf("settings-editor-new-note"));
-    expect(cards.indexOf("settings-editor-new-note")).toBeLessThan(cards.indexOf("settings-editor-display"));
+    expect(cards.indexOf("settings-editor-display")).toBeLessThan(cards.indexOf("settings-editor-new-note"));
+    expect(cards.indexOf("settings-editor-new-note")).toBeLessThan(cards.indexOf("settings-editor-auto-suggest"));
 
     const card = screen.getByTestId("settings-editor-new-note");
     const group = screen.getByRole("radiogroup", { name: "기본 날짜" });

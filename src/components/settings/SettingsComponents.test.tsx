@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { useSettingsStore } from "../../stores/settings";
-import { SwitchGrid, SWITCH_GRID_COLUMNS, type SwitchGridItem } from "./SwitchGrid";
+import { SwitchGrid, type SwitchGridItem } from "./SwitchGrid";
 import { MetricTileGroup, MetricTile, type MetricTileItem } from "./MetricTileGroup";
 import { StorageGauge } from "./StorageGauge";
 
@@ -10,19 +10,17 @@ describe("Settings Common Components", () => {
     useSettingsStore.setState({ uiLang: "ko" });
   });
 
-  describe("SwitchGrid columns (PLAN-2026-09-15 D12)", () => {
-    it("columns 를 주면 고정 열, 없으면 auto-fit", () => {
+  describe("SwitchGrid 한 열 (2026-10-27 설정 디자인 개편)", () => {
+    it("항상 한 열 flex — 열 규칙이 없고 힌트는 그대로 라벨에 붙는다", () => {
       const items: SwitchGridItem[] = [
         { id: "autostart", label: "시작 시 자동 실행", hint: "시스템 부팅 시 자동으로 앱을 실행합니다.", checked: true, onChange: vi.fn() },
         { id: "notifications", label: "알림 사용", checked: false, onChange: vi.fn() },
       ];
-
-      const { rerender } = render(<SwitchGrid items={items} aria-label="앱 동작" columns={2} />);
-      expect(screen.getByTestId("switch-grid").style.gridTemplateColumns).toBe("repeat(2, minmax(0, 1fr))");
+      render(<SwitchGrid items={items} aria-label="앱 동작" />);
+      const grid = screen.getByTestId("switch-grid");
+      expect(grid.style.flexDirection).toBe("column");
+      expect(grid.style.gridTemplateColumns).toBe("");
       expect(screen.getByLabelText("시스템 부팅 시 자동으로 앱을 실행합니다.")).toBeTruthy();
-
-      rerender(<SwitchGrid items={items} aria-label="앱 동작" />);
-      expect(screen.getByTestId("switch-grid").style.gridTemplateColumns).toBe(SWITCH_GRID_COLUMNS);
     });
   });
 

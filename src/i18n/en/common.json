@@ -18,6 +18,8 @@
   "unhandled_error": "An unexpected error occurred: {{message}}",
   "diag_notice_db_restored_from_backup": "Your database was damaged and has been restored from the most recent backup ({{backup}}). The damaged file was kept as {{quarantine}}. Files of notes created after that backup were kept in the \"orphaned\" folder inside your data folder.",
   "diag_notice_worker_stopped": "{{worker}} stopped unexpectedly. Try restarting the app.",
+  "diag_notice_db_connection_lost": "The restore/reset failed and the database could not be reopened. The app is running on a temporary in-memory database, so changes are NOT being saved. Restart the app now. Snapshot of the previous state: {{snapshot}} (in the backups folder of your data folder).",
+  "diag_notice_swap_recovery_failed": "The restore/reset failed and the previous state could not be copied back automatically. Restart the app, and if anything looks wrong restore from the snapshot of the previous state ({{snapshot}}, in the backups folder of your data folder).",
   "diag_worker_schedule": "Reminders/schedule",
   "diag_worker_collect": "Auto-collect",
   "diag_notice_generic": "Something went wrong ({{feature}}/{{code}}).",

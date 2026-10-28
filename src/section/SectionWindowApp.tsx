@@ -113,6 +113,7 @@ export function SectionWindowApp() {
       }
       closeTestId="section-window-close"
       escapeCloses={false}
+      contentSurface
     >
       {state === "ready" && <EditorPanel inDetachedWindow />}
       {state === "missing" && (

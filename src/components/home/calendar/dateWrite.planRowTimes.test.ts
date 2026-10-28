@@ -70,10 +70,9 @@ describe("planRowTimes", () => {
     const out = planRowTimes(row(), "move", { startMin: 1410, endMin: 1440 }, HOUR_ROW_H);
     expect(out.startMin).toBe(1350);
     expect(out.start_time).toBe("22:30");
-    // 현행 동작을 그대로 못 박는다 — 정확히 자정에 닿은 끝은 "00:00" 으로 쓰인다. 이웃 둘
-    // (shiftRowTimes · resizeRowBoundary)은 같은 자리에서 clampStoredEndMin 으로 "23:59" 를
-    // 쓰므로 셋이 어긋나 있다. 이번 웨이브는 **동작 변경 0** 이라 옮기기만 하고 그대로 뒀다.
-    expect(out.end_time).toBe("00:00");
+    // 정확히 자정에 닿은 끝은 "23:59" 로 쓴다 — "00:00" 은 I3(같은 날이면 start ≤ end)에 거절된다. 이웃 둘
+    // (shiftRowTimes · resizeRowBoundary)과 같은 clampStoredEndMin 한 규칙이다(익일 구간 작업에서 셋을 맞췄다).
+    expect(out.end_time).toBe("23:59");
   });
 
   it("mode move 인데 끝이 없는 행은 끝을 만들지 않는다(길이 0)", () => {

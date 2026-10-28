@@ -223,9 +223,11 @@ pub fn run() {
             commands::transfer::backup_create,
             commands::transfer::backup_restore,
             commands::transfer::backup_auto_status,
+            commands::transfer::backup_auto_list,
             commands::transfer::backup_auto_run,
             commands::transfer::data_dir_open,
             commands::data_location::data_location_get,
+            commands::data_location::data_subdir_open,
             commands::data_location::data_location_inspect,
             commands::data_location::data_location_apply,
             commands::migrate::migration_import_markdown,
@@ -335,6 +337,7 @@ pub fn run() {
             commands::habits::habit_history,
             // briefing (specs/commands/briefing.yaml) - PLAN-2026-09-30-briefing W7.
             commands::briefing::briefing_recent_collected,
+            commands::collect::collect_history,
             commands::briefing::briefing_recent_notes,
             // PLAN-2026-10-19-briefing-rewrite W2 — 시간축 일정 만들기 · 내 노트 인용.
             commands::briefing::briefing_block_create,
@@ -366,10 +369,15 @@ pub fn run() {
             commands::emoji::emoji_base_dir,
             commands::emoji::emoji_style_status,
             commands::emoji::emoji_download,
+            // fonts (PLAN-2026-10-27-fonts)
+            commands::fonts::fonts_base_dir,
+            commands::fonts::font_status,
+            commands::fonts::font_download,
             // sync (beta): tailnet 읽기전용 서버
             commands::sync::sync_status,
             commands::sync::sync_set_enabled,
             commands::sync::sync_regenerate_token,
+            commands::sync::agent_skill_install,
             // capture (Phase 2): 크롬 익스텐션 클리핑용 loopback ingest 리스너
             commands::capture::capture_status,
             commands::capture::capture_set_ledger_enabled,
@@ -382,7 +390,7 @@ pub fn run() {
     tauri::Builder::default()
         // R2: 단일 인스턴스 — 후발 실행은 기존 창을 포커스(트레이로 숨어 있었다면 복원도).
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            tray::show_and_focus(app);
+            tray::show_and_focus(app, tray::RevealVia::SecondInstance);
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -430,6 +438,8 @@ pub fn run() {
                 // pptx→pdf 파생 캐시 — 프런트가 convertFileSrc 로 여는 대상이라 여기 없으면
                 // asset.localhost 가 403 으로 조용히 막는다(위 주석의 그 사고).
                 db::slide_cache_dir(&data_dir),
+                // 내려받기 글꼴(PLAN-2026-10-27-fonts) — 지연 로더가 FontFace 로 asset URL 을 읽는다.
+                repo::fonts::fonts_dir(&data_dir),
             ] {
                 let _ = std::fs::create_dir_all(&dir);
                 let canon = std::fs::canonicalize(&dir).unwrap_or_else(|_| dir.clone());
@@ -624,7 +634,8 @@ pub fn run() {
             }
             // 모든 앱 커맨드가 지나는 자리 — 부른 창의 라벨을 실행 동안 주변에 둔다. 그 안의 publish 는
             // payload 에 `window` 로 실어, 각 창이 자기 쓰기의 메아리만 거를 수 있다(events.rs::scope_window,
-            // async 커맨드는 이 스코프 밖에서 돌아 null — 거기 ponytail).
+            // async 커맨드는 이 스코프 밖에서 돌아 null — 쓰기를 알리는 async 커맨드는 `webview` 를 받아
+            // events::publish_as 로 직접 싣는다. 거기 ponytail).
             events::scope_window(&label, || app_commands(invoke))
         })
         .build(tauri::generate_context!())

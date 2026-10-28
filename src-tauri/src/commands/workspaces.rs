@@ -70,6 +70,7 @@ pub fn workspace_rename(
 #[tauri::command(rename_all = "snake_case")]
 pub async fn workspace_delete(
     state: State<'_, AppState>,
+    webview: tauri::Webview,
     id: String,
 ) -> Result<WorkspaceDeleteResult, AppError> {
     let db = std::sync::Arc::clone(&state.db);
@@ -78,7 +79,7 @@ pub async fn workspace_delete(
         tauri::async_runtime::spawn_blocking(move || delete_with_backup(&db, &data_dir, &id))
             .await
             .map_err(|e| AppError::Io(format!("workspace delete worker failed: {e}")))??;
-    crate::events::publish(None, false);
+    crate::events::publish_as(Some(webview.label()), None, false); // async 커맨드 — 창 라벨을 직접(events::publish_as)
     Ok(WorkspaceDeleteResult { deleted_note_count })
 }
 

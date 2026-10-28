@@ -350,10 +350,13 @@ export function assignTracks<K extends string | number>(
 // must not get narrower, so the event area is ~230px and overlaps CANNOT split width (3 columns of
 // 76px make titles unreadable). Overlaps used to offset left by track × 8px (a staircase) + z-index,
 // but QA found that near-time chips (09:00/09:05) let the top chip fully cover the row below's
-// title. Owner revision (2026-08-09): overlapping chips keep FULL width and stack vertically
-// instead — pushed straight down under whatever chip is directly above them.
+// title. Owner revision (2026-08-09): overlapping chips kept FULL width and stacked vertically —
+// pushed straight down under whatever chip was directly above them.
+// 2026-10-27 기하 통일(오너 결정)이 이것을 다시 뒤집었다: 밀어내기는 칩 top 이 시각이 아니게 만들어 손잡이·스냅과
+// 칩이 화면에서 어긋났다. 지금은 top = 시각이고, 겹침은 **만들지 않는다** — 끌거나 늘릴 때 이웃이 자연스럽게 밀리거나
+// 줄어든다(오너 2026-10-27 "윗 블록 시간을 늘리면 아래 것이 줄어들거나 밀려난다"). 이미 겹쳐 저장된 일정만 lane 들여쓰기로 그린다.
 
-/** Time label column: 2-digit hour + breathing room. */
+/** Time label column: 2-digit hour + breathing room. timeChip.css 의 `.cal-hour-wx { width: 24px }` 와 같은 값이다(CSS 가 이 상수를 못 읽어 둘을 맞춰 둔다). */
 export const TIME_LABEL_W = 24;
 /** One hour row. 24 of them = DAY_AXIS_H, which scrolls INSIDE the aside. This is the axis's
  *  DEFAULT/initial scale only — 2026-09-13 축 확대: the axis now owns its own zoomed scale as
@@ -369,12 +372,65 @@ export const DAY_AXIS_H = HOUR_ROW_H * 24;
  *  촘촘한 눈금이 자연스럽게 나온다(요구사항: 5분 미만으로는 절대 세분화하지 않는다). */
 export const MIN_HOUR_ROW_H = HOUR_ROW_H;
 export const MAX_HOUR_ROW_H = 240;
-/** Vertical gap between two stacked (pushed-down) chips — owner's "0~2px" tolerance, picked once. */
-export const STACK_GAP_PX = 2;
-/** Shortest visible block: an event with no end (or a sub-30m one) still needs a readable title. */
+/** 끝이 없는 일정이 축에서 차지하는 기본 길이이자, 빈 곳 끌기·종일 카드 드롭으로 새로 만드는 일정의 길이. */
 export const MIN_SLOT_MIN = 30;
 /** Scroll target when the day has no timed item to scroll to. */
 export const DEFAULT_SCROLL_HOUR = 8;
+
+/** 하루의 분 — 축에서 "당일"과 "익일 구간"의 경계(자정). */
+export const DAY_MIN = 24 * 60;
+/** 익일 구간 상한(시). 설정(calendar_axis_tail_hours)과 Rust 검증이 같은 값을 쓴다. */
+export const MAX_TAIL_HOURS = 12;
+
+/** 축의 끝 분(좌표는 당일 00:00 기준) — 당일만이면 24:00, 익일 N시까지면 24:00 + N시간. **하루 끝에 기대던 모든
+ *  clamp 가 이 한 값에서 나온다**(DayAxis 가 `tailHours` 에서 한 번 계산해 아래 함수들에 넘긴다). */
+export function axisEndMinFor(tailHours: number): number {
+  const h = Number.isFinite(tailHours) ? Math.round(tailHours) : 0;
+  return DAY_MIN + Math.max(0, Math.min(MAX_TAIL_HOURS, h)) * 60;
+}
+
+/** 이 시작 분이 속한 날의 [lo, hi] — 당일이면 [0, 24:00], 익일 구간이면 [24:00, 축의 끝]. 한 일정은 자정을 가로지르지
+ *  않는다(저장 형식이 하루짜리 행 — 끝 시각이 시작보다 앞설 수 없다, I3) — 그래서 리사이즈와 이웃 이동은 이 안에 머문다. */
+export function dayBoundsOf(startMin: number, axisEndMin: number = DAY_MIN): { lo: number; hi: number } {
+  return startMin >= DAY_MIN ? { lo: DAY_MIN, hi: axisEndMin } : { lo: 0, hi: DAY_MIN };
+}
+
+/** 축 분(당일 00:00 기준, 익일 구간은 +24:00)이 속한 날의 시작 오프셋 — 당일 0, 익일 구간 `DAY_MIN`. 한 일정은 자정을 가로지르지 않으므로
+ *  **시작 분 하나**가 어느 날인지를 정한다. */
+export function axisDayOffsetMin(min: number): 0 | typeof DAY_MIN {
+  return min >= DAY_MIN ? DAY_MIN : 0;
+}
+
+/** 축 분 → (그 분이 속한 날, 그 날의 분). 익일 구간이 없으면(`tailDay` null) 24:00 이상이어도 당일로 둔다. 축이 만드는 쓰기·확인 요청이
+ *  "어느 날의 몇 분인가"를 말할 때 거치는 **한 길**이다(예전엔 다섯 곳이 `>= DAY_MIN ? … : …` 를 손으로 썼다). */
+export function splitAxisMin(min: number, day: string | null, tailDay: string | null): { day: string | null; min: number } {
+  return min >= DAY_MIN && tailDay ? { day: tailDay, min: min - DAY_MIN } : { day, min };
+}
+
+/** 당일 일정에 익일 구간 안에서 시작하는 다음 날 일정을 이어 붙인다 — 좌표는 당일 00:00 기준이라 익일 것은 +24:00, 끝은 구간 끝에서 자른다.
+ *  구간이 없거나(`tailMinutes` 0) 다음 날 plan 이 없으면 입력을 그대로 돌려준다(참조 유지 — 메모 키가 흔들리지 않는다). */
+export function mergeTailTimed(timed: TimedEvent[], tailPlan: TimedDayPlan | null, tailMinutes: number): TimedEvent[] {
+  if (tailMinutes === 0 || !tailPlan) return timed;
+  const next = tailPlan.timed
+    .filter((e) => e.startMin < tailMinutes)
+    .map((e) => ({
+      ...e,
+      startMin: e.startMin + DAY_MIN,
+      endMin: Math.min(e.endMin, tailMinutes) + DAY_MIN,
+    }));
+  return next.length > 0 ? [...timed, ...next] : timed;
+}
+
+/** 축 스크롤 영역의 전체 높이(px) — 눈금 영역(`hourRowH` × 축 끝 분 / 60) + compact 사이드바의 아래 여백 `paddingRows` 행. */
+export function axisContentPx(hourRowH: number, axisEndMin: number, paddingRows: number = 0): number {
+  return (hourRowH * axisEndMin) / 60 + paddingRows * hourRowH;
+}
+
+/** 축 스크롤러가 갈 수 있는 맨 아래 scrollTop. `scrollHeight - clientHeight` 가 정공법이지만 jsdom 에는 레이아웃이 없어 둘 다 0 이고,
+ *  캔버스 높이는 우리가 픽셀로 정한 값이라 같은 수가 나온다 — 확대 보정·기본 스크롤·가장자리 자동 스크롤이 이 한 식을 쓴다. */
+export function maxAxisScrollTop(contentPx: number, viewPx: number): number {
+  return Math.max(0, contentPx - viewPx);
+}
 
 /** "HH:MM" → minutes past midnight. Null on anything else (incl. null/undefined). */
 export function parseHhmm(v: string | null | undefined): number | null {
@@ -392,19 +448,20 @@ export type TimedEvent = {
   key: string;
   item: CalendarItem;
   startMin: number;
-  /** Half-open end, already clamped to >= startMin + MIN_SLOT_MIN and to end of day. */
+  /** Half-open end. 실제 끝이 있으면 그대로(짧아도 늘리지 않는다), 없으면 startMin + MIN_SLOT_MIN. 하루 끝에서 자른다. */
   endMin: number;
-  /** Pixel top within the axis. Equal to the time-derived position unless a near-time chip above
-   *  it pushed it down (vertical stacking sweep in planTimedDay). */
+  /** 축 안의 픽셀 top — **항상 시작 시각 그대로**다(겹쳐도 밀지 않는다, layoutTimedEvents). */
   top: number;
-  /** Pixel height, always duration-true (endMin - startMin) — a pushed chip is moved, never
-   *  squeezed. */
+  /** 픽셀 높이 = 실제 길이(endMin - startMin). */
   height: number;
+  /** 겹침 들여쓰기 칸(0부터). 이미 겹쳐 저장된 일정(다른 곳에서 만든 것 등)이 있을 때만 0 이 아니다 — 새 조작은
+   *  이웃을 밀거나 줄여 겹침을 만들지 않는다(planLinkedMove/Resize). */
+  lane: number;
 };
 
 export type TimedDayPlan = {
-  /** start_time-bearing items that actually start on this day, time-ordered and vertically packed
-   *  so no two ever overlap on screen (no cap/"+n" anymore — nothing is hidden, see §6.2). */
+  /** start_time-bearing items that actually start on this day, time-ordered (no cap/"+n" anymore — nothing is
+   *  hidden, see §6.2). 겹침은 밀어내지 않고 `lane` 들여쓰기로만 표현한다(layoutTimedEvents) — top 은 항상 시각이다. */
   timed: TimedEvent[];
   /** Everything else — no time, or a timed span's continuation day. */
   allDay: CalendarItem[];
@@ -423,30 +480,30 @@ export function itemKey(item: CalendarItem): string {
 }
 
 /**
- * 겹치는 칩을 아래로 미는 스태킹 스윕 — planTimedDay 가 하던 것을 뽑아냈다(2026-09-13 축 확대).
- * **`hourRowH` 별로 다시 돌 수 있어야** 한다: TimeAxis 가 로컬 확대 상태를 가지므로, 부모
- * (DayDetailBody)는 기본 스케일로 한 번 `planTimedDay`를 부르고, 축은 사용자가 휠로 스케일을
- * 바꿀 때마다 이미 시각순으로 정렬된 `plan.timed`를 이 함수에 다시 넣어 그 스케일의 top/height
- * 만 다시 얻는다(정렬은 다시 하지 않는다 — 매 렌더 다시 돌 비용을 아낀다). 전역 싱글턴 스케일을
- * 두지 않기 위한 구조: 스케일은 오직 이 함수의 인자로만 들어온다.
+ * 시간축 칩의 픽셀 자리 — **기하가 하나다**(2026-10-27 오너 결정 "칩 top=시각, 높이=실제 길이, 겹침은 들여쓰기").
  *
- * 입력은 **이미 시각순으로 정렬돼 있다고 믿는다** — planTimedDay 의 정렬 순서 그대로다.
+ * 예전엔 겹치는 칩을 아래로 밀어 쌓았는데(스태킹 스윕) 그러면 칩의 top 이 시각이 아니게 되어, 시각 좌표를 쓰는
+ * 손잡이·스냅·라벨과 칩이 화면에서 서로 다른 자리에 섰다(밀림이 연쇄로 누적돼 세 번째 칩은 54분 아래). 이제
+ * top·height 는 분에서만 나오고, 겹침은 `lane`(들여쓰기 칸)으로만 표현한다 — assignTracks 를 반열린 구간으로
+ * 써서 09:00–09:30 과 09:30–10:00 처럼 맞닿은 것은 겹침이 아니다(같은 칸).
+ *
+ * 스케일은 인자로만 들어온다(TimeAxis 의 로컬 확대 상태). 입력 순서는 상관없다 — 칸 배정은 시각순으로 한다.
  */
 export function layoutTimedEvents(
-  sortedEvents: readonly { startMin: number; endMin: number }[],
+  events: readonly { startMin: number; endMin: number }[],
   hourRowH: number = HOUR_ROW_H,
-): { top: number; height: number }[] {
-  const dayAxisH = hourRowH * 24;
-  let floor = -Infinity;
-  const out: { top: number; height: number }[] = [];
-  for (const e of sortedEvents) {
-    const nativeTop = (e.startMin / (24 * 60)) * dayAxisH;
-    const height = ((e.endMin - e.startMin) / (24 * 60)) * dayAxisH;
-    const top = Math.max(nativeTop, floor);
-    floor = top + height + STACK_GAP_PX;
-    out.push({ top, height });
-  }
-  return out;
+): { top: number; height: number; lane: number }[] {
+  const pxPerMin = hourRowH / 60;
+  const lanes = assignTracks(
+    events.map((e, i) => ({ key: String(i).padStart(6, "0"), start: e.startMin, end: e.endMin })),
+    { inclusiveEnd: false },
+  );
+  const laneOf = (i: number) => lanes.get(String(i).padStart(6, "0")) ?? 0;
+  return events.map((e, i) => ({
+    top: e.startMin * pxPerMin,
+    height: (e.endMin - e.startMin) * pxPerMin,
+    lane: laneOf(i),
+  }));
 }
 
 /**
@@ -479,12 +536,13 @@ export function planTimedDay(
       continue;
     }
     // end_time belongs to the row's last day; only a same-day row can use it as this block's length.
+    // 실제 끝이 있으면 짧아도 그대로 그린다(높이 = 실제 길이) — 끝이 없을 때만 기본 길이를 준다.
     const rawEnd = rowIsSameDay(item) ? parseHhmm(item.end_time) : null;
     const endMin = Math.min(
-      24 * 60,
-      Math.max(rawEnd ?? 0, startMin + MIN_SLOT_MIN),
+      DAY_MIN,
+      rawEnd !== null && rawEnd > startMin ? rawEnd : startMin + MIN_SLOT_MIN,
     );
-    timed.push({ key: itemKey(item), item, startMin, endMin, top: 0, height: 0 });
+    timed.push({ key: itemKey(item), item, startMin, endMin, top: 0, height: 0, lane: 0 });
   }
 
   timed.sort((a, b) => a.startMin - b.startMin || a.key.localeCompare(b.key));
@@ -493,6 +551,7 @@ export function planTimedDay(
   timed.forEach((e, i) => {
     e.top = layout[i].top;
     e.height = layout[i].height;
+    e.lane = layout[i].lane;
   });
 
   allDay.sort((a, b) => a.title.localeCompare(b.title));
@@ -510,10 +569,9 @@ export const PX_PER_MIN = HOUR_ROW_H / 60;
 /**
  * 드래그·키보드로 옮긴 새 시작 분 — 15분 스냅 + 0~23:59 clamp.
  *
- * **함정 ⓐ: 화면 `top` 은 시간이 아니다.** planTimedDay 의 스태킹 스윕은 겹치는 칩을 아래로
- * 밀어서 배치한다(`e.top = Math.max(nativeTop, floor)`). 그래서 top 에서 시각을 역산하면 밀린
- * 픽셀만큼 시각이 틀어진다 — 이 함수는 **`startMin` + 픽셀델타**만 본다. 호출자도 top 을
- * 넘기지 마라("화면 top 쓰면 되잖아"로 되돌리기 딱 좋은 자리다).
+ * **시각은 `startMin` + 픽셀델타로 센다.** 예전엔 스태킹 스윕이 겹치는 칩을 아래로 밀어 화면 `top` 이 시간이 아니었다
+ * (함정 ⓐ). 2026-10-27 기하 통일로 top = 시각이 됐지만, 이 함수는 여전히 **`startMin` + 픽셀델타**만 본다 — 호출자는 top 에서
+ * 시각을 역산하지 마라(렌더 스케일·미리보기와 얽히는 되돌리기 딱 좋은 자리다).
  *
  * `durationMin` 이 있으면 **길이를 유지**한 채 자정을 넘지 않도록 시작을 clamp 한다. 길이가
  * 없으면 상한은 23:45 — 15분 격자에서 23:59 를 넘지 않는 마지막 칸이다.
@@ -523,11 +581,25 @@ export function snapStartMin(
   deltaPx: number,
   durationMin = 0,
   hourRowH: number = HOUR_ROW_H,
+  prevStartMin?: number,
+  /** 시작이 머물 수 있는 범위 — 기본은 당일 [0, 24:00]. 익일 구간이 있으면 축 전체 또는 그 일정이 속한 날이다. */
+  bounds: { lo: number; hi: number } = { lo: 0, hi: DAY_MIN },
 ): number {
   const pxPerMin = hourRowH / 60;
-  const snapped = Math.round((startMin + deltaPx / pxPerMin) / SNAP_MIN) * SNAP_MIN;
-  const maxStart = 24 * 60 - Math.max(durationMin, SNAP_MIN);
-  return Math.max(0, Math.min(maxStart, snapped));
+  const snapped = snapWithHysteresis(startMin + deltaPx / pxPerMin, prevStartMin);
+  const maxStart = bounds.hi - Math.max(durationMin, SNAP_MIN);
+  return Math.max(bounds.lo, Math.min(maxStart, snapped));
+}
+
+/** 스냅 경계의 히스테리시스(칸 단위). 반올림 경계(±0.5칸)에서 손이 떨리면 값이 칸 사이를 오가며 진동하던 것을,
+ *  직전에 보인 칸에서 **0.5+0.2칸 넘게** 벗어나야 다음 칸으로 넘어가게 해 막는다. */
+export const SNAP_HYSTERESIS = 0.2;
+
+/** 15분 격자로 반올림하되 `prev`(직전에 보인 칸)가 있으면 그 칸에서 충분히 벗어나기 전엔 prev 를 유지한다. */
+function snapWithHysteresis(min: number, prev?: number): number {
+  const snapped = Math.round(min / SNAP_MIN) * SNAP_MIN;
+  if (prev === undefined || snapped === prev) return snapped;
+  return Math.abs(min - prev) < SNAP_MIN * (0.5 + SNAP_HYSTERESIS) ? prev : snapped;
 }
 
 /**
@@ -565,61 +637,76 @@ export const DRAG_THRESHOLD_PX = 3;
 
 export type ChipDragMode = "move" | "start" | "end";
 
-/** 손잡이 두께(px). 고정 6px 이면 가장 짧은 칩(MIN_SLOT_MIN = 30분 → 14px)에서 가운데(이동)가
- *  거의 사라진다 — 그래서 높이의 1/3 이 상한이다. */
-export function handleThicknessPx(height: number): number {
-  return Math.min(6, height / 3);
+/** 손잡이로 줄일 수 있는 가장 짧은 길이 — 스냅 한 칸. 높이가 실제 길이라 15분 일정도 그대로 그려지므로,
+ *  최소를 30분으로 두면 15분 일정의 손잡이를 잡는 순간 30분으로 튄다. */
+export const MIN_RESIZE_MIN = SNAP_MIN;
+
+/** 리사이즈 손잡이 히트 반폭의 상한(px). */
+export const HANDLE_HIT_PAD = 6;
+/** 칩 높이에 맞춘 손잡이 히트 반폭 — **손잡이 규칙의 단일 출처**. 위·아래 손잡이를 합쳐 칩 높이의 절반까지만 덮어(반폭 ≤ 높이/4) 가운데(이동)를
+ *  남긴다. 고정 ±6px 이면 두 손잡이(24px)가 14px(30분) 칩을 통째로 덮어 짧은 칩을 옮길 수 없게 된다. 어느 손잡이를 잡았는지는 이제 요소가 정하므로
+ *  (AxisResizeHandle 이 mode 를 안다) 좌표로 되짚던 `chipDragMode`/`handleThicknessPx`(높이/3 규칙 — 실제 손잡이와 달랐다)는 지웠다.
+ *  손잡이를 줄 수 있는 행은 `rowIsSameDay` 가 가른다(여러 날 span 의 end_time 은 마지막 날의 시각이라 끌게 하면 남의 날짜를 조용히 바꾼다). */
+export function handlePadPx(chipHeightPx: number): number {
+  return Math.max(1, Math.min(HANDLE_HIT_PAD, chipHeightPx / 4));
 }
 
-/**
- * 포인터가 칩의 어디를 잡았나 — 위 가장자리 = 시작, 아래 가장자리 = 끝, 나머지 = 이동.
- *
- * `resizable` 은 **그 날 안에서 끝나는 행**(rowIsSameDay — 월 경계로 잘린 span_start === span_end
- * 가 아니다. 10/31→11/2 는 10월 조회에서 [10/31, 10/31] 로 잘려 하루처럼 보인다)만 true 다. 여러 날 span 의
- * `end_time` 은 마지막 날의 시각이라(§1.3 I3) 이 날의 끝이 아니고 — keepDurationMin 이 이미 같은
- * 이유로 0 을 돌려준다 — 여기서 끌게 하면 **다른 날의 시각**을 조용히 바꾼다. 높이가 0 이면
- * (레이아웃 전 · jsdom) 잡을 손잡이 자체가 없으니 이동이다.
- */
-export function chipDragMode(offsetY: number, height: number, resizable: boolean): ChipDragMode {
-  if (!resizable || height <= 0) return "move";
-  const h = handleThicknessPx(height);
-  if (offsetY <= h) return "start";
-  if (offsetY >= height - h) return "end";
-  return "move";
+/** 15분 격자 반올림 + 범위(기본 하루) 안으로 clamp. */
+function snapMin(min: number, prev?: number, bounds: { lo: number; hi: number } = { lo: 0, hi: DAY_MIN }): number {
+  return Math.max(bounds.lo, Math.min(bounds.hi, snapWithHysteresis(min, prev)));
 }
 
-/** 15분 격자 반올림 + 하루 안으로 clamp. */
-function snapMin(min: number): number {
-  return Math.max(0, Math.min(24 * 60, Math.round(min / SNAP_MIN) * SNAP_MIN));
+/** 시작~끝이 자정(24:00)을 가로지르나. */
+function straddlesMidnight(startMin: number, endMin: number): boolean {
+  return startMin < DAY_MIN && endMin > DAY_MIN;
 }
 
 /**
  * 드래그 한 번의 결과 시각. 무엇이 고정인지가 mode 마다 다르다 —
  * move 는 길이 유지(함정 ⓐ 그대로 `startMin` + 픽셀델타), start 는 끝 고정, end 는 시작 고정.
- * 어느 쪽도 **MIN_SLOT_MIN 보다 짧아지지 않는다**(시작이 끝을 넘지도, 끝이 시작 아래로 가지도).
+ * 어느 쪽도 **MIN_RESIZE_MIN 보다 짧아지지 않는다**(시작이 끝을 넘지도, 끝이 시작 아래로 가지도).
  */
 export function dragTimes(
   mode: ChipDragMode,
   base: { startMin: number; endMin: number; durationMin: number },
   deltaPx: number,
   hourRowH: number = HOUR_ROW_H,
+  /** 직전에 보인 스냅 결과 — 있으면 칸 경계에 히스테리시스를 건다(드래그 중 진동 방지). 키보드는 안 준다. */
+  prev?: { startMin: number; endMin: number },
+  /** 익일 구간이 있는 축 — `axisEndMin` 이 24:00 보다 크면 이동은 자정을 넘을 수 있다(`locked` 가 아닐 때).
+   *  `locked`(여러 날 span · 반복 행처럼 날짜를 못 바꾸는 일정)와 리사이즈는 자기 날 안에 머문다. */
+  axis: { axisEndMin: number; locked?: boolean } = { axisEndMin: DAY_MIN },
 ): { startMin: number; endMin: number } {
   const pxPerMin = hourRowH / 60;
   const deltaMin = deltaPx / pxPerMin;
+  const own = dayBoundsOf(base.startMin, axis.axisEndMin);
   if (mode === "start") {
     return {
-      startMin: Math.min(base.endMin - MIN_SLOT_MIN, snapMin(base.startMin + deltaMin)),
+      startMin: Math.min(base.endMin - MIN_RESIZE_MIN, snapMin(base.startMin + deltaMin, prev?.startMin, own)),
       endMin: base.endMin,
     };
   }
   if (mode === "end") {
     return {
       startMin: base.startMin,
-      endMin: Math.max(base.startMin + MIN_SLOT_MIN, snapMin(base.endMin + deltaMin)),
+      endMin: Math.max(base.startMin + MIN_RESIZE_MIN, snapMin(base.endMin + deltaMin, prev?.endMin, own)),
     };
   }
-  const startMin = snapStartMin(base.startMin, deltaPx, base.durationMin, hourRowH);
-  return { startMin, endMin: startMin + (base.endMin - base.startMin) };
+  const free = !axis.locked && axis.axisEndMin > DAY_MIN;
+  const bounds = free ? { lo: 0, hi: axis.axisEndMin } : own;
+  const durationMin = base.endMin - base.startMin;
+  let startMin = snapStartMin(base.startMin, deltaPx, base.durationMin, hourRowH, prev?.startMin, bounds);
+  if (free && straddlesMidnight(startMin, startMin + durationMin)) {
+    // 자정을 가로지르는 자리는 없다 — "끝이 자정에 닿는 자리"(위)와 "시작이 자정인 자리"(아래) 중 손에 가까운 쪽으로.
+    // 같은 거리면 가던 방향으로(키보드 15분 한 칸으로도 자정을 넘을 수 있게).
+    const up = DAY_MIN - durationMin;
+    const down = DAY_MIN + durationMin <= axis.axisEndMin ? DAY_MIN : up;
+    const raw = base.startMin + deltaMin;
+    const dUp = Math.abs(raw - up);
+    const dDown = Math.abs(raw - down);
+    startMin = dUp < dDown ? up : dDown < dUp ? down : deltaMin >= 0 ? down : up;
+  }
+  return { startMin, endMin: startMin + durationMin };
 }
 
 // ── 붙어 있는 항목의 연동 이동 (PLAN-2026-09-10 달력 W15) ────────────────────────────────────
@@ -637,71 +724,99 @@ export type LinkableEvent = {
   endMin: number;
   linkable: boolean;
   hasEnd?: boolean;
+  /** 날짜를 못 바꾸는 일정(여러 날 span · 반복 행) — 익일 구간이 있어도 자기 날 안에서만 움직인다. 주 칩일 때만 본다. */
+  locked?: boolean;
 };
 
 /**
- * 옮기는 칩(`key`)과 **정확히 맞닿은**(gap 0) 이웃들의 새 자리 — 같은 델타만큼 따라 움직인다.
- * 반환에 자신은 없다(호출자가 이미 갖고 있다).
+ * 옮기는 칩(`key`)이 이웃을 **밀어내며** 움직인 결과 — 겹침을 만들지 않는다(오너 2026-10-27 "윗 블록을 옮기면 아래 것이
+ * 자연스레 밀려난다"). 반환은 칩이 실제로 갈 수 있는 델타(`deltaMin`)와, 밀린 이웃들의 새 자리(`linked`)다.
  *
- * **이동 방향으로만** 따라간다(아래로 끌면 내 끝에 붙은 것들, 위로 끌면 내 시작에 붙은 것들) —
- * 뒤쪽에 간격이 생기는 것은 허용한다. 양방향으로 모으면 하루가 촘촘한 날에 칩 하나를 건드리는
- * 순간 그 날 전체가 딸려 온다.
+ * 이동 방향의 이웃이 칩의 새 범위와 겹치면 그 이웃은 **딱 겹치는 만큼만**(= 칩의 새 가장자리까지) 밀리고, 그 이웃이
+ * 다음 이웃과 겹치게 되면 연쇄로 민다(뒤쪽 간격은 그대로 둔다 — 간격이 있으면 거기까지는 안 밀린다). 예전의 "정확히
+ * 맞닿은 이웃이 같은 델타만큼 따라온다"(W15)는 이 규칙의 특수한 경우다: 맞닿아 있으면 델타 전부만큼 밀린다.
  *
- * 탐색은 너비 우선 한 벌이다(체인 A-B-C 전부). 같은 경계에 둘이 붙어 있으면(스택된 항목) 둘 다
- * 모은다. **방문한 키는 다시 보지 않는다** — 무한 루프 방지이자, 연동에서 빠진 이웃(아래 둘)을
- * 두 번 판정하지 않는 자리다.
- *
- * 이웃이 빠지는 두 경우 — 그 자리에서 맞닿음이 끊기고(그 뒤의 체인도 따라오지 않는다) 간격이
- * 생기는 것을 허용한다:
- *  ⓐ `linkable` 이 false (여러 날 span)
- *  ⓑ 델타를 얹으면 하루를 벗어난다(자정 넘기기)
+ * 벽: 밀 수 없는 이웃(`linkable` false — 여러 날 span)이나 하루의 끝(0:00·24:00)에 닿으면 칩이 그 앞에서 멈춘다 —
+ * 델타를 스냅 한 칸씩 0 쪽으로 줄여 가장 가까이 갈 수 있는 값을 고른다. 칩 자신의 길이는 그대로다.
+ * 이미 겹쳐 저장된 일정(칩의 원래 범위와 겹치는 것)은 밀지 않는다 — 새 겹침을 만들지 않는 규칙이지 옛 겹침을 고치는
+ * 규칙이 아니다.
  */
 export function planLinkedMove(
   events: readonly LinkableEvent[],
   key: string,
   deltaMin: number,
-): { key: string; startMin: number; endMin: number }[] {
-  if (deltaMin === 0) return [];
+  /** 축의 끝 분 — 익일 구간이 있으면 24:00 보다 크다. 기본은 하루(예전 동작). */
+  axisEndMin: number = DAY_MIN,
+): { deltaMin: number; linked: { key: string; startMin: number; endMin: number }[] } {
   const head = events.find((e) => e.key === key);
-  if (!head) return [];
+  if (!head || deltaMin === 0) return { deltaMin, linked: [] };
   const down = deltaMin > 0;
-  const seen = new Set([key]);
-  const moved: { key: string; startMin: number; endMin: number }[] = [];
-  const queue: LinkableEvent[] = [head];
-  while (queue.length > 0) {
-    const cur = queue.shift()!;
-    for (const nb of events) {
-      if (seen.has(nb.key)) continue;
-      if (down ? nb.startMin !== cur.endMin : nb.endMin !== cur.startMin) continue;
-      seen.add(nb.key);
-      if (!nb.linkable) continue; // ⓐ
-      const startMin = nb.startMin + deltaMin;
-      const endMin = nb.endMin + deltaMin;
-      if (startMin < 0 || endMin > 24 * 60) continue; // ⓑ
-      moved.push({ key: nb.key, startMin, endMin });
-      queue.push(nb);
+  const others = events.filter((e) => e.key !== key);
+
+  // 한 델타를 시뮬레이션한다 — 벽에 걸리면 null.
+  const simulate = (d: number): { key: string; startMin: number; endMin: number }[] | null => {
+    const hs = head.startMin + d;
+    const he = head.endMin + d;
+    const free = !head.locked && axisEndMin > DAY_MIN;
+    const hb = free ? { lo: 0, hi: axisEndMin } : dayBoundsOf(head.startMin, axisEndMin);
+    if (hs < hb.lo || he > hb.hi || (free && straddlesMidnight(hs, he))) return null;
+    // 밀려나는 이웃은 자기 날을 벗어나지 못한다 — 날짜를 바꾸는 쓰기는 주 칩 하나만 한다(자정을 넘으려면 이웃 앞을 지나야 한다).
+    const stays = (nb: LinkableEvent, s: number, e: number) => {
+      const b = dayBoundsOf(nb.startMin, axisEndMin);
+      return s >= b.lo && e <= b.hi;
+    };
+    const moved: { key: string; startMin: number; endMin: number }[] = [];
+    if (down) {
+      // 칩의 원래 끝 이후에 시작하는 이웃을 시작순으로 — 앞 가장자리가 닿으면 밀고, 간격이 남으면 거기서 끝.
+      let frontier = he;
+      const ahead = others.filter((e) => e.startMin >= head.endMin).sort((a, b) => a.startMin - b.startMin);
+      for (const nb of ahead) {
+        if (nb.startMin >= frontier) break;
+        if (!nb.linkable) return null;
+        const shift = frontier - nb.startMin;
+        if (!stays(nb, nb.startMin + shift, nb.endMin + shift)) return null;
+        moved.push({ key: nb.key, startMin: nb.startMin + shift, endMin: nb.endMin + shift });
+        frontier = nb.endMin + shift;
+      }
+    } else {
+      let frontier = hs;
+      const behind = others.filter((e) => e.endMin <= head.startMin).sort((a, b) => b.endMin - a.endMin);
+      for (const nb of behind) {
+        if (nb.endMin <= frontier) break;
+        if (!nb.linkable) return null;
+        const shift = frontier - nb.endMin; // 음수
+        if (!stays(nb, nb.startMin + shift, nb.endMin + shift)) return null;
+        moved.push({ key: nb.key, startMin: nb.startMin + shift, endMin: nb.endMin + shift });
+        frontier = nb.startMin + shift;
+      }
     }
+    return moved;
+  };
+
+  for (let d = deltaMin; down ? d > 0 : d < 0; d += down ? -SNAP_MIN : SNAP_MIN) {
+    const moved = simulate(d);
+    if (moved) return { deltaMin: d, linked: moved };
   }
-  return moved;
+  return { deltaMin: 0, linked: [] };
 }
 
 /**
- * 오너 요청(2026-09-16) — 맞닿은 이음새를 손잡이로 끌면 **양쪽 다** 반응한다: 끝을 늘리면
- * 뒤에 붙은 이웃의 시작이 같이 밀리고, 시작을 당기면 앞에 붙은 이웃의 끝이 같이 밀린다. 이웃은
- * **하나뿐**이다 — planLinkedMove 처럼 체인을 잇지 않는다(이음새는 두 칩이 만나는 한 점이지,
- * 이동처럼 여러 칩이 줄줄이 따라올 이유가 없다). `next` 는 dragTimes 가 이미 자기 자신의
- * MIN_SLOT_MIN 으로 clamp 한 값 — 여기서는 **이웃이 그 이하로 줄지 않게** 한 번 더 죈다.
+ * 손잡이 리사이즈가 이웃에 미치는 영향 — 겹침을 만들지 않는다(오너 2026-10-27 "윗 블록 시간을 늘리면 아래 것이 줄어든다").
+ * 끝 손잡이를 늘려 뒤 이웃의 시작과 겹치면 그 이웃의 **시작이 칩의 끝으로 따라오며 줄어든다**(시작 손잡이는 앞 이웃의
+ * 끝이 반대로). 이웃은 `MIN_RESIZE_MIN` 아래로는 안 줄고, 거기서 칩의 가장자리가 멈춘다. 줄일 수 없는 이웃(여러 날
+ * span, 끝 시각이 없는 행)은 벽이라 칩이 그 앞에서 멈춘다.
  *
- * 이웃을 못 찾으면(맞닿은 게 없거나, 있어도 조건에 안 맞으면) `next` 그대로 돌려주고 연동은
- * 빈 배열이다.
+ * 오너 요청(2026-09-16) 그대로 — **정확히 맞닿은 이음새**는 양쪽 다 반응한다: 칩이 줄어드는 방향이어도 이웃의 맞닿은
+ * 면이 같이 따라와 이웃이 **늘어난다**(간격이 생기지 않는다). 이웃은 항상 하나뿐이다(이음새는 한 점).
  *
- * mode "start"(위 손잡이) — 이웃은 **앞쪽**(그 `endMin` 이 이 칩의 원래 `startMin` 과 같다).
- * 이웃의 `end_time` 을 쓰게 되므로 `hasEnd` 가 false 인 이웃은 아예 후보에서 뺀다 — 안 그러면
- * 끝이 없던 행에 없던 끝을 지어내게 된다(commitDateRow 의 patch 콜백이 이 값을 그대로 쓴다).
+ * 이웃을 못 찾으면 `next` 그대로, 연동은 빈 배열이다.
  *
- * mode "end"(아래 손잡이) — 이웃은 **뒤쪽**(그 `startMin` 이 이 칩의 원래 `endMin` 과 같다).
- * 이웃의 `start_time` 을 쓰는데, 축에 그려진 시각 있는 항목은 전부 `start_time` 이 있으므로
- * (planTimedDay) 여기는 hasEnd 류 가드가 필요 없다.
+ * mode "start"(위 손잡이) — 이웃은 **앞쪽**(그 `endMin` 이 칩의 원래 `startMin` 이하인 것 중 가장 가까운 것).
+ * 이웃의 `end_time` 을 쓰게 되므로 `hasEnd` 가 false 인 이웃은 줄일 수 없다 — 안 그러면 끝이 없던 행에 없던 끝을
+ * 지어내게 된다(commitDateRow 의 patch 콜백이 이 값을 그대로 쓴다).
+ *
+ * mode "end"(아래 손잡이) — 이웃은 **뒤쪽**(그 `startMin` 이 칩의 원래 `endMin` 이상인 것 중 가장 가까운 것).
+ * 이웃의 `start_time` 을 쓰는데, 축에 그려진 시각 있는 항목은 전부 `start_time` 이 있으므로 hasEnd 가드가 필요 없다.
  */
 export function planLinkedResize(
   events: readonly LinkableEvent[],
@@ -711,23 +826,36 @@ export function planLinkedResize(
 ): { next: { startMin: number; endMin: number }; linked: { key: string; startMin: number; endMin: number }[] } {
   const head = events.find((e) => e.key === key);
   if (!head) return { next, linked: [] };
+  // 이웃은 같은 날 안에서만 — 자정 너머의 일정은 이음새를 따라 줄이거나 늘리지 않는다(그러면 일정이 자정을 가로지른다).
+  const sameDay = (m: number) => (m >= DAY_MIN) === (head.startMin >= DAY_MIN);
+  const others = events.filter((e) => e.key !== key && sameDay(e.startMin));
   if (mode === "start") {
-    const neighbor = events.find(
-      (e) => e.key !== key && e.linkable && e.hasEnd !== false && e.endMin === head.startMin,
-    );
-    if (!neighbor) return { next, linked: [] };
-    const startMin = Math.max(next.startMin, neighbor.startMin + MIN_SLOT_MIN);
+    const nb = others.filter((e) => e.endMin <= head.startMin).sort((a, b) => b.endMin - a.endMin)[0];
+    if (!nb) return { next, linked: [] };
+    const touching = nb.endMin === head.startMin;
+    if (!touching && next.startMin >= nb.endMin) return { next, linked: [] }; // 겹치지 않는다
+    const shrinkable = nb.linkable && nb.hasEnd !== false;
+    if (!shrinkable) {
+      // 벽 — 맞닿아 있던 이음새는 연동 없이 그대로 두되(옛 동작), 넘어서 겹치지는 못한다.
+      return { next: { startMin: Math.max(next.startMin, nb.endMin), endMin: next.endMin }, linked: [] };
+    }
+    const startMin = Math.max(next.startMin, nb.startMin + MIN_RESIZE_MIN);
     return {
       next: { startMin, endMin: next.endMin },
-      linked: [{ key: neighbor.key, startMin: neighbor.startMin, endMin: startMin }],
+      linked: [{ key: nb.key, startMin: nb.startMin, endMin: startMin }],
     };
   }
-  const neighbor = events.find((e) => e.key !== key && e.linkable && e.startMin === head.endMin);
-  if (!neighbor) return { next, linked: [] };
-  const endMin = Math.min(next.endMin, neighbor.endMin - MIN_SLOT_MIN);
+  const nb = others.filter((e) => e.startMin >= head.endMin).sort((a, b) => a.startMin - b.startMin)[0];
+  if (!nb) return { next, linked: [] };
+  const touching = nb.startMin === head.endMin;
+  if (!touching && next.endMin <= nb.startMin) return { next, linked: [] };
+  if (!nb.linkable) {
+    return { next: { startMin: next.startMin, endMin: Math.min(next.endMin, nb.startMin) }, linked: [] };
+  }
+  const endMin = Math.min(next.endMin, nb.endMin - MIN_RESIZE_MIN);
   return {
     next: { startMin: next.startMin, endMin },
-    linked: [{ key: neighbor.key, startMin: endMin, endMin: neighbor.endMin }],
+    linked: [{ key: nb.key, startMin: endMin, endMin: nb.endMin }],
   };
 }
 
@@ -739,13 +867,22 @@ export function planNewRange(
   y0: number,
   y1: number,
   hourRowH: number = HOUR_ROW_H,
+  /** 축의 끝 분 — 익일 구간이 있으면 24:00 보다 크다. */
+  axisEndMin: number = DAY_MIN,
 ): { startMin: number; endMin: number } | null {
   if (Math.abs(y1 - y0) < DRAG_THRESHOLD_PX) return null;
   const pxPerMin = hourRowH / 60;
-  const lo = snapMin(Math.min(y0, y1) / pxPerMin);
-  const hi = snapMin(Math.max(y0, y1) / pxPerMin);
-  const startMin = Math.min(lo, 24 * 60 - MIN_SLOT_MIN);
-  return { startMin, endMin: Math.max(hi, startMin + MIN_SLOT_MIN) };
+  const bounds = { lo: 0, hi: axisEndMin };
+  const lo = snapMin(Math.min(y0, y1) / pxPerMin, undefined, bounds);
+  const hi = snapMin(Math.max(y0, y1) / pxPerMin, undefined, bounds);
+  let startMin = Math.min(lo, axisEndMin - MIN_SLOT_MIN);
+  let endMin = Math.max(hi, startMin + MIN_SLOT_MIN);
+  if (straddlesMidnight(startMin, endMin)) {
+    // 새 일정은 시작한 날 안에서 끝난다 — 자정에서 자른다(시작이 너무 늦으면 앞으로 당겨 30분을 지킨다).
+    startMin = Math.min(startMin, DAY_MIN - MIN_SLOT_MIN);
+    endMin = DAY_MIN;
+  }
+  return { startMin, endMin };
 }
 
 /** 현재 시각 눈금의 픽셀 위치(③) — 보고 있는 날이 **오늘**일 때만. 다른 날이면 null(눈금 없음). */
@@ -757,7 +894,7 @@ export function nowLineTop(
 ): number | null {
   if (day !== todayIso) return null;
   const pxPerMin = hourRowH / 60;
-  return Math.max(0, Math.min(24 * 60, minutesNow)) * pxPerMin;
+  return Math.max(0, Math.min(DAY_MIN, minutesNow)) * pxPerMin;
 }
 
 // ── 축 확대 (PLAN-2026-09-13 달력 확대) ──────────────────────────────────────────────────────
@@ -836,7 +973,7 @@ export type DroppedTimes = Pick<
  * 축 바닥에서 만드는 경로(CalendarTab::onCreateTimedNote)와 드롭이 **같은 규칙**을 쓴다.
  */
 export function clampStoredEndMin(min: number): number {
-  return Math.min(min, 24 * 60 - 1);
+  return Math.min(min, DAY_MIN - 1);
 }
 
 export function planAllDayDrop(row: NoteDate, dayIso: string, startMin: number): DroppedTimes | null {

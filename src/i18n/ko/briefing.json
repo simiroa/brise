@@ -43,7 +43,6 @@
   "habits_done": "{{done}}/{{total}} 완료",
   "habits_empty": "아직 등록한 습관이 없어요. 여기서 바로 추가하세요.",
   "habits_title": "오늘의 습관",
-  "hourly_aria": "시간별 날씨",
   "load_failed": "불러오지 못했습니다.",
   "loading": "불러오는 중…",
   "notify_body": "오늘 일정 {{n}}개 · 습관 {{done}}/{{total}}",

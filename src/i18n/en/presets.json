@@ -14,7 +14,7 @@
   "ai_disabled_hint": "Set up AI in Settings to use this preset.",
   "ai_checking": "Checking AI connection…",
   "ai_unreachable": "Cannot connect to AI — check Settings",
-  "ai_actions_title": "AI presets",
+  "ai_actions_title": "Custom prompts",
   "assist_autorun": "Auto-run",
   "style_title": "Icon & color",
   "color_default": "Default color",

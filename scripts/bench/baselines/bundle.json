@@ -44,13 +44,13 @@
     ]
   },
   "updated": {
-    "date": "2026-10-23",
-    "commit": "9f7142dd",
-    "reason": "first baseline (local Windows, authority ci-linux 미확인)"
+    "date": "2026-10-28",
+    "commit": "e3612361",
+    "reason": "2026-10-28 설정 디자인 웨이브 누적: ko/en/fr 설정·검색 i18n 키 약 130개(+8KB ko), settings 스토어 키 16개, App.tsx 용량 알림 훅, 글꼴 미리보기 index; 설정 창 부팅은 -40KB(펫·페르소나 지연)"
   },
   "metrics": {
     "bundle.boot_main_css_kb": {
-      "value": 155.305664,
+      "value": 158.05957,
       "unit": "KB",
       "direction": "lower",
       "tolerance": {
@@ -60,7 +60,7 @@
       "gate": true
     },
     "bundle.boot_main_js_kb": {
-      "value": 1615.711914,
+      "value": 1653.194336,
       "unit": "KB",
       "direction": "lower",
       "tolerance": {
@@ -70,7 +70,7 @@
       "gate": true
     },
     "bundle.boot_mobile_js_gzip_kb": {
-      "value": 387.639648,
+      "value": 393.038086,
       "unit": "KB",
       "direction": "lower",
       "tolerance": {
@@ -80,7 +80,7 @@
       "gate": false
     },
     "bundle.boot_mobile_js_kb": {
-      "value": 1174.013672,
+      "value": 1189.795898,
       "unit": "KB",
       "direction": "lower",
       "tolerance": {
@@ -90,7 +90,7 @@
       "gate": true
     },
     "bundle.boot_settings_window_js_kb": {
-      "value": 980.585938,
+      "value": 939.746094,
       "unit": "KB",
       "direction": "lower",
       "tolerance": {
@@ -100,7 +100,7 @@
       "gate": true
     },
     "bundle.chunk_count": {
-      "value": 293,
+      "value": 371,
       "unit": "count",
       "direction": "lower",
       "tolerance": {
@@ -110,7 +110,7 @@
       "gate": false
     },
     "bundle.locale_ko_kb": {
-      "value": 275.881836,
+      "value": 284.035156,
       "unit": "KB",
       "direction": "lower",
       "tolerance": {
@@ -120,7 +120,7 @@
       "gate": false
     },
     "bundle.total_js_kb": {
-      "value": 15474.357422,
+      "value": 15745.777344,
       "unit": "KB",
       "direction": "lower",
       "tolerance": {

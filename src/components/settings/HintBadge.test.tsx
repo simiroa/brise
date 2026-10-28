@@ -20,7 +20,7 @@ describe("HintBadge", () => {
     const tip = screen.getByTestId("hint-badge-tip");
     expect(tip.textContent).toBe("한 줄 힌트");
     expect(tip.getAttribute("aria-hidden")).toBe("true"); // 이름은 aria-label 이 이미 준다
-    expect(tip.className).toBe("overlay");
+    expect(tip.className).toBe("overlay tip");
     expect(badge.contains(tip)).toBe(false); // 스크롤 컨테이너에 잘리지 않게 바깥으로 띄운다
 
     fireEvent.blur(badge);

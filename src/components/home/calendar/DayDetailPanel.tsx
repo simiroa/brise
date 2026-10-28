@@ -45,11 +45,10 @@
  *     가로선을 끊어 `──09──` 로 읽히고, 그 불투명 배경이 현재 시각 선의 발광 위에서 대비를
  *     지킨다. 이유와 진단은 tokens.css 의 그 클래스 주석에 있다.
  *  ③ 축 칩이 한 줄에서 **3줄**이 된다 — (시각·반복) / (노트 제목) / (본문 첫 줄). 발췌는 이미
- *     캐싱해 둔 `excerpts` 를 그대로 쓴다(새 IPC 0). 짧은 일정도 3줄이 다 보이도록 칩에
- *     바닥 높이(CHIP_MIN_H)를 주고, 그래서 아래 칩과 겹치는 것은 허용한다(오너: "위치 중복도
- *     가능함").
- *  ④ 칩의 설정 아이콘을 누르면 시각·반복 칩이 펼쳐진다(ChipSchedule) — 저장은 기존
- *     commitDateRow 한 길을 그대로 지난다. **W12 ③ 에서 인라인 → 플로팅 메뉴로 바뀌었다.**
+ *     캐싱해 둔 `excerpts` 를 그대로 쓴다(새 IPC 0). (2026-10-27 기하 통일로 바닥 높이 CHIP_MIN_H 는
+ *     없어졌다 — 칩 높이 = 실제 길이, 짧은 칩은 줄 수를 줄인다. TimeChip 의 chipTier 참고.)
+ *  ④ 칩의 설정 아이콘(또는 롱프레스)은 일정 수정 모달(ChipEventModal)을 연다 — 저장은 기존
+ *     commitDateRow 한 길을 그대로 지난다. (W12 ③ 에서 인라인 → 플로팅 메뉴(ChipSchedule)였다가 2026-10-27 모달로 바뀌었다.)
  *
  * PLAN-2026-09-10 달력 W12 — 오너 실기 넷:
  *  ① 축 칩의 호버가 거꾸로였다 — 평소 불투명 `--bg` 에 호버 시 낮은 알파의 `--hover` 를 덮어써
@@ -58,9 +57,9 @@
  *  ② 종일 카드의 그립이 `.icon-btn` 을 입는다 — 호버 시 배경·색이 바뀌는 그 클래스가 이
  *     저장소의 "조작 가능함" 신호다(전에는 항상 --faint 로 아무 반응이 없었다).
  *  ③ 설정을 열면 칩이 늘어나던 것(height:auto)을 없앴다. 칩의 height 는 **그 일정의 길이**라
- *     늘리면 "일정이 길어졌다"는 거짓 정보가 된다 — 대신 칩 아래로 작은 플로팅 메뉴가 뜬다.
+ *     늘리면 "일정이 길어졌다"는 거짓 정보가 된다 — 당시엔 칩 아래 작은 플로팅 메뉴가 떴고, 지금은 모달이다.
  *  ④ "축에만 있는 항목"의 상단 상세 블록(FocusedDetails 사용처 하나)을 지웠다 — 그 일을 ③ 의
- *     메뉴와 칩 3행이 이미 한다.
+ *     설정 UI 와 칩 3행이 이미 한다.
  *
  * PLAN-2026-09-10 달력 W14 — 종일 목록이 **가로 스트립**이 된다(오너 실기 2026-09-11):
  *  ① W4 ③ 의 접힘(3개 이상이면 접히고, 펼치면 목록이 축의 자리를 먹는다)을 통째로 지웠다.
@@ -83,11 +82,11 @@
  *  ② 드래그 중엔 시각과 함께 **지속시간**을 보여준다(1행 · 툴팁).
  *  ③ 되돌리기 토스트에 실제 이전→이후 시각이 들어간다 — 연속 드래그로 토스트가 쌓일 때 서로
  *     구분되지 않던 것(그릴 D4)의 짝이다.
- *  ④ 15분 스냅마다 순간이동하던 칩이 짧게 이징된다 — **드래그 중에만**.
- *  ⑤ 칩 3줄이 좌상단 정렬 + 두 단 큰 글꼴(`--text-md`). CHIP_MIN_H 의 유도식도 같은 토큰이다.
+ *  ④ (폐기 2026-10-27) 드래그 이징은 칸마다 재시작돼 떨림을 만들었다 — 이제 칩이 스냅 자리에 바로 선다.
+ *  ⑤ 칩 3줄이 좌상단 정렬 + 두 단 큰 글꼴(`--text-md`). 줄 높이 계산(chipLinePx)도 같은 토큰이다.
  *  ⑥ **연동 이동**: 시작~끝이 맞닿은(gap 0) 이웃은 가운데를 잡은 이동(드래그·키보드 ↑/↓)에서
  *     같은 델타만큼 따라 움직이고, 저장은 각자 자기 DB 행을 지나며(함정 ⓑ) 되돌리기는 **하나의
- *     토스트**로 묶인다. 판정·경계는 calendarLayout::planLinkedMove 한 곳이다.
+ *     토스트**로 묶인다. 판정·경계는 calendarLayout::planLinkedMove 한 곳이다(2026-10-27: 맞닿은 이웃 연동 → 겹친 만큼 밀어내기로 일반화, 겹침을 만들지 않는다).
  *
  * PLAN-2026-09-11 사이드바 W1 D4 — 껍데기 분리. `DayDetailPanel`(aside, 훅 0) ⊃ `DayDetailBody`
  * (본문 전부). 대시보드는 전자 그대로, 사이드바(W2)는 후자를 직접 그린다. 동작·testid 변화 0.
@@ -131,16 +130,13 @@ import {
   SectionLabel,
   type AxisHandle,
 } from "./AllDayStrip";
-import {
-  CHIP_MIN_H,
-  CHIP_LINE,
-} from "./TimeChip";
-import { useDayRoutines, useDayNoteBodies } from "./useDayDetailData";
+import { CHIP_LINE } from "./TimeChip";
+import { useDayRoutines, useDayNoteBodies, useNextDayPlan, type ParentMonthItems } from "./useDayDetailData";
 // PLAN-2026-10-19 W1 — 축(TimeAxis·HourRuler·AxisResizeHandle)은 DayAxis.tsx 로 순수 이동했다.
 import { TimeAxis, readNowTick } from "./DayAxis";
 
 export type { AxisHandle } from "./AllDayStrip";
-export { CHIP_MIN_H, CHIP_LINE };
+export { CHIP_LINE };
 
 
 export type DayDetailBodyProps = {
@@ -153,6 +149,8 @@ export type DayDetailBodyProps = {
   /** MonthGrid 가 쓰는 것과 **같은** 일별 예보. null 이면 브리핑의 날씨 자리만 조용히 빈다. */
   forecast?: DailyForecast | null;
   detailNotes: CalendarItem[];
+  /** 부모가 이미 읽어 둔 그 달 일정(대시보드 달력 탭) — 익일 구간이 같은 달이면 `dashboard_calendar` 를 또 부르지 않고 이것을 쓴다. 사이드바는 안 넘긴다. */
+  monthItems?: ParentMonthItems | null;
   /** Double-click — opens the note tab. */
   onOpen: (noteId: string) => void;
   /** Single-click focus (map view pattern) — optional so tests that only exercise open don't need
@@ -218,6 +216,7 @@ export function DayDetailBody({
   markLabel = null,
   forecast = null,
   detailNotes,
+  monthItems = null,
   onOpen,
   onFocus = () => {},
   focusedNoteId = null,
@@ -232,6 +231,9 @@ export function DayDetailBody({
   const folderById = useMemo(() => new Map(folders.map((f) => [f.id, f])), [folders]);
 
   const uiLang = useSettingsStore((s) => s.uiLang);
+  /** 시간축 익일 구간(설정 calendar_axis_tail_hours) — 대시보드·사이드바가 이 본체를 같이 쓰므로 한 곳에서 채운다. */
+  const tailHours = useSettingsStore((s) => s.calendarAxisTailHours);
+  const tailPlan = useNextDayPlan(selectedDay, tailHours, monthItems);
 
   // ── 데이터 조회 계층은 useDayDetailData.ts 에 있다 ────────────────────────────────────────
   // 시간축 배경 루틴(설정에서 오는 요일 반복)과, 그 날 노트들의 본문 한 번 읽기(발췌 · 칩
@@ -298,6 +300,8 @@ export function DayDetailBody({
   } = useAxisConfirmFlow({
     selectedDay,
     plan,
+    tailHours,
+    tailPlan,
     setDropPreview,
   });
 
@@ -497,6 +501,8 @@ export function DayDetailBody({
               routines={dayRoutines}
               toolbarHint={axisToolbarHint}
               compact={compact}
+              tailHours={tailHours}
+              tailPlan={tailPlan}
             />
           )}
 

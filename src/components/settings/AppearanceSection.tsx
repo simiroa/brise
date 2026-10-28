@@ -11,7 +11,6 @@ import {
   BG_TONE_MAX,
   CONTENT_TINT_MIN,
   CONTENT_TINT_MAX,
-  DEFAULT_APPEARANCE_SEED,
   SHEET_ALPHA_MIN,
   SHEET_ALPHA_MAX,
 } from "../../lib/appearance";
@@ -27,14 +26,13 @@ import {
 } from "../../lib/accentPalette";
 import { t } from "../../i18n/t";
 import { isBrowser } from "../../lib/env";
-import { groupCardStyle, SETTINGS_CTRL_WIDTH } from "./shared";
-import { SectionHeader } from "./SectionHeader";
+import { SETTINGS_CTRL_WIDTH } from "./shared";
 import { SettingsRow } from "./SettingsRow";
 import { SubGroup } from "./SubGroup";
-import { Select } from "../Select";
 import { SegGroup } from "./SegGroup";
 import { Badge } from "./Badge";
 import { AppearancePreview } from "./AppearancePreview";
+import { FontPickerRow } from "./FontPickerRow";
 import { IconFileExport, IconFileImport, IconFmtText, IconPalette, IconRefresh, IconUndo } from "../icons";
 import { IconAction } from "./IconAction";
 import {
@@ -43,40 +41,11 @@ import {
   resetAppearance,
   restoreAppearance,
 } from "../../lib/themeTransfer";
+import { SettingsCard } from "./SettingsCard";
 
-const FONT_CUSTOM = "__custom__";
-// lib/appearance.ts::applyAppearance 의 stack 과 같은 값이어야 한다(여기는 드롭다운 미리보기용).
-const FONT_STACK: Record<string, string> = {
-  pretendard: '"Pretendard", "Source Sans 3", system-ui, sans-serif',
-  serif: '"Source Serif 4", "Noto Serif KR", serif',
-  sans: '"Source Sans 3", "Noto Sans KR", system-ui, sans-serif',
-};
-/** Bundled 3 + Windows-Korean representative system fonts. Uninstalled names fall back honestly.
- *  "Pretendard" 시스템 글꼴 항목은 2026-09-09 에 번들 "pretendard" 로 승격됐다 — 설치돼 있어야
- *  보이던 것이 이제 앱이 들고 다니는 기본값이라, 같은 이름의 시스템 항목은 중복이라 뺐다. */
-const CURATED_FONTS: Array<{ value: string; labelKey: string }> = [
-  { value: "pretendard", labelKey: "settings.font_pretendard" },
-  { value: "serif", labelKey: "settings.font_serif" },
-  { value: "sans", labelKey: "settings.font_sans" },
-  { value: "Malgun Gothic", labelKey: "settings.font_malgun" },
-  { value: "Gulim", labelKey: "settings.font_gulim" },
-  { value: "Batang", labelKey: "settings.font_batang" },
-  { value: "NanumGothic", labelKey: "settings.font_nanum" },
-  { value: "Segoe UI", labelKey: "settings.font_segoe" },
-];
-const CURATED_VALUES = CURATED_FONTS.map((f) => f.value);
-function isCuratedFont(value: string): boolean {
-  return CURATED_VALUES.includes(value);
-}
-/** 직접 입력 칸을 비웠을 때 돌아갈 곳 — 앱 기본 글꼴(첫 페인트 시드와 같은 값). */
-const DEFAULT_FONT_FAMILY = DEFAULT_APPEARANCE_SEED.fontFamily;
 /** 배경 밝기 슬라이더 음수 끝(-100%)이 싣는 bg_dim 값 — Rust settings_schema.rs 의 bg_dim arm
  *  상한(0..=40)과 같아야 한다(넘기면 저장이 거부된다). */
 const BG_DIM_MAX = 40;
-
-function fontStack(value: string): string {
-  return FONT_STACK[value] ?? `"${value}", "Pretendard", system-ui, sans-serif`;
-}
 
 function SliderRow({
   label,
@@ -162,7 +131,6 @@ export function AppearanceSection() {
   const bgTone = useSettingsStore((s) => s.bgTone);
   const bgSat = useSettingsStore((s) => s.bgSat);
   const contentTint = useSettingsStore((s) => s.contentTint);
-  const fontFamily = useSettingsStore((s) => s.fontFamily);
   const surfaceStyle = useSettingsStore((s) => s.surfaceStyle);
   // F5(PLAN-2026-09-15): window_set_effect 가 실제로 적용됐는지 — Win10 등에서 flat 으로 폴백해도
   // 선택 상태는 "아크릴" 로 남는다. 화면이 그 사실을 말하고 불투명도 슬라이더는 잠근다.
@@ -201,7 +169,6 @@ export function AppearanceSection() {
   const setBgTone = useSettingsStore((s) => s.setBgTone);
   const setBgSat = useSettingsStore((s) => s.setBgSat);
   const setContentTint = useSettingsStore((s) => s.setContentTint);
-  const setFontFamily = useSettingsStore((s) => s.setFontFamily);
   const setSurfaceStyle = useSettingsStore((s) => s.setSurfaceStyle);
 
   // W11 (결정 5): 단일 "배경 밝기" 슬라이더 (-100 ~ +100). 양수는 bg_tone(밝게), 음수는 bg_tone
@@ -235,86 +202,61 @@ export function AppearanceSection() {
     setBgDim(dim);
   };
 
-  // W11 / W23-d: 큐레이션 드롭다운 + 직접 입력. 스키마 키 font_family 불변.
-  // 직접 입력 모드는 화면 상태지만 **저장값을 따라간다** — 초기화·불러오기·되돌리기·다른 창·저장
-  // 실패 롤백으로 글꼴이 바깥에서 바뀌면 드롭다운과 입력 칸을 저장값에 다시 맞춘다. 드롭다운에서
-  // "직접 입력"만 고르고 아직 확정하지 않은 상태는 저장값이 그대로라 이 effect 가 건드리지 않는다.
-  const [customMode, setCustomMode] = useState(() => !isCuratedFont(fontFamily));
-  const [customFontInput, setCustomFontInput] = useState(() => (isCuratedFont(fontFamily) ? "" : fontFamily));
-  useEffect(() => {
-    const custom = !isCuratedFont(fontFamily);
-    setCustomMode(custom);
-    setCustomFontInput(custom ? fontFamily : "");
-  }, [fontFamily]);
-  const selectValue = customMode ? FONT_CUSTOM : fontFamily;
-
-  // 확정(blur/Enter) 한 번 — 타이핑마다 부르지 않는다(setFontFamily 는 call() 이라 실패하면 글자마다
-  // 토스트가 뜬다). 바뀐 게 없으면 저장하지 않는다. 비우면 직접 입력 모드를 닫는데, 저장된 글꼴이
-  // **직접 입력한 이름**이었을 때만 앱 기본 글꼴로 되돌린다 — 큐레이션 글꼴에서 "직접 입력"을 열었다가
-  // 빈 칸으로 나가는 것은 아무것도 바꾸지 않는다.
-  const commitCustomFont = () => {
-    const typed = customFontInput.trim();
-    if (!typed) {
-      setCustomMode(false);
-      setCustomFontInput("");
-      if (!isCuratedFont(fontFamily)) void setFontFamily(DEFAULT_FONT_FAMILY);
-      return;
-    }
-    if (typed !== fontFamily) void setFontFamily(typed);
-  };
 
   return (
     <>
       {/* 1. 테마·재질 + 강조색 — 한 카드(같은 관심사인 색·재질, 오너 R2 2026-09-15). 카드 머리는 다른
           카드와 같은 아이콘 달린 SectionHeader 이고, 강조색은 그 아래 구분선 있는 SubGroup 이다. */}
-      <div className="card" style={groupCardStyle} id={anchorId("appearance_theme")} data-testid="settings-appearance-theme">
+      <SettingsCard
+        title={t("settings.appearance_group_theme")}
+        icon={<IconPalette size={14} strokeWidth={2} />}
+        actions={
+          browser ? undefined : (
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", flexWrap: "wrap" }}>
+              {undoSnapshot && (
+                <IconAction
+                  icon={<IconUndo size={16} />}
+                  label={t("settings.theme_undo")}
+                  data-testid="appearance-undo"
+                  disabled={transferBusy}
+                  onClick={() => void undo()}
+                />
+              )}
+              <IconAction
+                icon={<IconFileImport size={16} />}
+                label={t("settings.theme_import")}
+                id={anchorId("theme_import")}
+                data-testid="appearance-import"
+                disabled={transferBusy}
+                onClick={() => void runTransfer(importThemeFromPicker)}
+              />
+              <IconAction
+                icon={<IconFileExport size={16} />}
+                label={t("settings.theme_export")}
+                id={anchorId("theme_export")}
+                data-testid="appearance-export"
+                disabled={transferBusy}
+                onClick={() => void exportThemeToPicker()}
+              />
+              {/* 되돌리기가 있으므로 danger 아님(PLAN-2026-09-19-settings-icon-actions §2). 설명 힌트는
+                  툴팁에 이름 뒤로 붙여 잃지 않는다 — 접근 이름은 여전히 label 하나. */}
+              <IconAction
+                icon={<IconRefresh size={16} />}
+                label={t("settings.theme_reset")}
+                titleOverride={`${t("settings.theme_reset")} — ${t("settings.theme_reset_hint")}`}
+                id={anchorId("theme_reset")}
+                data-testid="appearance-reset"
+                disabled={transferBusy}
+                onClick={() => void runTransfer(resetAppearance)}
+              />
+            </div>
+          )
+        }
+        anchor="appearance_theme"
+        testId="settings-appearance-theme"
+      >
         {/* 되돌리기·내보내기·불러오기·초기화는 첫 카드 제목 줄로(PLAN-2026-10-24 D4). 브라우저 탭엔 없다. */}
-        <SectionHeader
-          title={t("settings.appearance_group_theme")}
-          icon={<IconPalette size={14} strokeWidth={2} />}
-          actions={
-            browser ? undefined : (
-              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", flexWrap: "wrap" }}>
-                {undoSnapshot && (
-                  <IconAction
-                    icon={<IconUndo size={16} />}
-                    label={t("settings.theme_undo")}
-                    data-testid="appearance-undo"
-                    disabled={transferBusy}
-                    onClick={() => void undo()}
-                  />
-                )}
-                <IconAction
-                  icon={<IconFileImport size={16} />}
-                  label={t("settings.theme_import")}
-                  id={anchorId("theme_import")}
-                  data-testid="appearance-import"
-                  disabled={transferBusy}
-                  onClick={() => void runTransfer(importThemeFromPicker)}
-                />
-                <IconAction
-                  icon={<IconFileExport size={16} />}
-                  label={t("settings.theme_export")}
-                  id={anchorId("theme_export")}
-                  data-testid="appearance-export"
-                  disabled={transferBusy}
-                  onClick={() => void exportThemeToPicker()}
-                />
-                {/* 되돌리기가 있으므로 danger 아님(PLAN-2026-09-19-settings-icon-actions §2). 설명 힌트는
-                    툴팁에 이름 뒤로 붙여 잃지 않는다 — 접근 이름은 여전히 label 하나. */}
-                <IconAction
-                  icon={<IconRefresh size={16} />}
-                  label={t("settings.theme_reset")}
-                  titleOverride={`${t("settings.theme_reset")} — ${t("settings.theme_reset_hint")}`}
-                  id={anchorId("theme_reset")}
-                  data-testid="appearance-reset"
-                  disabled={transferBusy}
-                  onClick={() => void runTransfer(resetAppearance)}
-                />
-              </div>
-            )
-          }
-        />
+
         <SettingsRow
           anchor="theme"
           label={t("settings.theme")}
@@ -370,57 +312,14 @@ export function AppearanceSection() {
         <SubGroup title={t("settings.appearance_group_accent")} divider data-testid="settings-appearance-accent">
           <AccentRow />
         </SubGroup>
-      </div>
+      </SettingsCard>
 
       {/* 2. 글꼴·배경 — 글꼴 Select(+직접 입력), 슬라이더 4개, 미리보기 */}
-      <div className="card" style={groupCardStyle} id={anchorId("appearance_font")} data-testid="settings-appearance-font">
-        <SectionHeader title={t("settings.appearance_group_font")} icon={<IconFmtText size={14} strokeWidth={2} />} />
-        <SettingsRow
-          anchor="font_family"
-          label={t("settings.font_family")}
-          control={
-            <Select
-              testid="settings-font-family"
-              value={selectValue}
-              ariaLabel={t("settings.font_family")}
-              onChange={(mode) => {
-                if (mode === FONT_CUSTOM) {
-                  setCustomMode(true);
-                  return;
-                }
-                setCustomMode(false);
-                if (mode !== fontFamily) void setFontFamily(mode);
-              }}
-              options={[
-                ...CURATED_FONTS.map((f) => ({
-                  value: f.value,
-                  label: t(f.labelKey),
-                  style: { fontFamily: fontStack(f.value) },
-                })),
-                { value: FONT_CUSTOM, label: t("settings.font_custom") },
-              ]}
-              style={{ width: SETTINGS_CTRL_WIDTH, minWidth: SETTINGS_CTRL_WIDTH }}
-            />
-          }
-        />
-
-        {customMode && (
-          <input
-            className="field"
-            type="text"
-            value={customFontInput}
-            placeholder={t("settings.font_custom_placeholder")}
-            aria-label={t("settings.font_custom")}
-            maxLength={64}
-            onChange={(e) => setCustomFontInput(e.target.value)}
-            onBlur={commitCustomFont}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-            }}
-            style={{ width: "100%", marginBottom: "var(--space-2)" }}
-            data-testid="settings-font-custom-input"
-          />
-        )}
+      <SettingsCard title={t("settings.appearance_group_font")} icon={<IconFmtText size={14} strokeWidth={2} />} anchor="appearance_font" testId="settings-appearance-font">
+        {/* PLAN-2026-10-27-fonts W5 — 앱 화면 · 노트 본문(Q2) · 코드(Q3) 세 줄이 같은 고르기 줄을 쓴다. */}
+        <FontPickerRow target="ui" />
+        <FontPickerRow target="editor" />
+        <FontPickerRow target="mono" />
 
         <SliderRow
           anchor="font_scale"
@@ -484,7 +383,7 @@ export function AppearanceSection() {
         />
 
         <AppearancePreview />
-      </div>
+      </SettingsCard>
     </>
   );
 }

@@ -20,8 +20,9 @@
 // payload 의 `window` = 쓰기를 낸 데스크톱 창의 라벨(lib.rs invoke_handler 가 scope_window 로 표시).
 // 데스크톱 웹뷰 리스너는 window==자기 라벨(자기가 낸 쓰기)만 무시한다 — 데스크톱 스토어는 이미
 // 낙관적으로 갱신돼 있으므로 재로드하면 방금 친 글자를 되돌릴 뿐이다. 다른 창(설정·브리핑·섹션 창)의
-// 쓰기는 반영한다. window==null 이면서 origin=="local" 은 async 커맨드·백그라운드 작업이라 누가 냈는지
-// 모른다 — 받는 쪽은 트리/목록만 가볍게 재조회한다(src/lib/remoteNoteWrite.ts). 브라우저 클라이언트는
+// 쓰기는 반영한다. window==null 이면서 origin=="local" 은 백그라운드 작업·라벨을 아직 안 싣는 async 커맨드라 누가 냈는지
+// 모른다 — 받는 쪽은 트리/목록만 가볍게 재조회한다(src/lib/remoteNoteWrite.ts::classifyWrite). async 쓰기 커맨드는 `publish_as` 로
+// 라벨을 싣는다(scope_window 주석). 브라우저 클라이언트는
 // 둘 다 반영한다(데스크톱 쓰기를 받는 것이 이 기능의 나머지 절반이므로) — 자기 쓰기의 메아리는
 // 재조회 한 번으로 끝나고 새 쓰기를 만들지 않으므로 루프가 아니다.
 use std::sync::OnceLock;
@@ -50,12 +51,15 @@ thread_local! {
 
 /// lib.rs invoke_handler 가 모든 앱 커맨드를 이걸로 감싼다 — 그 안에서 불린 publish 는 `window` 에 이 라벨을 싣는다.
 ///
-/// ponytail: 동기 커맨드만 라벨을 얻는다. tauri 2 의 generate_handler 는 async 커맨드(그리고
+/// ponytail: **이 단일 지점은 동기 커맨드만** 라벨을 얻는다. tauri 2 의 generate_handler 는 async 커맨드(그리고
 /// `#[command(async)]`)의 본문을 `respond_async_serialized` → async_runtime::spawn 으로 다른 태스크에 넘기고
 /// 곧바로 돌아오므로 이 스코프는 이미 끝나 있다 → window=null. 커맨드 시그니처 ~100개를 안 바꾸고
-/// 라벨을 실어 나를 단일 지점이 없다(본문 future 가 매크로 안에서 만들어진다). 받는 쪽은 null 을
-/// "출처 모름 → coarse 재조회"로 다룬다. async 쓰기도 정밀하게 알려야 하면 그 커맨드만
-/// `webview: tauri::Webview` 를 받아 scope 를 직접 거는 형태로 올린다.
+/// 라벨을 실어 나를 단일 지점은 없다(본문 future 가 매크로 안에서 만들어진다). 그래서 **쓰기를 알리는 async 커맨드는 개별로**
+/// `webview: tauri::Webview` 를 받아 `publish_as(webview.label(), …)` 로 라벨을 싣는다 — 본 창 자신의 붙여넣기·드롭마다 트리를 통째
+/// 재조회하던 것을 이걸로 막았다(attachment_add_file/bytes · doc_import_html · export_note · workspace_delete; 모두 http:false 라
+/// HTTP 디스패치에 Webview 가 없어도 된다). 아직 라벨이 없는 async 쓰기(pet_chat·audio_transcribe 의 쓰기, 백그라운드 워커의 EXIF
+/// 알림)는 그대로 window=null 이고, 받는 쪽(remoteNoteWrite.ts::classifyWrite)은 이를 "출처 모름 → coarse 재조회"로 다룬다.
+/// 새 async 쓰기 커맨드를 추가하면 같은 방식으로 라벨을 싣는다.
 pub fn scope_window<R>(label: &str, f: impl FnOnce() -> R) -> R {
     struct Restore(Option<String>);
     impl Drop for Restore {
@@ -67,6 +71,15 @@ pub fn scope_window<R>(label: &str, f: impl FnOnce() -> R) -> R {
     // 중첩·패닉에도 이전 값으로 되돌린다(동기 커맨드 안에서 block_on 으로 다른 IPC 가 끼어드는 일은 없지만 싸다).
     let _restore = Restore(WINDOW.with(|w| w.borrow_mut().replace(label.to_string())));
     f()
+}
+
+/// async 커맨드용 `publish` — 커맨드가 `webview: tauri::Webview` 를 받아 그 라벨을 넘긴다. `scope_window` 는 thread_local 이라
+/// **publish 를 부르는 동기 구간만** 감싸야 한다(여기서 하는 일이 그것이다 — await 를 건너 감싸면 안 된다).
+pub fn publish_as(window_label: Option<&str>, note_id: Option<&str>, created: bool) {
+    match window_label {
+        Some(label) => scope_window(label, || publish(note_id, created)),
+        None => publish(note_id, created), // 창이 없는 호출(트레이·테스트) — 출처 모름
+    }
 }
 
 /// HTTP 경로(폰)에는 창이 없다 — REMOTE 스코프 안이면 무조건 None.
@@ -285,6 +298,25 @@ mod tests {
         }
         assert_eq!(seen["a"], "main");
         assert!(seen["b"].is_null());
+    }
+
+    /// async 커맨드용 publish_as — 라벨을 싣고 끝나면 새지 않는다.
+    #[tokio::test]
+    async fn publish_as_carries_the_label_and_does_not_leak_it() {
+        let mut rx = subscribe();
+        publish_as(Some("main"), Some("evt-as-in"), false);
+        publish(Some("evt-as-out"), false);
+        publish_as(None, Some("evt-as-none"), false);
+        let mut seen = std::collections::HashMap::new();
+        while let Ok(p) = rx.try_recv() {
+            let v: serde_json::Value = serde_json::from_str(&p).unwrap();
+            if let Some(id) = v["note_id"].as_str().filter(|id| id.starts_with("evt-as-")) {
+                seen.insert(id.to_string(), v["window"].clone());
+            }
+        }
+        assert_eq!(seen["evt-as-in"], "main");
+        assert!(seen["evt-as-out"].is_null(), "the label must not leak past publish_as");
+        assert!(seen["evt-as-none"].is_null(), "no label = unattributed");
     }
 
     #[tokio::test]

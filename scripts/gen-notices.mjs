@@ -287,6 +287,14 @@ function collectStatic() {
       text: meteoconsLicense,
     },
     {
+      name: "calender-app-design",
+      note: "일정 수정 모달의 구성·필드 순서·푸터 배치를 차용(src/components/home/calendar/ChipEventModal.tsx) — Kargul Studio, MIT",
+      href: "https://github.com/kargulstudio/calender-app-design",
+      text: normalizeText(
+        readFileSync(join(ROOT, "src", "components", "home", "calendar", "CalenderAppDesign.LICENSE.txt"), "utf8"),
+      ),
+    },
+    {
       name: "Microsoft Fluent UI Emoji",
       note: "이모지 아이콘 — MIT. 앱 실행 중 필요 시 원격에서 내려받아 캐시한다(번들에는 없음).",
       href: "https://github.com/microsoft/fluentui-emoji",
@@ -315,6 +323,30 @@ function collectStatic() {
       name: "MET Norway",
       note: "날씨 예보 데이터 — CC BY 4.0. (날씨 위젯 서체 5종은 npm OFL 스캔에 별도 수록)",
       href: "https://api.met.no",
+    },
+    ...collectFonts(),
+  ];
+}
+
+/** 글꼴 중 npm 스캔 밖에 있는 것 — docs/PLAN-2026-10-27-fonts.md §5.5. */
+function collectFonts() {
+  const read = (...p) => normalizeText(readFileSync(join(ROOT, ...p), "utf8"));
+  const catalog = JSON.parse(readFileSync(join(ROOT, "src", "lib", "fonts", "catalog.json"), "utf8"));
+  const ofl = read("src-tauri", "resources", "fonts", "OFL-1.1.txt");
+  return [
+    {
+      name: "Paper Mono",
+      note: "번들 코드체 — SIL OFL 1.1 (Geist Mono 기반)",
+      href: "https://github.com/paper-design/paper-mono",
+      text: read("src", "assets", "fonts", "paper-mono", "LICENSE.txt"),
+    },
+    {
+      name: `내려받기 글꼴 ${catalog.fonts.length}종`,
+      note:
+        "사용자가 설정에서 고를 때 내려받는다(설치본에는 없음) — 전부 SIL OFL 1.1. 받은 폴더에도 같은 LICENSE.txt 를 둔다. " +
+        catalog.fonts.map((f) => f.family).join(", "),
+      href: "https://fontsource.org",
+      text: `${catalog.fonts.map((f) => `${f.family}: ${f.copyright}`).join("\n")}\n\n${ofl}`,
     },
   ];
 }

@@ -133,9 +133,9 @@ describe("AiPermissionsSection", () => {
       "ai_debug_verbose",
     ]) {
       const cell = screen.getByTestId(`switch-grid-cell-${id}`);
-      // 셀 구조: <div><span>[<span>라벨</span> + 힌트]</span><Toggle/></div> — 첫 span 안의
-      // 첫 span 이 화면에 보이는 라벨이다(힌트 배지는 라벨이 아니라 옆에 붙는 부가 설명).
-      const visible = cell.firstElementChild?.firstElementChild?.textContent ?? "";
+      // 셀 구조(SettingsRow): <div><div column><div inline-flex>[<span>라벨</span> + 힌트]</div></div><control/></div> — 라벨 줄 안의
+      // 첫 span 이 화면에 보이는 라벨이다(힌트 배지는 라벨이 아니라 옆에 붙는 부가 설명). 2026-10-28 C4: SwitchGrid 가 SettingsRow 로 통일돼 한 단 깊어졌다.
+      const visible = cell.firstElementChild?.firstElementChild?.firstElementChild?.textContent ?? "";
       const accessibleName =
         screen.getByTestId(`switch-grid-toggle-${id}`).getAttribute("aria-label") ?? "";
 
@@ -144,19 +144,41 @@ describe("AiPermissionsSection", () => {
     }
   });
 
-  it("외부 전송 항목 개수를 정확히 요약하여 표시한다", () => {
-    // aiEnabled: true, provider: Gemini (external), linkSuggestions: true (external) -> 2건
-    useSettingsStore.setState({ aiEnabled: true, linkSuggestions: true } as never);
-    const { rerender } = render(<AiPermissionsSection provider="Gemini" />);
-
-    expect(screen.getByTestId("ai-external-summary").textContent).toContain("2");
-    // PLAN-2026-09-15 W3: 요약은 첫 카드 제목 줄 actions 의 Badge — 카드 푸터 줄은 없다.
-    expect(screen.getByTestId("settings-ai-permissions").contains(screen.getByTestId("ai-external-summary"))).toBe(true);
-    expect(screen.getByTestId("settings-ai-permissions-safety").querySelector('[data-testid="ai-external-summary"]')).toBeNull();
-
-    // provider: Ollama, linkSuggestions: false -> 0건
-    useSettingsStore.setState({ linkSuggestions: false } as never);
-    rerender(<AiPermissionsSection provider="Ollama" />);
-    expect(screen.getByTestId("ai-external-summary").textContent).toContain("0");
+  it("제목 줄 전체 토글이 읽기·쓰기 권한 4가지를 한꺼번에 켜고 끈다 — 안전장치는 건드리지 않는다", async () => {
+    // 전체 토글은 키별 setter 넷이 아니라 배치 setter 한 번(IPC 한 번·롤백 한 번)으로 간다.
+    const setters = {
+      setSimplePrefs: vi.fn().mockResolvedValue(undefined),
+      setChatReadHistory: vi.fn(),
+      setChatReadFiles: vi.fn(),
+      setChatWriteEnabled: vi.fn(),
+      setCollectChatRegister: vi.fn(),
+      setAiConfirmBeforeApply: vi.fn(),
+      setAiDebugVerbose: vi.fn(),
+    };
+    useSettingsStore.setState({
+      chatReadHistory: true,
+      chatReadFiles: true,
+      chatWriteEnabled: true,
+      collectChatRegister: false,
+      ...setters,
+    } as never);
+    render(<AiPermissionsSection />);
+    const master = screen.getByTestId("ai-permissions-master");
+    expect(master.getAttribute("aria-checked")).toBe("false"); // 일부만 켜짐 → 꺼진 쪽
+    expect(screen.queryByTestId("ai-external-summary")).toBeNull();
+    master.click();
+    await Promise.resolve();
+    expect(setters.setSimplePrefs).toHaveBeenCalledTimes(1);
+    expect(setters.setSimplePrefs).toHaveBeenCalledWith({
+      chatReadHistory: true,
+      chatReadFiles: true,
+      chatWriteEnabled: true,
+      collectChatRegister: true,
+    });
+    for (const k of ["setChatReadHistory", "setChatReadFiles", "setChatWriteEnabled", "setCollectChatRegister"] as const) {
+      expect(setters[k]).not.toHaveBeenCalled();
+    }
+    expect(setters.setAiConfirmBeforeApply).not.toHaveBeenCalled();
+    expect(setters.setAiDebugVerbose).not.toHaveBeenCalled();
   });
 });

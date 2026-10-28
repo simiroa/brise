@@ -28,7 +28,6 @@ import { useFolderWindows } from "./useFolderWindows";
 import { useFavoritesWindow } from "./useFavoritesWindow";
 import { useTreeLoadMore } from "./useTreeLoadMore";
 import { TreeHeaderActions } from "./TreeHeaderActions";
-import { BackupNudgeBanner } from "./BackupNudgeBanner";
 
 /* ── Note tree ── */
 export function NoteTree() {
@@ -727,8 +726,6 @@ export function NoteTree() {
             )}
           </div>
         </div>
-
-        <BackupNudgeBanner />
 
         <div
           ref={listWrapRef}

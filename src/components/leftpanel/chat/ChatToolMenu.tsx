@@ -12,6 +12,7 @@ export const CHAT_TOOLS = [
   { id: "save_session", label: "search.chat_tool_save_session" },
   { id: "copy_session", label: "search.chat_tool_copy_session" },
   { id: "regen_last", label: "search.chat_tool_regen_last" },
+  { id: "extract_memory", label: "search.chat_tool_extract_memory" },
   { id: "refresh_suggestions", label: "search.chat_tool_refresh_suggestions" },
 ] as const;
 

@@ -125,7 +125,8 @@ export function parseTimeInput(raw: string): string | null {
  * year-only/year.month record, or silently clamping a BCE year into a wrong CE one.
  */
 export function toDateInputValue(year: number | null, month: number | null, day: number | null): string {
-  if (year === null || month === null || day === null || year < 1 || year > 9999) return "";
+  // `== null`: 값이 IPC 를 건너와 필드가 아예 없을 수도 있다(undefined) — null 과 같이 "정밀도 없음"으로 본다.
+  if (year == null || month == null || day == null || year < 1 || year > 9999) return "";
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${String(year).padStart(4, "0")}-${pad(month)}-${pad(day)}`;
 }

@@ -17,16 +17,15 @@ import type {
   PetSessionNewOutput,
   PetSessionOpenOutput,
   PetSessionSummary,
-  Suggestion,
 } from "../../lib/commands.gen";
-import { useNotesStore, displayTitle } from "../../stores/notes";
+import { useNotesStore } from "../../stores/notes";
 import {
   useAiPresetsStore,
   sidebarChatPresets,
   isSidebarSaveMemoPreset,
 } from "../../stores/aiPresets";
 import { t } from "../../i18n/t";
-import type { PetChatItem, PetSuggestionCard } from "../../plugins/pet/PetChat";
+import type { PetChatItem } from "../../plugins/pet/PetChat";
 import { ChatBubble, CHAT_BUBBLE_LABELS } from "../../plugins/pet/ChatBubble";
 import { ChatComposer } from "../../plugins/pet/ChatComposer";
 import {
@@ -44,8 +43,6 @@ import {
 } from "../../plugins/pet/bridge/petChatContext";
 import { PET_REVIEW_CHAT_PLAN_EVENT } from "../../plugins/pet/bridge/petChatPlan";
 import { applyChatSection } from "../../plugins/pet/bridge/petChatSection";
-import { pickRenderableSuggestion, type PendingSuggestion } from "../../plugins/pet/bridge/petSuggestionCards";
-import { acceptCollectSuggestion } from "../../plugins/pet/bridge/petCollectBridge";
 import { useSettingsStore } from "../../stores/settings";
 import {
   DEFAULT_PET_PERSONA,
@@ -66,59 +63,20 @@ import { DropGhost } from "../attachments/DropGhost";
 import { useFileDropZone } from "../../lib/useFileDropZone";
 import { IconBulletList, IconClose, IconCopy, IconFile, IconHistory, IconNote, IconTrash } from "../icons";
 import { ChatSearchToolCard } from "./chat/ChatSearchToolCard";
-import { ChatSuggestionCard } from "./chat/ChatSuggestionCard";
 import { ChatToolMenu, type ChatToolId } from "./chat/ChatToolMenu";
+import { ChatMemoryExtractModal } from "./chat/ChatMemoryExtractModal";
+import { proposeChatMemories, saveChatMemories } from "../../lib/chatMemoryExtractor";
 import { runChatPipeline } from "../../lib/chatPipeline";
+import { ThinkingLoader } from "../common/ThinkingLoader";
 import "../../plugins/pet/pet.css";
 
 /**
  * Sidebar chat body (plan S4) — main surface for the shared pet_chat thread.
  * Send goes through runChatPipeline (pet bubble too); the write gate is shared via chat_write_enabled.
- * Hybrid UI: bubbles + search tool cards inside assistant bubbles + note chips + suggestion above composer.
+ * Hybrid UI: bubbles + search tool cards inside assistant bubbles + note chips + suggestions live in the frame bell (ReminderBell).
  */
 
-// Suggestion[] → PendingSuggestion 파싱(kind별 payload 검증 포함)은
-// plugins/pet/bridge/petSuggestionCards.ts 로 옮겨져 PetBubbleApp.tsx 와 재사용한다 — 예전엔 이
-// 파일에 로컬 복제본이 있었다.
-
-// 카드는 표시 전용 데이터라 노트 제목을 여기서 한 번 displayTitle 로 거른다 — 새 노트의 저장 제목
-// 센티널 "Untitled Note" 가 '"Untitled Note" × "Untitled Note"' 로 새던 자리. 펫 창(PetChat)은 스토어를
-// 싣지 않으므로 이 판정은 메인 창 전용인 이 어댑터에 둔다(petSuggestionCards.ts 는 펫 창도 쓰는 순수 헬퍼).
-function toCard(s: PendingSuggestion): PetSuggestionCard {
-  if (s.kind === "link") {
-    return {
-      kind: "link",
-      id: s.id,
-      title: s.title,
-      summary: s.summary,
-      url: s.url,
-      // 비었으면(null·"") 포맷터의 "새 노트로" 분기라 그대로 둔다.
-      targetNoteTitle: s.targetNoteTitle ? displayTitle(s.targetNoteTitle) : s.targetNoteTitle,
-    };
-  }
-  if (s.kind === "theme") {
-    return {
-      kind: "theme",
-      id: s.id,
-      noteTitle: displayTitle(s.noteTitle),
-      othersCount: s.othersCount,
-    };
-  }
-  if (s.kind === "collect") {
-    return {
-      kind: "collect",
-      id: s.id,
-      noteTitle: displayTitle(s.noteTitle),
-      sourceName: s.sourceName,
-    };
-  }
-  return {
-    kind: "overlap",
-    id: s.id,
-    noteTitle: displayTitle(s.noteTitle),
-    relatedNoteTitle: displayTitle(s.relatedNoteTitle),
-  };
-}
+// 펫 제안(검토하기 등)은 여기 카드로 두지 않는다 — 앱 알림(ReminderBell: 토스트 + 벨 메뉴)으로 옮겼다(오너 2026-10-27).
 
 type ChatItem = ChatHistoryItem;
 
@@ -180,10 +138,12 @@ export function SidebarChat({ onOpenNote }: SidebarChatProps = {}) {
   const [draft, setDraft] = useState("");
   const [attaches, setAttaches] = useState<ChatAttach[]>([]);
   const [htmlDragOver, setHtmlDragOver] = useState(false);
-  const [suggestion, setSuggestion] = useState<PendingSuggestion | null>(null);
   const [presetsOpen, setPresetsOpen] = useState(false);
   const [sessions, setSessions] = useState<PetSessionSummary[]>([]);
   const [savingConversation, setSavingConversation] = useState(false);
+  // 수동 기억 추출(도구 메뉴 › 이 대화에서 기억 추출) — null = 닫힘, 배열 = 후보 목록 모달.
+  const [memoryCandidates, setMemoryCandidates] = useState<string[] | null>(null);
+  const [extractingMemory, setExtractingMemory] = useState(false);
   const [selected, setSelected] = useState<{ index: number; rect: DOMRect } | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -344,26 +304,7 @@ export function SidebarChat({ onOpenNote }: SidebarChatProps = {}) {
     };
   }, []);
 
-  // Suggestions: same broadcast the pet window listens to (main-window bridge).
-  useEffect(() => {
-    let cancelled = false;
-    let unlisten: (() => void) | undefined;
-    // 브라우저에선 이 이벤트가 오지 않고(SSE 미중계) 펫 브리지도 없다 — 제안 카드는 데스크톱 전용.
-    void listenEvent<{ suggestions: Suggestion[] }>("pet-suggestions-pending", (e) => {
-      if (cancelled) return;
-      setSuggestion(pickRenderableSuggestion(e.payload.suggestions));
-    }).then((un) => {
-      if (cancelled) un();
-      else unlisten = un;
-    }).catch(() => {
-      // silent-ok: Tauri IPC 없는 환경 — 제안 카드 없음.
-    });
-    if (!isBrowser()) void emit("pet-suggestions-refresh").catch(() => {});
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, []);
+
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
@@ -703,7 +644,36 @@ export function SidebarChat({ onOpenNote }: SidebarChatProps = {}) {
     void send(f.text, { skipAttaches: true, displayText: f.displayText });
   };
 
+  const extractMemory = async () => {
+    if (extractingMemory || pending) return;
+    setExtractingMemory(true);
+    try {
+      const turns = items
+        .filter((item) => item.text.trim().length > 0)
+        .map((item) => ({ role: item.role === "user" ? ("user" as const) : ("assistant" as const), text: item.text }));
+      // null = 실패(call() 이 이미 토스트) → 모달을 열지 않는다. [] = 후보 없음 → 기존처럼 "후보 없음" 모달.
+      const candidates = await proposeChatMemories(turns);
+      if (candidates !== null) setMemoryCandidates(candidates);
+    } finally {
+      setExtractingMemory(false);
+    }
+  };
+
+  const saveExtractedMemory = async (picked: string[]) => {
+    try {
+      const n = await saveChatMemories(picked);
+      emitNotice(n > 0 ? t("search.chat_memory_extract_saved", { n }) : t("search.chat_memory_extract_full"));
+      setMemoryCandidates(null);
+    } catch {
+      // setChatMemory 의 call() 이 이미 토스트했다 — 모달은 열어 두고 다시 시도하게 한다.
+    }
+  };
+
   const runTool = (id: ChatToolId) => {
+    if (id === "extract_memory") {
+      void extractMemory();
+      return;
+    }
     if (id === "save_session") {
       void saveConversation();
       return;
@@ -723,6 +693,8 @@ export function SidebarChat({ onOpenNote }: SidebarChatProps = {}) {
     if (id === "save_session") return !hasConversation || pending || savingConversation;
     if (id === "copy_session") return !hasConversation;
     if (id === "regen_last") return lastUserIndexOf(items) < 0 || pending;
+    // 모델을 불러야 하므로 AI 가 꺼져 있으면 막는다. 자동 추출 토글(aiChatMemory)과는 무관하다.
+    if (id === "extract_memory") return !hasConversation || pending || extractingMemory || !useSettingsStore.getState().aiEnabled;
     return false;
   };
 
@@ -753,7 +725,6 @@ export function SidebarChat({ onOpenNote }: SidebarChatProps = {}) {
     fillComposer(text);
   };
 
-  const card = suggestion ? toCard(suggestion) : null;
   const hasConversation = items.some((item) => item.text.trim().length > 0);
   const selectedItem = selected ? items[selected.index] : null;
   const canSend = (!!draft.trim() || attaches.length > 0) && !pending;
@@ -873,13 +844,7 @@ export function SidebarChat({ onOpenNote }: SidebarChatProps = {}) {
         {pending ? (
           <div className="pet-chat__pending-row">
             <div className="pet-bubble pet-bubble--assistant pet-chat__thinking">
-              <span className="pet-chat__thinking-label">{t("search.chat_waiting")}</span>
-              <span className="pet-chat__dots" aria-hidden="true">
-                <i />
-                <i />
-                <i />
-                <i />
-              </span>
+              <ThinkingLoader variant="plain" phases={[t("search.chat_waiting")]} />
             </div>
             <button
               type="button"
@@ -893,55 +858,6 @@ export function SidebarChat({ onOpenNote }: SidebarChatProps = {}) {
         ) : null}
       </div>
 
-      {card && suggestion ? (
-        <ChatSuggestionCard
-          card={card}
-          suggestion={suggestion}
-          onDismiss={() => {
-            const id = suggestion.id;
-            setSuggestion(null);
-            void emit("pet-suggestion-dismiss", { id }).catch(() => {});
-          }}
-          onAcceptOrReview={() => {
-            if (suggestion.kind === "overlap") {
-              const { id, noteId, relatedNoteId } = suggestion;
-              setSuggestion(null);
-              void emit("pet-review-suggestion", {
-                id,
-                note_id: noteId,
-                related_note_id: relatedNoteId,
-              }).catch(() => {});
-              void selectNote(noteId);
-            } else if (suggestion.kind === "link") {
-              const { id, title, summary, url, targetNoteId } = suggestion;
-              setSuggestion(null);
-              void emit("pet-accept-link-suggestion", {
-                id,
-                target_note_id: targetNoteId,
-                title,
-                summary,
-                url,
-              }).catch(() => {});
-            } else if (suggestion.kind === "theme") {
-              const { id, noteIds } = suggestion;
-              setSuggestion(null);
-              void emit("pet-accept-theme-suggestion", { id, note_ids: noteIds }).catch(() => {});
-            } else if (suggestion.kind === "collect") {
-              const { id, noteId, postProcessModel } = suggestion;
-              const prevSuggestion = suggestion;
-              setSuggestion(null);
-              // C(AUDIT-2026-09-26): 카드를 먼저 지운 뒤 acceptCollectSuggestion 이 실패하면(내부
-              // 세 단계 중 acceptSuggestion 은 callSilent 라 조용하다) 사용자는 실패 사실을 전혀
-              // 모른 채 카드만 사라졌다. 카드를 되돌려 재시도할 수 있게 한다 — 이 함수는 invoke.ts
-              // 의 두 래퍼(호출부에 붙잡으라고 다시 throw 하는 그것) 자체가 아니라 합성 함수라,
-              // 여기서 직접 롤백한다.
-              void acceptCollectSuggestion({ id, noteId, model: postProcessModel }).catch(() => {
-                setSuggestion(prevSuggestion);
-              });
-            }
-          }}
-        />
-      ) : null}
 
       {failure ? (
         <div
@@ -1071,6 +987,15 @@ export function SidebarChat({ onOpenNote }: SidebarChatProps = {}) {
           }
         />
       </div>
+
+      {memoryCandidates && (
+        <ChatMemoryExtractModal
+          candidates={memoryCandidates}
+          onSave={saveExtractedMemory}
+          onOpenMemory={isBrowser() ? undefined : () => void openChatSettings()}
+          onClose={() => setMemoryCandidates(null)}
+        />
+      )}
 
       {selected && selectedItem
         ? createPortal(

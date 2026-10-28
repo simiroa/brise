@@ -59,6 +59,10 @@ pub struct TrayHandles {
     /// `exit_after_flush` 에 들어섰다 — 정상 경로(창 확인)와 트레이 종료의 시간 초과 경로가 겹쳐도 한 번만
     /// 끝내고, 분리 창 저장을 기다리는 중에 시간 초과가 거짓 `quit_flush_timeout` 을 남기지 않게 한다.
     pub exiting: std::sync::atomic::AtomicBool,
+    /// 본 창이 트레이에 숨어 있는 동안 표면 효과(아크릴)를 보류한다 — `hide_to_tray` 가 세우고
+    /// `show_and_focus` 가 내린다. 위 `hidden_to_tray` 는 부팅 failsafe 전용이라 한 번 서면 안 내리므로
+    /// 이 용도로 못 쓴다. 판정·보류는 commands::window::window_set_effect 가 한다(거기 `effect_decision`).
+    pub main_effect: parking_lot::Mutex<crate::commands::window::MainEffectGate>,
 }
 
 /// 트레이 "종료" 가 본 창의 닫기 확인(flushAll → window_close_confirmed)을 기다리는 상한. 평소 flush 는 로컬 IPC
@@ -225,7 +229,7 @@ fn sync_status_label(app: &AppHandle) -> String {
 
 /// 본 창 라벨 — tauri.conf.json 의 windows[0] 에 label 이 없으면 Tauri 가 "main" 을 쓴다
 /// (aux_window.rs 의 MAIN_LABEL 과 같은 값).
-const MAIN_LABEL: &str = "main";
+pub(crate) const MAIN_LABEL: &str = "main";
 
 /// 파괴된 본 창을 tauri.conf.json 의 windows[0] 과 같은 조건으로 다시 만든다.
 ///
@@ -256,29 +260,187 @@ fn rebuild_main_window(app: &AppHandle) -> tauri::Result<tauri::WebviewWindow> {
     Ok(w)
 }
 
-/// 창을 보이고, 최소화돼 있으면 복원하고, 포커스를 준다 — 트레이 열기/좌클릭과 단일 인스턴스
-/// 재실행(lib.rs::run 의 single-instance 플러그인 콜백) 두 경로가 공유한다.
-/// 숨긴 창에 Acrylic을 먼저 바르면 HWND 가 죽어 show 가 조용히 실패한다(docs/PET.md).
-/// 안 보이면 한 번 가운데로 옮기고 다시 show 한다.
-pub fn show_and_focus(app: &AppHandle) {
+/// 누가 본 창을 열었나 — `tray/reveal_state` 진단에 싣는다.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RevealVia {
+    TrayClick,
+    TrayDoubleClick,
+    TrayMenu,
+    SecondInstance,
+    Pet,
+}
+
+impl RevealVia {
+    fn as_str(self) -> &'static str {
+        match self {
+            RevealVia::TrayClick => "tray_click",
+            RevealVia::TrayDoubleClick => "tray_double_click",
+            RevealVia::TrayMenu => "tray_menu",
+            RevealVia::SecondInstance => "second_instance",
+            RevealVia::Pet => "pet",
+        }
+    }
+}
+
+/// 숨어 있는 동안 보류한 표면 효과를 show 뒤에 건 결과.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DeferredEffect {
+    /// 보류분이 없었다.
+    None,
+    Applied,
+    /// 걸었지만 apply_style 이 false(미지원·실패) — 또는 메인 스레드로 못 넘겼다.
+    Failed,
+    /// 창을 다시 만들어서 버렸다 — 새 웹뷰의 부팅이 현재 설정으로 다시 건다.
+    Dropped,
+}
+
+impl DeferredEffect {
+    fn as_str(self) -> &'static str {
+        match self {
+            DeferredEffect::None => "none",
+            DeferredEffect::Applied => "applied",
+            DeferredEffect::Failed => "failed",
+            DeferredEffect::Dropped => "dropped",
+        }
+    }
+}
+
+/// 열기 뒤 본 창의 상태를 확인할 때까지 기다리는 시간. show 는 메인 스레드로 넘어가 비동기로 처리되므로
+/// 바로 읽으면 아직 숨김으로 보인다.
+const REVEAL_STATE_DELAY: std::time::Duration = std::time::Duration::from_millis(300);
+/// 다시 만든 본 창은 프런트 부팅이 show 하고, 못 하면 watch_reveal 이 이 시간 뒤에 띄운다.
+const REBUILD_REVEAL_TIMEOUT_MS: u64 = 5000;
+
+/// `tray/reveal_state` 한 줄 — 순수 함수라 창 없이 테스트한다. 정상(보임·최소화 아님·맨 앞)이면 Info,
+/// 하나라도 어긋나거나 읽지 못했으면 Warn. 메시지는 상태 플래그만 — 경로·노트 내용은 없다(CLAUDE.md 함정 11).
+fn reveal_state_entry(
+    via: RevealVia,
+    rebuilt: bool,
+    effect: DeferredEffect,
+    visible: Option<bool>,
+    minimized: Option<bool>,
+    foreground: Option<bool>,
+) -> (crate::diag::Level, String) {
+    let ok = visible == Some(true) && minimized == Some(false) && foreground == Some(true);
+    let flag = |v: Option<bool>| match v {
+        Some(true) => "true",
+        Some(false) => "false",
+        None => "unknown",
+    };
+    let message = format!(
+        "via={} rebuilt={rebuilt} visible={} minimized={} foreground={} deferred_effect={}",
+        via.as_str(),
+        flag(visible),
+        flag(minimized),
+        flag(foreground),
+        effect.as_str(),
+    );
+    let level = if ok { crate::diag::Level::Info } else { crate::diag::Level::Warn };
+    (level, message)
+}
+
+/// 열기 `delay` 뒤 본 창 상태를 한 번 기록한다. 열기의 각 호출(show·set_focus 등)은 OS 수준에서 실패해도
+/// Err 를 돌려주지 않아(tao 의 set_visible 은 반환값이 없다) 릴리스에서 "트레이로 안 열림"이 흔적 없이
+/// 지나갔다(2026-10-28 조사) — 보였는지·최소화인지·앞에 왔는지를 사후에 읽어 남긴다. 창 getter 는 메인
+/// 스레드 왕복이라 메인 스레드를 막지 않게 비동기 태스크에서 읽는다.
+/// ponytail: 웹뷰가 실제로 그리는지(투명·빈 창)는 못 본다 — 웹뷰 왕복(eval→IPC 응답)으로 재려면 프런트에
+/// 응답 경로가 필요하다. 이 기록이 "visible=true foreground=true 인데 안 보였다"를 보이면 그때 붙인다.
+fn schedule_reveal_state(
+    app: &AppHandle,
+    via: RevealVia,
+    rebuilt: bool,
+    effect: DeferredEffect,
+    delay: std::time::Duration,
+) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(delay).await;
+        let Some(w) = app.get_webview_window(MAIN_LABEL) else {
+            crate::diag::warn(
+                "tray",
+                "reveal_state",
+                format!(
+                    "via={} rebuilt={rebuilt} window=gone deferred_effect={}",
+                    via.as_str(),
+                    effect.as_str()
+                ),
+            );
+            return;
+        };
+        let (level, message) = reveal_state_entry(
+            via,
+            rebuilt,
+            effect,
+            w.is_visible().ok(),
+            w.is_minimized().ok(),
+            is_foreground(&w),
+        );
+        crate::diag::record(level, "tray", "reveal_state", message);
+    });
+}
+
+/// 본 창이 지금 맨 앞(전경) 창인가 — reveal_state 가 "열렸지만 다른 창 뒤"를 가르는 값. Windows 는 Win32
+/// `GetForegroundWindow` 를 HWND 와 비교한다. Tauri `is_focused()` 를 쓰지 않는 이유: tao 의 그 값은 최상위
+/// HWND 의 WM_SETFOCUS/WM_KILLFOCUS 를 따르는데, wry 가 WM_SETFOCUS 마다 키보드 포커스를 WebView2 자식으로
+/// 넘겨(`MoveFocus`) 최상위 HWND 가 곧바로 WM_KILLFOCUS 를 받는다 — 맨 앞에 뜬 정상 창도 false 로 읽힌다.
+/// 선언 하나라 crate 를 들이지 않는다(user32 는 Windows 바이너리가 이미 링크한다). `hwnd()` 를 못 읽으면 unknown.
+#[cfg(windows)]
+fn is_foreground(w: &tauri::WebviewWindow) -> Option<bool> {
+    #[link(name = "user32")]
+    extern "system" {
+        fn GetForegroundWindow() -> *mut core::ffi::c_void;
+    }
+    let hwnd = w.hwnd().ok()?.0 as *mut core::ffi::c_void;
+    // SAFETY: 인자 없는 순수 조회 — 전경 창 핸들(없으면 null)을 돌려줄 뿐 메모리·프로세스 상태를 건드리지 않는다.
+    let foreground = unsafe { GetForegroundWindow() };
+    Some(foreground == hwnd)
+}
+
+/// Windows 밖에는 같은 방식의 전경 창 조회가 없어 Tauri `is_focused()` 로 채운다 — 진단 문구의 필드 이름은
+/// 플랫폼과 무관하게 `foreground` 로 둔다(이 앱의 배포 대상은 Windows 뿐이라 이 갈래는 컴파일 유지용).
+#[cfg(not(windows))]
+fn is_foreground(w: &tauri::WebviewWindow) -> Option<bool> {
+    w.is_focused().ok()
+}
+
+/// 표시 쪽 관문 — 보류 플래그를 내리고 보류분을 넘긴다. TrayHandles 미준비(방어적)면 없음.
+fn unpark_main(app: &AppHandle) -> Option<crate::commands::window::EffectRequest> {
+    app.try_state::<TrayHandles>().and_then(|h| h.main_effect.lock().unpark())
+}
+
+/// 창을 보이고, 최소화돼 있으면 복원하고, 포커스를 준다 — 트레이 좌클릭·더블클릭·메뉴 "열기",
+/// 단일 인스턴스 재실행(lib.rs::run 의 single-instance 플러그인 콜백), 펫의 "메인 열기"가 공유한다.
+/// 숨긴 창에 Acrylic을 먼저 바르면 HWND 가 죽어 show 가 조용히 실패한다(docs/PET.md) — 그래서 숨은 동안
+/// 보류한 효과(commands::window::effect_decision 2번)는 여기서 show **뒤에** 건다.
+/// 안 보이면 한 번 가운데로 옮기고 다시 show 한다. 끝나고 잠시 뒤 상태를 진단에 남긴다(schedule_reveal_state).
+pub fn show_and_focus(app: &AppHandle, via: RevealVia) {
     let w = match app.get_webview_window(MAIN_LABEL) {
         Some(w) => w,
         // 창이 **파괴된** 경우(숨김이 아니다) — 여기서 다시 만든다. 예전엔 그냥 로그만 찍고
         // 돌아갔고, 그러면 트레이 열기/좌클릭/더블클릭·단일 인스턴스 재실행·펫의 "메인 열기"가
         // 전부 영구히 죽어 앱이 트레이만 남은 좀비가 됐다(2026-08-25 실제 발생). 본 창은
         // tauri.conf.json 이 부팅 때 한 번만 만들므로 재생성 경로가 없으면 복구 불가였다.
-        None => match rebuild_main_window(app) {
-            // 프런트가 다 그린 뒤 show() 한다 — 여기서 show 하면 숨긴 의미가 없다. 보이는 순간 포커스.
-            Ok(_) => {
-                crate::aux_window::watch_reveal(app, MAIN_LABEL, 5000, true);
-                return;
+        None => {
+            // 보류 플래그를 **만들기 전에** 내리고 보류분은 버린다. 새 창은 숨긴 채 만들어져 부팅이 DB 의
+            // 현재 설정을 읽고 show 뒤 스스로 효과를 건다(bootWindow → applySurfaceEffectAfterShow) — 보류분도
+            // 같은 설정에서 나온 값이라 중복이고, 여기서 걸면 숨긴 새 HWND 에 거는 바로 그 버그다. 플래그를
+            // 남겨 두면 그 부팅 호출이 보류되는데 그 뒤로 이 함수를 다시 탈 계기가 없어 효과가 영영 안 걸린다.
+            let dropped = if unpark_main(app).is_some() { DeferredEffect::Dropped } else { DeferredEffect::None };
+            match rebuild_main_window(app) {
+                // 프런트가 다 그린 뒤 show() 한다 — 여기서 show 하면 숨긴 의미가 없다. 보이는 순간 포커스.
+                Ok(_) => {
+                    crate::aux_window::watch_reveal(app, MAIN_LABEL, REBUILD_REVEAL_TIMEOUT_MS, true);
+                    // 300ms 면 새 웹뷰가 아직 부팅 중이라 늘 "안 보임"이다 — watch_reveal 의 마감 뒤에 본다.
+                    let delay = std::time::Duration::from_millis(REBUILD_REVEAL_TIMEOUT_MS) + REVEAL_STATE_DELAY;
+                    schedule_reveal_state(app, via, true, dropped, delay);
+                }
+                Err(e) => {
+                    // 여기서 실패하면 진짜 복구 불가(재생성 경로 자체가 없다) — Error 레벨.
+                    crate::diag::error("tray", "rebuild_main_window_failed", format!("{e}"));
+                }
             }
-            Err(e) => {
-                // 여기서 실패하면 진짜 복구 불가(재생성 경로 자체가 없다) — Error 레벨.
-                crate::diag::error("tray", "rebuild_main_window_failed", format!("{e}"));
-                return;
-            }
-        },
+            return;
+        }
     };
     if let Err(e) = w.unminimize() {
         crate::diag::warn("tray", "unminimize_failed", format!("{e}"));
@@ -294,6 +456,28 @@ pub fn show_and_focus(app: &AppHandle) {
     }
     if let Err(e) = w.set_focus() {
         crate::diag::warn("tray", "set_focus_failed", format!("{e}"));
+    }
+    // 보류분은 메인 스레드에서 건다: 이 함수는 펫 "메인 열기"(async 커맨드)에선 다른 스레드에서 돌아,
+    // 위 show() 가 메인 이벤트 루프로 넘겨지고 바로 돌아온다. 효과를 여기서 곧장 걸면 아직 숨은 HWND 에
+    // 닿을 수 있다 — 같은 루프에 뒤따라 넣으면 show 가 처리된 다음에 돈다(메인 스레드에서 불렸으면
+    // show 가 이미 동기로 끝났다). 상태 기록도 그 결과를 실어야 해서 같은 자리에서 예약한다.
+    let pending = unpark_main(app);
+    let had_pending = pending.is_some();
+    let handle = app.clone();
+    let main = w.clone();
+    let queued = app.run_on_main_thread(move || {
+        let effect = match pending {
+            None => DeferredEffect::None,
+            Some(req) if crate::commands::window::apply_effect_request(&main, &req) => DeferredEffect::Applied,
+            Some(_) => DeferredEffect::Failed,
+        };
+        schedule_reveal_state(&handle, via, false, effect, REVEAL_STATE_DELAY);
+    });
+    if let Err(e) = queued {
+        // 이벤트 루프가 이미 끝나는 중(종료 직전)이다 — 보류분은 걸지 못했다.
+        crate::diag::warn("tray", "deferred_effect_dispatch_failed", format!("{e}"));
+        let effect = if had_pending { DeferredEffect::Failed } else { DeferredEffect::None };
+        schedule_reveal_state(app, via, false, effect, REVEAL_STATE_DELAY);
     }
 }
 
@@ -616,7 +800,7 @@ pub fn ensure_tray(app: &AppHandle) -> tauri::Result<()> {
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id().as_ref() {
-            OPEN_ID => show_and_focus(app),
+            OPEN_ID => show_and_focus(app, RevealVia::TrayMenu),
             PET_TOGGLE_ID => toggle_pet_visible(app),
             COPY_URL_ID => copy_sync_url(app),
             CLIPBOARD_ID => run_clipboard(app),
@@ -626,14 +810,14 @@ pub fn ensure_tray(app: &AppHandle) -> tauri::Result<()> {
             _ => {}
         })
         .on_tray_icon_event(|tray, event| match event {
-            TrayIconEvent::DoubleClick { .. } => show_and_focus(tray.app_handle()),
+            TrayIconEvent::DoubleClick { .. } => show_and_focus(tray.app_handle(), RevealVia::TrayDoubleClick),
             // 좌클릭 단독(업/다운 둘 다가 아니라 Up만 — 안 그러면 한 번의 클릭이 두 번 열고 닫는다).
             // show_menu_on_left_click(false)라 좌클릭이 메뉴를 열지 않으므로 여기서 직접 처리한다.
             TrayIconEvent::Click {
                 button: MouseButton::Left,
                 button_state: MouseButtonState::Up,
                 ..
-            } => show_and_focus(tray.app_handle()),
+            } => show_and_focus(tray.app_handle(), RevealVia::TrayClick),
             _ => {}
         });
     if let Some(icon) = app.default_window_icon().cloned() {
@@ -701,13 +885,23 @@ pub fn refresh_sync_status_item(app: &AppHandle) {
 
 /// 창을 닫는 대신 트레이로 숨긴다 — 이 함수 자체는 무조건(호출되면 항상 숨긴다). 게이팅은
 /// 호출부(commands/window.rs::window_close_confirmed)가 close_to_tray_setting 으로 미리 판단한다.
-/// hidden_to_tray 를 여기서 세팅한다 — 모든 트레이 숨김이 거치는 유일한 지점이라서다(TrayHandles
-/// 주석 참고).
+/// hidden_to_tray 와 효과 보류(main_effect)를 여기서 세팅한다 — 모든 트레이 숨김이 거치는 유일한
+/// 지점이라서다(TrayHandles 주석 참고).
 pub fn hide_to_tray(app: &AppHandle) {
     let _ = ensure_tray(app);
-    mark_hidden_to_tray(app.try_state::<TrayHandles>().as_deref());
-    if let Some(w) = app.get_webview_window("main") {
-        let _ = w.hide();
+    let handles = app.try_state::<TrayHandles>();
+    mark_hidden_to_tray(handles.as_deref());
+    // 숨기기 **전에** 세운다 — 숨긴 뒤에 세우면 그 사이 도착한 효과 요청이 숨은 HWND 에 걸린다. 숨기기
+    // 직전 보이는 동안 온 요청이 보류되는 건 무해하다(다시 보일 때 건다).
+    if let Some(h) = handles.as_deref() {
+        h.main_effect.lock().park();
+    }
+    if let Some(w) = app.get_webview_window(MAIN_LABEL) {
+        if let Err(e) = w.hide() {
+            // 못 숨겼으면 창은 보이는 채로 남는다 — 보류를 풀어야 효과가 다음 열기까지 멈추지 않는다.
+            crate::diag::warn("tray", "hide_failed", format!("{e}"));
+            let _ = unpark_main(app);
+        }
     }
 }
 
@@ -722,7 +916,57 @@ fn mark_hidden_to_tray(handles: Option<&TrayHandles>) {
 
 #[cfg(test)]
 mod tests {
-    use super::{close_to_tray_from_settings, mark_hidden_to_tray, menu_model, tray_strings, TrayHandles};
+    use super::{
+        close_to_tray_from_settings, mark_hidden_to_tray, menu_model, reveal_state_entry, tray_strings, DeferredEffect,
+        RevealVia, TrayHandles,
+    };
+    use crate::diag::Level;
+
+    #[test]
+    fn effect_gate_is_not_parked_at_boot() {
+        // setup() 이 manage 하는 기본값 — 부팅의 본 창 효과(applySurfaceEffectAfterShow)는 보류되지 않는다.
+        // 세우는 곳은 hide_to_tray 뿐이다.
+        let handles = TrayHandles::default();
+        assert!(!handles.main_effect.lock().is_parked());
+    }
+
+    #[test]
+    fn reveal_state_is_info_only_when_visible_restored_and_foreground() {
+        let (level, message) = reveal_state_entry(
+            RevealVia::TrayClick,
+            false,
+            DeferredEffect::None,
+            Some(true),
+            Some(false),
+            Some(true),
+        );
+        assert_eq!(level, Level::Info);
+        assert_eq!(
+            message,
+            "via=tray_click rebuilt=false visible=true minimized=false foreground=true deferred_effect=none"
+        );
+    }
+
+    #[test]
+    fn reveal_state_warns_on_any_mismatch_or_unknown() {
+        let cases = [
+            (Some(false), Some(false), Some(true)), // 안 보임
+            (Some(true), Some(true), Some(true)),   // 최소화로 남음
+            (Some(true), Some(false), Some(false)), // 다른 창 뒤
+            (None, Some(false), Some(true)),        // 못 읽음
+        ];
+        for (visible, minimized, foreground) in cases {
+            let (level, _) =
+                reveal_state_entry(RevealVia::Pet, false, DeferredEffect::Applied, visible, minimized, foreground);
+            assert_eq!(level, Level::Warn, "{visible:?} {minimized:?} {foreground:?}");
+        }
+        let (_, message) =
+            reveal_state_entry(RevealVia::SecondInstance, true, DeferredEffect::Dropped, None, None, Some(false));
+        assert_eq!(
+            message,
+            "via=second_instance rebuilt=true visible=unknown minimized=unknown foreground=false deferred_effect=dropped"
+        );
+    }
 
     #[test]
     fn menu_model_pet_window_items_need_pet_enabled_and_visible() {

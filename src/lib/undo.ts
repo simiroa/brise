@@ -156,9 +156,15 @@ export function showToastOnly(
   label: string,
   onUndo: () => void,
   opts?: { ttlMs?: number; actionLabel?: string; extraAction?: { label: string; onAction: () => void } },
-): void {
+): number {
   const id = nextId++;
   emitUndoToast({ id, label, onUndo, ttlMs: opts?.ttlMs, actionLabel: opts?.actionLabel, extraAction: opts?.extraAction });
+  return id;
+}
+
+/** showToastOnly 가 돌려준 id 의 토스트를 닫는다 — 알림이 이미 처리돼 그 토스트의 버튼이 낡았을 때(lib/frameNotices.ts). */
+export function dismissToast(id: number): void {
+  emitDismiss(id);
 }
 
 /**

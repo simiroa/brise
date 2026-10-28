@@ -7,22 +7,39 @@
  * **여기 한 곳**에만 둔다 — useAxisDragSession 은 DOM 도 도메인도 모르는 뼈대라 이 로직이
  * 들어갈 자리가 아니다(그 이음매 옆에 나란히 둔 이유이기도 하다).
  *
- * 순수 이동(동작 변경 0): 본문은 DayDetailPanel.tsx 의 TimeAxis 안에 있던 블록 그대로다.
- * 매 렌더 새로 만들어지는 평범한 함수들이라(메모이즈하지 않는다) `dayAxisH` 가 바뀌면 다음
- * 루프부터 새 값을 쓴다 — 옮기기 전과 같다.
+ * 루프는 requestAnimationFrame 이다(예전엔 16ms setInterval + 고정 7px/틱): 가장자리에 ~250ms 머문 뒤에만
+ * 흐르고, 속도는 가장자리 깊이에 비례하며, 서브픽셀을 누적해 스냅 칸(7px)과 속도가 얽히지 않는다.
+ * 반환 함수들은 매 렌더 새로 만들어지지만 **오래 사는 쪽이 있다** — DayAxis 의 `useImperativeHandle(…, [])` 가 첫 렌더의
+ * `trackAutoScroll` 을 부모(종일 스트립 드롭)에게 평생 건넨다. 그래서 렌더마다 바뀌는 값(스크롤 영역 높이)은 클로저가 아니라
+ * 이 훅 안의 ref(`contentHRef`)로 읽는다 — 안 그러면 축 확대·익일 구간 변경 뒤에도 첫 렌더의 높이로 상한을 계산했다.
  */
 import { useEffect, useRef, type RefObject } from "react";
+import { maxAxisScrollTop } from "../calendarLayout";
 
-/* W17 자동 스크롤의 세 상수 — 전부 **동작** 값이다(애니메이션 속도·감지 폭). CSS 로 나가는
- * 디자인 값이 아니라 스케일 사다리와 무관하고, 그래서 토큰으로 두지 않는다. */
-/** 이만큼 안쪽까지 오면 "가장자리에 있다"고 본다. 칩 한 줄 높이(HOUR_ROW_H=28)보다 조금 크게 —
- *  더 좁으면 손이 통과해 버려 안 걸리고, 더 넓으면 아직 화면 안을 겨누는 손짓까지 축을 흘린다. */
+/* W17 자동 스크롤 상수 — 전부 **동작** 값이다(감지 폭·속도·머무름). CSS 로 나가는 디자인 값이 아니라
+ * 스케일 사다리와 무관하고, 그래서 토큰으로 두지 않는다. */
+/** 가장자리 영역의 상한. 사이드바 축은 보이는 창이 ~168px 뿐이라 고정 32px 면 위아래 ~38% 가 영역이 돼
+ *  손이 영역을 벗어나지 못했다 — 보이는 높이의 12% 로도 죈다(아래 edgePx). */
 const AUTO_SCROLL_EDGE_PX = 32;
-/** 한 틱에 미는 픽셀. 16ms 틱이면 초당 ~440px = 15분 눈금 기준 약 16분/초 — 24시간을 1.5초에
- *  훑는다. 가장자리 깊이에 따라 빠르게 하지 않았다: 한 속도로도 하루를 도는 데 충분하다. */
-const AUTO_SCROLL_PX_PER_TICK = 7;
-/** ~60fps. requestAnimationFrame 이 아니라 setInterval 인 이유는 trackAutoScroll 주석에. */
-const AUTO_SCROLL_TICK_MS = 16;
+const AUTO_SCROLL_EDGE_RATIO = 0.12;
+/** 가장자리에 이만큼 **머문 뒤에만** 흐르기 시작한다 — 스치기만 한 손에는 축이 움직이지 않는다. */
+const AUTO_SCROLL_DWELL_MS = 250;
+/** 초당 속도: 영역 가장자리에서 시작해 맨 끝(깊이 1)에서 최대. 24시간을 훑는 데 충분한 값(기존 ~440px/s). */
+const AUTO_SCROLL_MIN_PX_PER_S = 80;
+const AUTO_SCROLL_MAX_PX_PER_S = 480;
+/** 한 프레임에 밀 수 있는 시간 상한 — 탭이 멈췄다 돌아와도 한 번에 날아가지 않게. */
+const AUTO_SCROLL_MAX_DT_MS = 50;
+
+/** 보이는 높이에 따른 가장자리 영역 폭. */
+export function autoScrollEdgePx(visibleHeight: number): number {
+  return Math.min(AUTO_SCROLL_EDGE_PX, visibleHeight * AUTO_SCROLL_EDGE_RATIO);
+}
+
+/** 가장자리 깊이(0~1)에 따른 초당 속도. */
+export function autoScrollSpeed(depth: number): number {
+  const d = Math.max(0, Math.min(1, depth));
+  return AUTO_SCROLL_MIN_PX_PER_S + (AUTO_SCROLL_MAX_PX_PER_S - AUTO_SCROLL_MIN_PX_PER_S) * d;
+}
 
 export type AxisAutoScroll = {
   /** 드래그가 지금 이 높이에 있다 — 가장자리면 밀기 시작/유지, 벗어나면 멈춘다. */
@@ -34,14 +51,26 @@ export type AxisAutoScroll = {
 
 /**
  * @param axisRef 축의 스크롤 컨테이너(보이는 창). 이 훅이 미는 대상이다.
- * @param dayAxisH 캔버스 전체 높이(= hourRowH * 24). 위/아래 끝을 넘겨 밀지 않기 위한 상한.
+ * @param contentH 스크롤 영역 전체 높이(= `axisContentPx` — 눈금 영역 + compact 아래 여백). 위/아래 끝을 넘겨 밀지 않기 위한 상한이고,
+ *   확대 보정·기본 스크롤과 같은 `maxAxisScrollTop` 식으로 쓴다.
  */
 export function useAxisAutoScroll(
   axisRef: RefObject<HTMLDivElement | null>,
-  dayAxisH: number,
+  contentH: number,
 ): AxisAutoScroll {
-  /** 돌고 있는 루프와 그 방향(-1 위 / 1 아래). null = 안 돌고 있다. */
-  const autoScroll = useRef<{ id: ReturnType<typeof setInterval>; dir: -1 | 1 } | null>(null);
+  /** 항상 최신 스크롤 영역 높이 — 오래 사는 첫 렌더의 클로저도 같은 ref 를 보므로 낡지 않는다. */
+  const contentHRef = useRef(contentH);
+  contentHRef.current = contentH;
+  /** 돌고 있는 루프(rAF)와 그 방향(-1 위 / 1 아래), 가장자리에 들어선 시각(머무름 판정), 마지막 손 높이
+   *  (깊이 비례 속도), 서브픽셀 누적. null = 안 돌고 있다. */
+  const autoScroll = useRef<{
+    id: number;
+    dir: -1 | 1;
+    since: number;
+    clientY: number;
+    last: number;
+    acc: number;
+  } | null>(null);
   /** 밀고 난 뒤 미리보기를 다시 계산하는 자리 — 각 드래그의 onMove 본문 그대로다. 포인터가
    *  가만히 있으면 pointermove 가 안 오므로, 이것을 루프가 대신 불러야 미리보기가 축과 같이
    *  움직인다(안 그러면 칩이 커서를 놓치고 위로 흘러간다). */
@@ -49,7 +78,7 @@ export function useAxisAutoScroll(
   const stopAutoScroll = () => {
     autoScrollResync.current = null;
     if (!autoScroll.current) return;
-    clearInterval(autoScroll.current.id);
+    cancelAnimationFrame(autoScroll.current.id);
     autoScroll.current = null;
   };
   // 언마운트(날짜를 바꾸거나 목록을 펼쳐 축이 사라지는 경우)에도 루프는 끊어져야 한다.
@@ -57,11 +86,9 @@ export function useAxisAutoScroll(
 
   /** 드래그가 지금 이 높이에 있다 — 가장자리면 그 방향으로 **계속** 밀고, 벗어나면 멈춘다.
    *
-   *  `setInterval` 이다: requestAnimationFrame 이 더 정직한 틱이지만 이 루프가 하는 일은
-   *  "scrollTop 에 상수를 더한다" 뿐이라 프레임에 맞출 이유가 없고, 가짜 타이머로 고정하기가
-   *  훨씬 쉽다(시간축의 현재 시각 눈금도 같은 이유로 setInterval 이다).
+   *  루프는 requestAnimationFrame 이다(아래 `frame`) — 머무름·속도가 시간(`t`)으로 정해지고 프레임 수에 묶이지 않는다.
    *
-   *  **위/아래 끝을 넘겨 밀지 않는다** — 최대치는 캔버스 높이(dayAxisH) 빼기 보이는 높이다.
+   *  **위/아래 끝을 넘겨 밀지 않는다** — 최대치는 스크롤 영역 높이(contentH) 빼기 보이는 높이다(`maxAxisScrollTop`).
    *  `scrollHeight - clientHeight` 가 정공법이지만 jsdom 에는 레이아웃이 없어 둘 다 0 이고,
    *  캔버스의 높이는 우리가 픽셀로 정한 상수라 rect 로 유도해도 같은 값이다.
    *
@@ -71,44 +98,60 @@ export function useAxisAutoScroll(
     const el = axisRef.current;
     if (!el) return;
     const box = el.getBoundingClientRect();
+    const edge = autoScrollEdgePx(box.height);
     const dir =
       clientY < box.top || clientY > box.bottom
         ? 0
-        : clientY <= box.top + AUTO_SCROLL_EDGE_PX
+        : clientY <= box.top + edge
           ? -1
-          : clientY >= box.bottom - AUTO_SCROLL_EDGE_PX
+          : clientY >= box.bottom - edge
             ? 1
             : 0;
     if (dir === 0) {
       stopAutoScroll();
       return;
     }
-    // 같은 방향으로 이미 돌고 있으면 루프는 그대로 두고 resync 만 갈아 끼운다(아래).
+    // 같은 방향으로 이미 돌고 있으면 루프는 그대로 두고 손 높이와 resync 만 갈아 끼운다(아래).
     if (autoScroll.current?.dir !== dir) {
       stopAutoScroll();
-      autoScroll.current = { id: startAutoScrollLoop(dir), dir };
+      const now = performance.now();
+      autoScroll.current = { id: 0, dir, since: now, clientY, last: now, acc: 0 };
+      autoScroll.current.id = requestAnimationFrame(frame);
     }
+    autoScroll.current!.clientY = clientY;
     // **stopAutoScroll 뒤에** 얹는다 — 그쪽이 이 자리를 비우기 때문이다(순서를 뒤집으면 방금
     // 넣은 resync 가 지워져 미리보기가 축을 따라오지 않는다. 실제로 그렇게 한 번 틀렸다).
     autoScrollResync.current = resync;
   };
 
-  /** 한 방향으로 계속 미는 루프 하나. 멈추는 판단은 위 trackAutoScroll 이 한다. */
-  const startAutoScrollLoop = (dir: -1 | 1) =>
-    setInterval(() => {
-      const cur = axisRef.current;
-      if (!cur) {
-        stopAutoScroll();
-        return;
-      }
-      const max = Math.max(0, dayAxisH - cur.getBoundingClientRect().height);
-      const before = cur.scrollTop;
-      cur.scrollTop = Math.min(max, Math.max(0, before + dir * AUTO_SCROLL_PX_PER_TICK));
-      // 끝에 닿아 한 픽셀도 못 움직였으면 다시 그릴 것도 없다 — 가만히 댄 채로 두면 60fps 로
-      // 같은 값을 setState 하게 된다(루프는 그대로 둔다, 손이 다시 움직이면 곧 이어진다).
-      if (cur.scrollTop === before) return;
-      autoScrollResync.current?.();
-    }, AUTO_SCROLL_TICK_MS);
+  /** 프레임 하나 — 머무름(DWELL)이 지난 뒤에만 깊이에 비례해 밀고, 서브픽셀은 누적했다가 정수만 민다. */
+  const frame = (t: number) => {
+    const st = autoScroll.current;
+    const cur = axisRef.current;
+    if (!st || !cur) {
+      stopAutoScroll();
+      return;
+    }
+    st.id = requestAnimationFrame(frame);
+    const dt = Math.min(AUTO_SCROLL_MAX_DT_MS, Math.max(0, t - st.last));
+    st.last = t;
+    if (t - st.since < AUTO_SCROLL_DWELL_MS) return;
+    const box = cur.getBoundingClientRect();
+    const edge = autoScrollEdgePx(box.height);
+    const depth =
+      st.dir === -1 ? (box.top + edge - st.clientY) / edge : (st.clientY - (box.bottom - edge)) / edge;
+    st.acc += (st.dir * autoScrollSpeed(depth) * dt) / 1000;
+    const whole = Math.trunc(st.acc);
+    if (whole === 0) return;
+    st.acc -= whole;
+    // **위/아래 끝을 넘겨 밀지 않는다** — 최대치는 스크롤 영역 높이 빼기 보이는 높이다. ref 로 읽으므로 확대·익일 구간이 바뀐 뒤에도 최신이다.
+    const max = maxAxisScrollTop(contentHRef.current, box.height);
+    const before = cur.scrollTop;
+    cur.scrollTop = Math.min(max, Math.max(0, before + whole));
+    // 끝에 닿아 한 픽셀도 못 움직였으면 다시 그릴 것도 없다.
+    if (cur.scrollTop === before) return;
+    autoScrollResync.current?.();
+  };
 
   /** 자동 스크롤이 축을 민 만큼은 손짓에 **더해야** 한다 — 칩·새 범위의 자리는 캔버스 기준
    *  픽셀로 계산되는데, 축이 흐르면 같은 clientY 가 다른 분을 뜻하게 된다. 스크롤 한 번 읽어

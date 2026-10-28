@@ -18,10 +18,8 @@ export interface MetricTileProps {
  * Individual metric tile with tinted icon, bold value, label, and optional subtext.
  */
 export function MetricTile({ tile }: MetricTileProps) {
+  // 면·테두리·모서리는 .settings-strip(settingsLayout.css) — 아크릴에서 혼자 불투명하지 않게 30% 비친다.
   const tileStyle: CSSProperties = {
-    background: "var(--surface-sunken)",
-    border: "1px solid var(--divider)",
-    borderRadius: "var(--radius-md)",
     padding: "var(--space-6) var(--space-7)",
     boxSizing: "border-box",
     display: "flex",
@@ -33,6 +31,7 @@ export function MetricTile({ tile }: MetricTileProps) {
   return (
     <div
       data-testid={tile.testId ?? `metric-tile-${tile.id}`}
+      className="settings-strip"
       style={tileStyle}
     >
       <IconChip size={32}>{tile.icon}</IconChip>

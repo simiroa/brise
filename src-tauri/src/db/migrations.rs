@@ -2547,6 +2547,18 @@ pub fn migrate_v69(tx: &rusqlite::Transaction) -> AppResult<()> {
     Ok(())
 }
 
+// v97 (2026-10-27): 브리핑은 미완성 베타라 신규 설치의 기본값을 꺼짐으로 바꿨다(default_settings). 그런데
+// 시드는 신규 DB 에서만 돌고 get_all 은 행이 없으면 기본값으로 채우므로, 행이 없는 기존 설치가 이 릴리즈에서
+// 조용히 꺼진다. 이미 노트북이 있는(= 기존) DB 에만 옛 기본값 true 를 못 박는다 — 신규 DB 는 마이그레이션이
+// 시드보다 먼저라 노트북이 아직 없어 건너뛰고, 시드가 새 기본값(false)을 쓴다. 저장된 행(사용자 선택)은 그대로.
+pub const V97_SQL: &str = "INSERT OR IGNORE INTO settings(key, value) SELECT 'briefing_enabled', 'true' WHERE EXISTS (SELECT 1 FROM workspaces);";
+
+// v98 (2026-10-28): 갤러리 "이름순"(settings gallery_sort=name) 정렬 인덱스. ORDER BY a.name COLLATE NOCASE, a.id 에 받쳐 줄
+// 인덱스가 없어 created_at 인덱스를 전수 스캔하고 임시 B-tree 로 정렬했다(페이지·첨부 변경마다, 10만 첨부에서 수백 ms).
+// 정렬식과 같은 (name COLLATE NOCASE, id) 로 두어 LIMIT 이 일찍 끊게 한다(attachment_query::gallery_sql_ordered).
+// ANALYZE 는 붙이지 않는다 — V21 주석: 빈 테이블의 0 행 통계가 플래너를 망친다(scrub_zero_row_stats 가 걷어내는 바로 그것).
+pub const V98_SQL: &str = "CREATE INDEX IF NOT EXISTS idx_attachments_name ON attachments(name COLLATE NOCASE, id);";
+
 pub fn migrations() -> Vec<(i64, &'static str)> {
     vec![
         (1, V1_SQL),
@@ -2645,6 +2657,8 @@ pub fn migrations() -> Vec<(i64, &'static str)> {
         (94, V94_SQL),
         (95, V95_SQL),
         (96, V96_SQL),
+        (97, V97_SQL),
+        (98, V98_SQL),
     ]
 }
 
@@ -2817,6 +2831,65 @@ pub fn seed(conn: &mut Connection) -> AppResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// V97: 행이 없는 기존 DB 는 briefing_enabled 가 true 로 고정되고(기본값 반전의 파급 차단), 사용자가 이미
+    /// 고른 값과 노트북 없는 신규 DB 는 건드리지 않는다.
+    #[test]
+    fn test_v97_pins_briefing_enabled_only_for_existing_installs() {
+        let read = |c: &Connection| -> Option<String> {
+            c.query_row("SELECT value FROM settings WHERE key='briefing_enabled'", [], |r| r.get(0)).ok()
+        };
+        let mut existing = Connection::open_in_memory().unwrap();
+        apply(&mut existing, &migrations()[..96]).unwrap();
+        existing.execute("INSERT INTO workspaces(id, name, created_at) VALUES ('w','n','t')", []).unwrap();
+        apply(&mut existing, &[(97, V97_SQL)]).unwrap();
+        assert_eq!(read(&existing).as_deref(), Some("true"));
+
+        let mut chosen = Connection::open_in_memory().unwrap();
+        apply(&mut chosen, &migrations()[..96]).unwrap();
+        chosen.execute("INSERT INTO workspaces(id, name, created_at) VALUES ('w','n','t')", []).unwrap();
+        chosen.execute("INSERT INTO settings(key, value) VALUES ('briefing_enabled','false')", []).unwrap();
+        apply(&mut chosen, &[(97, V97_SQL)]).unwrap();
+        assert_eq!(read(&chosen).as_deref(), Some("false"));
+
+        let mut fresh = Connection::open_in_memory().unwrap();
+        apply(&mut fresh, &migrations()).unwrap();
+        assert_eq!(read(&fresh), None);
+    }
+
+    /// V98: 이름순 갤러리 인덱스 — 기존 DB 에 한 번 만들어지고(IF NOT EXISTS 라 다시 돌려도 무해), 신규 DB 는 전체 적용으로 갖는다.
+    /// ANALYZE 는 붙이지 않는다(빈 DB 의 0 행 통계가 플래너를 망친다 — V21 주석).
+    #[test]
+    fn test_v98_creates_the_attachments_name_index() {
+        let index_sql = |c: &Connection| -> Option<String> {
+            c.query_row(
+                "SELECT sql FROM sqlite_master WHERE type='index' AND name='idx_attachments_name'",
+                [],
+                |r| r.get(0),
+            )
+            .ok()
+        };
+        let mut existing = Connection::open_in_memory().unwrap();
+        apply(&mut existing, &migrations()[..97]).unwrap();
+        assert!(index_sql(&existing).is_none(), "precondition: v1..v97 do not have it");
+        apply(&mut existing, &[(98, V98_SQL)]).unwrap();
+        let sql = index_sql(&existing).expect("V98 creates the index");
+        assert!(sql.contains("name COLLATE NOCASE") && sql.contains("id"), "{sql}");
+        existing.execute_batch(V98_SQL).expect("idempotent");
+
+        let mut fresh = Connection::open_in_memory().unwrap();
+        apply(&mut fresh, &migrations()).unwrap();
+        assert!(index_sql(&fresh).is_some());
+        let has_stats: bool = fresh
+            .query_row("SELECT 1 FROM sqlite_master WHERE name='sqlite_stat1'", [], |_| Ok(true))
+            .unwrap_or(false);
+        if has_stats {
+            let n: i64 = fresh
+                .query_row("SELECT COUNT(*) FROM sqlite_stat1 WHERE idx='idx_attachments_name'", [], |r| r.get(0))
+                .unwrap();
+            assert_eq!(n, 0, "V98 must not write statistics for the new index");
+        }
+    }
 
     /// V25: note_embeddings 드롭이 두 경로 모두에서 안전한지 — (a) 이미 V2 를 거쳐 테이블이
     /// 존재하는 기존 DB, (b) V1..V25 를 한 번에 적용하는 신규 DB(테이블이 존재한 적조차 없음,
@@ -6825,6 +6898,8 @@ mod tests {
     fn v86_key_list_is_a_subset_of_notebook_keys_and_every_later_key_is_accounted_for() {
         // V86 이후 NOTEBOOK_KEYS 에 더해진 키 — 전부 "새로 생긴 키라 옮길 전역 값이 없다"(위 주석).
         const KEYS_ADDED_AFTER_V86: &[&str] = &[
+            // 2026-10-27 시간축 익일 구간 — 새 키라 옮길 전역 값이 없다(기본 3 은 default_settings 가 채운다).
+            "calendar_axis_tail_hours",
             "date_nudge_enabled",
             "region_nudge_enabled",
             "paste_link_nudge",
@@ -6839,6 +6914,9 @@ mod tests {
             "new_note_section_name",
             // 2026-09-27 PLAN-askai-result-journey §7-4 — 어시스트 "바로 실행" 토글. 새 키라 옮길 전역 값이 없다.
             "assist_preset_autorun",
+            // 2026-10-27 PLAN-2026-10-27-fonts Q2/Q3 — 노트 본문 글꼴·코드체. 새 키라 옮길 전역 값이 없다.
+            "font_editor",
+            "font_mono",
         ];
         let frozen: Vec<&str> = V86_KEYS.split(',').map(|k| k.trim_matches('\'')).collect();
         let now: Vec<&str> = crate::repo::settings_schema::NOTEBOOK_KEYS.to_vec();

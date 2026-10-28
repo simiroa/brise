@@ -146,25 +146,25 @@ describe("Challenger M4: AiCapabilityCatalog Empirical Adversarial Challenge", (
       const filterBtn = screen.getByTestId("ai-capability-filter-button");
 
       // Initially closed
-      expect(screen.queryByRole("button", { name: "에디터" })).toBeNull();
+      expect(screen.queryByRole("radio", { name: "에디터" })).toBeNull();
 
       // Click to open
       await userEvent.click(filterBtn);
-      expect(screen.getByRole("button", { name: "전체" })).toBeTruthy();
-      expect(screen.getByRole("button", { name: "에디터" })).toBeTruthy();
-      expect(screen.getByRole("button", { name: "노트" })).toBeTruthy();
-      expect(screen.getByRole("button", { name: "폴더" })).toBeTruthy();
-      expect(screen.getByRole("button", { name: "챗" })).toBeTruthy();
+      expect(screen.getByRole("radio", { name: "전체" })).toBeTruthy();
+      expect(screen.getByRole("radio", { name: "에디터" })).toBeTruthy();
+      expect(screen.getByRole("radio", { name: "노트" })).toBeTruthy();
+      expect(screen.getByRole("radio", { name: "폴더" })).toBeTruthy();
+      expect(screen.getByRole("radio", { name: "챗" })).toBeTruthy();
 
       // Click to close
       await userEvent.click(filterBtn);
-      expect(screen.queryByRole("button", { name: "에디터" })).toBeNull();
+      expect(screen.queryByRole("radio", { name: "에디터" })).toBeNull();
     });
 
     it("2.2 filters strictly by 'editor' target and excludes other targets", async () => {
       render(<AiCapabilityCatalog onNavigate={navigateMock} />);
       await userEvent.click(screen.getByTestId("ai-capability-filter-button"));
-      await userEvent.click(screen.getByRole("button", { name: "에디터" }));
+      await userEvent.click(screen.getByRole("radio", { name: "에디터" }));
 
       // Editor capabilities present
       expect(screen.getByTestId("ai-capability-row-list")).toBeTruthy();
@@ -179,7 +179,7 @@ describe("Challenger M4: AiCapabilityCatalog Empirical Adversarial Challenge", (
     it("2.3 filters strictly by 'note' target", async () => {
       render(<AiCapabilityCatalog onNavigate={navigateMock} />);
       await userEvent.click(screen.getByTestId("ai-capability-filter-button"));
-      await userEvent.click(screen.getByRole("button", { name: "노트" }));
+      await userEvent.click(screen.getByRole("radio", { name: "노트" }));
 
       expect(screen.getByTestId("ai-capability-row-agent_split")).toBeTruthy();
       expect(screen.queryByTestId("ai-capability-row-list")).toBeNull();
@@ -188,7 +188,7 @@ describe("Challenger M4: AiCapabilityCatalog Empirical Adversarial Challenge", (
     it("2.4 filters strictly by 'folder' target", async () => {
       render(<AiCapabilityCatalog onNavigate={navigateMock} />);
       await userEvent.click(screen.getByTestId("ai-capability-filter-button"));
-      await userEvent.click(screen.getByRole("button", { name: "폴더" }));
+      await userEvent.click(screen.getByRole("radio", { name: "폴더" }));
 
       expect(screen.getByTestId("ai-capability-row-agent_folder")).toBeTruthy();
       expect(screen.queryByTestId("ai-capability-row-list")).toBeNull();
@@ -197,7 +197,7 @@ describe("Challenger M4: AiCapabilityCatalog Empirical Adversarial Challenge", (
     it("2.5 filters strictly by 'chat' target", async () => {
       render(<AiCapabilityCatalog onNavigate={navigateMock} />);
       await userEvent.click(screen.getByTestId("ai-capability-filter-button"));
-      await userEvent.click(screen.getByRole("button", { name: "챗" }));
+      await userEvent.click(screen.getByRole("radio", { name: "챗" }));
 
       expect(screen.getByTestId("ai-capability-row-ask_note")).toBeTruthy();
       expect(screen.getByTestId("ai-capability-row-find_related")).toBeTruthy();
@@ -209,11 +209,11 @@ describe("Challenger M4: AiCapabilityCatalog Empirical Adversarial Challenge", (
       await userEvent.click(screen.getByTestId("ai-capability-filter-button"));
 
       // Filter by folder first
-      await userEvent.click(screen.getByRole("button", { name: "폴더" }));
+      await userEvent.click(screen.getByRole("radio", { name: "폴더" }));
       expect(screen.queryByTestId("ai-capability-row-list")).toBeNull();
 
       // Reset to all
-      await userEvent.click(screen.getByRole("button", { name: "전체" }));
+      await userEvent.click(screen.getByRole("radio", { name: "전체" }));
       expect(screen.getByTestId("ai-capability-row-list")).toBeTruthy();
       expect(screen.getByTestId("ai-capability-row-agent_folder")).toBeTruthy();
     });
@@ -224,7 +224,7 @@ describe("Challenger M4: AiCapabilityCatalog Empirical Adversarial Challenge", (
       await userEvent.click(screen.getByTestId("ai-capability-filter-button"));
 
       // Select target "노트"
-      await userEvent.click(screen.getByRole("button", { name: "노트" }));
+      await userEvent.click(screen.getByRole("radio", { name: "노트" }));
 
       // Type matching query for note target ("노트 분리 계획 지침")
       await userEvent.type(searchInput, "분리");

@@ -72,7 +72,7 @@ pub fn ensure_owned_window_placed<R: Runtime>(
         // 불투명 부팅색 → 아크릴 없이 뚫린 투명 창 → 완성)이 첫 열기마다 ~1초 동안 그대로 보였다
         // (2026-10-22 60fps 데스크톱 캡처로 확인). 프런트 AuxWindowChrome 이 설정을 읽고 한 프레임을
         // 그린 뒤 show() → 아크릴 순서로 드러낸다. 아크릴은 숨긴 HWND 에 걸면 안 되므로(commands/
-        // window.rs::should_apply_effect) 반드시 show() 뒤다. 프런트가 못 부르면 watch_reveal 이 띄운다.
+        // window.rs::effect_decision) 반드시 show() 뒤다. 프런트가 못 부르면 watch_reveal 이 띄운다.
         .visible(false);
     #[cfg_attr(not(windows), allow(unused_mut))]
     let mut builder = match position {

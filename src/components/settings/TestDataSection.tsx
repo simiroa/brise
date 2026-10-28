@@ -3,12 +3,11 @@ import { emit } from "@tauri-apps/api/event";
 import { call, callSilent } from "../../lib/invoke";
 import type { Workspace } from "../../lib/commands.gen";
 import { t } from "../../i18n/t";
-import { groupCardStyle } from "./shared";
-import { SectionHeader } from "./SectionHeader";
 import { SettingsRow } from "./SettingsRow";
 import { IconFlask, IconPlus, IconTrash } from "../icons";
 import { IconAction } from "./IconAction";
 import { seedTestDb, TEST_DB_NAME } from "../../lib/testDbSeed";
+import { SettingsCard } from "./SettingsCard";
 
 // 임시 개발용 — 다양한 타입이 든 "테스트 DB" 노트북을 만들고 지우는 토글 (2026-08-20 오너).
 // 온오프 상태는 설정 키가 아니라 "그 이름의 노트북이 존재하는가"다 — testDbSeed.ts 헤더 참조.
@@ -57,11 +56,10 @@ export function TestDataSection() {
   if (!dev) return null;
 
   return (
-    <div className="card" style={groupCardStyle}>
-      <SectionHeader
-        title={t("settings.test_db_title")}
-        icon={<IconFlask size={14} strokeWidth={2} />}
-      />
+    <SettingsCard
+      title={t("settings.test_db_title")}
+      icon={<IconFlask size={14} strokeWidth={2} />}
+    >
       <SettingsRow
         data-testid="settings-data-test-db-row"
         label={t("settings.test_db_label")}
@@ -82,6 +80,6 @@ export function TestDataSection() {
           />
         }
       />
-    </div>
+    </SettingsCard>
   );
 }

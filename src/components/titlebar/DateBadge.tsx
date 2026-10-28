@@ -1,6 +1,7 @@
 import React, { useState, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { t } from "../../i18n/t";
+import { HintBadge } from "../settings/HintBadge";
 import { formatDateBadgeLabel, type EventEnd } from "./eventDate";
 import { DatesPanel } from "./DatesPanel";
 import { useDismiss, useMenuPos } from "../../lib/ui";
@@ -166,7 +167,6 @@ export function DateBadge({
         ref={badgeRef}
         role="button"
         tabIndex={0}
-        title={t("editor.year_precision_hint")}
         aria-label={t("editor.year")}
         aria-haspopup="dialog"
         aria-expanded={dateAnchor != null}
@@ -239,6 +239,10 @@ export function DateBadge({
               width: 296,
             }}
           >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ color: "var(--faint)", fontSize: "var(--text-xs)" }}>{t("editor.date_drag_caption")}</span>
+              <HintBadge glyph="?" hint={t("editor.year_precision_hint")} />
+            </div>
             <DatesPanel
               noteId={noteId}
               seed={{

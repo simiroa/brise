@@ -159,23 +159,23 @@ describe("GeneralSection", () => {
   // 오너 QA 2026-09-15 R5: 알림 스위치·종일 알림 시각·트레이 경고는 "알림 및 일정" 페이지
   // (NotificationsSection)로 갔다. 2026-09-15 2차 QA: AI 마스터까지 격자에 넣어 2×2 — 토글이
   // 행마다 다른 자리에 서지 않는다. 원본 처리·온보딩도 이 카드의 행이다(단일 컨트롤 카드 금지).
-  it("앱 동작 카드: 언어 셀렉트 + 토글 셋(시작/트레이/캡처)이 2열 격자에 서고, 온보딩 행이 있다", () => {
+  it("앱 동작 카드: 언어 셀렉트 + 토글 셋(시작/트레이/캡처)이 한 열에 서고, 온보딩 행이 있다", () => {
     render(<GeneralSection onClose={onClose} />);
 
     expect(screen.getByTestId("settings-app-behavior")).toBeTruthy();
     expect(screen.getByLabelText("언어 (Language)")).toBeTruthy();
-    expect(screen.getByTestId("switch-grid").style.gridTemplateColumns).toBe("repeat(2, minmax(0, 1fr))");
+    expect(screen.getByTestId("switch-grid").style.flexDirection).toBe("column"); // 좌우 2단 없음(2026-10-27)
     expect(screen.getByTestId("switch-grid-toggle-autostart")).toBeTruthy();
     expect(screen.getByTestId("switch-grid-toggle-close-to-tray")).toBeTruthy();
     expect(screen.getByTestId("switch-grid-toggle-capture-screenshot")).toBeTruthy();
     // AI 마스터는 AI 제공자 페이지 첫 줄로 갔다(PLAN-2026-10-24 D7) — 일반에 다시 나타나면 두 벌이 된다.
     expect(screen.queryByTestId("switch-grid-toggle-ai-enabled")).toBeNull();
     expect(screen.queryByTestId("settings-ai-enabled-toggle")).toBeNull();
+    // 알림은 앱 동작 격자가 아니라 그 아래 자기 카드다(2026-10-27, NotificationsCard).
     expect(screen.queryByTestId("switch-grid-toggle-notifications")).toBeNull();
     const card = screen.getByTestId("settings-app-behavior");
     expect(card.contains(screen.getByTestId("settings-onboarding"))).toBe(true);
-    expect(screen.queryByTestId("settings-switch-notifications")).toBeNull();
-    expect(screen.queryByTestId("settings-notifications-all-day-at")).toBeNull();
+    expect(card.contains(screen.getByTestId("settings-switch-notifications"))).toBe(false);
   });
 
   // PLAN-2026-09-01 W0 — 일반 탭이 "그 밖의 전부" 서랍이 되어 있었다. 이사한 것들이 여기 다시
@@ -194,10 +194,11 @@ describe("GeneralSection", () => {
     expect(screen.queryByTestId("settings-original-policy")).toBeNull();
   });
 
-  it("제품·업데이트 카드가 페이지 맨 위에 선다", () => {
+  it("제품·업데이트 카드(히어로)가 맨 위, 그 바로 아래에 정보 스트립(통계 타일)이 선다 (2026-10-27)", () => {
     const { container } = render(<GeneralSection onClose={onClose} />);
     const card = screen.getByTestId("settings-product-card");
     expect(container.firstElementChild).toBe(card);
+    expect(container.children[1]).toBe(screen.getByTestId("settings-storage-stats"));
     expect(card.textContent).toContain("Brise");
   });
 
@@ -271,23 +272,25 @@ describe("GeneralSection", () => {
 
   // W5: 브라우저 탭엔 트레이도, 이 토글이 가로채는 창 닫기 자체도 없다 — 죽은 컨트롤은 통째로
   // 가린다(비활성 표시가 아니라). R5 로 알림 스위치까지 다른 페이지로 갔으니 격자 블록이 통째로 빠진다.
-  it("브라우저 모드에서는 데스크톱 전용 스위치 셋이 격자째 빠지고 알림 행도 여기 없다", () => {
+  it("브라우저 모드에서는 데스크톱 전용 스위치 셋이 격자째 빠지고 트레이 경고도 없다", () => {
     mockBrowser = true;
     render(<GeneralSection onClose={onClose} />);
 
     expect(screen.queryByTestId("switch-grid")).toBeNull();
     expect(screen.queryByTestId("switch-grid-toggle-close-to-tray")).toBeNull();
-    expect(screen.queryByTestId("settings-switch-notifications")).toBeNull();
     expect(screen.queryByTestId("settings-notifications-needs-tray")).toBeNull();
     expect(screen.queryByTestId("settings-ai-enabled-toggle")).toBeNull();
   });
 
-  it("트레이 경고는 더는 일반 탭의 것이 아니다 (알림 및 일정 페이지로 이사)", () => {
+  it("알림 카드는 앱 동작 카드 아래에 서고, 트레이 경고도 그 카드의 것이다 (2026-10-27)", () => {
     act(() => {
       useSettingsStore.setState({ notificationsEnabled: true, closeToTray: false });
     });
     render(<GeneralSection onClose={onClose} />);
-    expect(screen.queryByTestId("settings-notifications-needs-tray")).toBeNull();
+    const behavior = screen.getByTestId("settings-app-behavior");
+    const notifications = screen.getByTestId("settings-notifications-card");
+    expect(!!(behavior.compareDocumentPosition(notifications) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(notifications.contains(screen.getByTestId("settings-notifications-needs-tray"))).toBe(true);
   });
 
   it("resets onboarding completed flag and closes on restart onboarding click", () => {

@@ -666,10 +666,10 @@ features:
 
       - id: axis-chip-translucent-at-rest
         given:
-          chip: "축, 평소"
+          chip: "축, 평소 — 배경(평소 --hover 반투명 · 호버·포커스·선택 불투명 + 맨 위)은 timeChip.css 가 갖는다(2026-10-27 겹친 칩 정책)"
         expect:
-          background: "var(--hover)"
-        covered_by: ① 축 칩은 평소 반투명(--hover), 호버·포커스에서 불투명(--surface-base) — D6
+          class: "cal-chip"
+        covered_by: ① 축 칩의 배경·선택 링은 .cal-chip 클래스가 갖는다 — 인라인이 가리지 않는다(D6·겹친 칩 정책)
 
       - id: multi-day-span-has-no-end-handle
         given:
@@ -737,24 +737,24 @@ features:
 
       - id: chip-shows-time-title-excerpt
         given:
-          item: "시각 있는 항목, 발췌 있음"
+          item: "시각 있는 항목, 발췌 있음, 3줄이 들어갈 만큼 긴 칩(칩 높이 = 실제 길이, 2026-10-27)"
         expect:
           lines: 3
-        covered_by: 시각·반복 / 제목 / 발췌 첫 줄이 각각 한 줄로 뜬다
+        covered_by: 충분히 긴 칩은 시각·반복 / 제목 / 발췌 첫 줄이 각각 한 줄로 뜬다
 
-      - id: chip-settings-opens-inline-time-repeat
+      - id: chip-settings-opens-event-modal
         given:
           click: "cal-chip-settings"
         expect:
           via: "commitDateRow"
-        covered_by: 시각 입력이 note_dates_list → note_date_update 한 길을 지난다 (DB 행 기준 페이로드)
+        covered_by: 시각 저장이 note_dates_list → note_date_update 한 길을 지난다 (DB 행 기준 페이로드)
 
-      - id: expanded-chip-not-draggable
+      - id: chip-longpress-opens-event-modal
         given:
-          chip: "설정 펼침"
+          chip: "롱프레스"
         expect:
-          command: "note_date_update"
-        covered_by: 펼쳐진 칩은 끌리지 않는다 — 접으면 드래그가 그대로 돌아온다
+          via: "cal-event-modal"
+        covered_by: 움직이지 않고 길게 누르면 같은 모달이 뜬다 — 짧게 누르면 안 뜬다
 
       - id: day-picked-card-is-one-line
         given:

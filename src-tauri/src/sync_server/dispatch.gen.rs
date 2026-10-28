@@ -282,11 +282,13 @@ pub async fn dispatch<R: tauri::Runtime>(
                 pub limit: Option<i64>,
                 #[serde(default)]
                 pub workspace_id: Option<String>,
+                #[serde(default)]
+                pub sort: Option<String>,
             }
             let a: AttachmentQueryArgs = serde_json::from_value(args)
                 .map_err(|e| DispatchError::BadArgs(e.to_string()))?;
             let state = app.state::<crate::commands::AppState>();
-            let out = crate::commands::attachments::attachment_query(state, a.kinds, a.query, a.offset, a.limit, a.workspace_id)?;
+            let out = crate::commands::attachments::attachment_query(state, a.kinds, a.query, a.offset, a.limit, a.workspace_id, a.sort)?;
             serde_json::to_value(out).map_err(|e| DispatchError::BadArgs(e.to_string()))
         }
         "attachment_read_text" => {

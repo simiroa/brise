@@ -1,0 +1,31 @@
+# 커맨드 계약: fonts — 내려받기 글꼴 (docs/PLAN-2026-10-27-fonts.md §5.1). 규약: _conventions.yaml.
+# 전부 http:false — 서버 머신의 앱 데이터 폴더에 받는 로컬 부수효과이고, 원격 뷰어에겐 의미 없다
+# (emoji_* 와 같은 부류).
+commands:
+  fonts_base_dir:
+    http: false
+    input: {}
+    output: { base: string }
+    notes: |
+      받은 글꼴이 사는 폴더(data_dir/fonts) 절대 경로 — 프런트가 convertFileSrc 로 asset URL 을 만든다.
+      파일 경로 = <base>/<id>/<catalog face.file>.
+
+  font_status:
+    http: false
+    input: {}
+    output:
+      installed: "string[]"           # 받아 둔(.complete) 카탈로그 id
+      downloading: object             # { [id]: 진행률 0~100 } — 받는 중인 것만
+    notes: |
+      카탈로그 = src/lib/fonts/catalog.json(바이너리에 묻힘). 디스크 표식만 본다(네트워크 없음).
+
+  font_download:
+    http: false
+    input: { id: string }             # 카탈로그 id
+    output: { started: boolean }
+    errors: [NOT_FOUND]
+    notes: |
+      백그라운드로 받는다 — 이미 받았거나 받는 중이면 started=false. 진행은 font_status 로 본다.
+      파일마다 크기·sha256 을 카탈로그와 대조하고(불일치 = 3회 재시도 후 실패), 전부 끝나야
+      LICENSE.txt(저작권 줄 + OFL 전문)와 .complete 를 쓴다. 실패는 diag("fonts", "download_failed").
+      NOT_FOUND = 카탈로그에 없는 id(경로 조작 포함).

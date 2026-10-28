@@ -4,14 +4,13 @@ import { emitNotice } from "../../lib/invoke";
 import { t } from "../../i18n/t";
 import { IconHistory, IconPlus, IconTrash } from "../icons";
 import { IconAction } from "./IconAction";
-import { groupCardStyle } from "./shared";
-import { SectionHeader } from "./SectionHeader";
 import { SettingsRow } from "./SettingsRow";
 import { Toggle } from "./Toggle";
 import { SettingsTable, SettingsTableRow } from "./SettingsTable";
 import { StorageGauge } from "./StorageGauge";
 import { useFeatureBriefTrigger } from "../../lib/useFeatureBrief";
 import { formatRelativeTime } from "../../lib/dateUtils";
+import { SettingsCard } from "./SettingsCard";
 
 /**
  * 챗봇 대화 기억 (chat_memory) 및 자동 추출 통합 섹션.
@@ -55,12 +54,12 @@ export function ChatMemorySection() {
 
   return (
     <>
-      <div className="card" style={groupCardStyle} data-testid="settings-chat-memory-section">
-        <SectionHeader
-          title={t("settings.chat_memory_title")}
-          hint={t("settings.chat_memory_hint")}
-          icon={<IconHistory size={14} strokeWidth={2} />}
-        />
+      <SettingsCard
+        title={t("settings.chat_memory_title")}
+        hint={t("settings.chat_memory_hint")}
+        icon={<IconHistory size={14} strokeWidth={2} />}
+        testId="settings-chat-memory-section"
+      >
         {/* 1. 자동 기억 추출 토글 */}
         <SettingsRow
           anchor="ai_chat_memory"
@@ -129,7 +128,7 @@ export function ChatMemorySection() {
             {t("settings.chat_memory_full_reason", { max: CHAT_MEMORY_MAX_ITEMS })}
           </div>
         )}
-      </div>
+      </SettingsCard>
 
       {/* ponytail: StorageGauge 는 바이트 게이지라 개수를 usedBytes/totalBytes 에 넣고 ratioText 로 표기를
           덮는다(비율만 같으면 막대는 맞다). 개수용 게이지가 두 번째로 필요해지면 그 부품에 count 모드를 둔다. */}

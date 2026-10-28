@@ -10,6 +10,7 @@ import { FOLDER_BADGE_MAX_PX } from "./FolderBadge";
 import { useRegionDetect } from "../editor/regionDetect";
 import { useRegionNudgeStore } from "../../stores/regionNudge";
 import { invalidateRegionRegistry } from "../../lib/regionRegistry";
+import { HintBadge } from "../settings/HintBadge";
 import { RegionDetectedSection } from "./RegionDetectedSection";
 import { NoteRegionsList } from "../../lazySurfaces";
 import { preloadIntentProps } from "../../lib/lazyPreload";
@@ -105,11 +106,6 @@ export function RegionMetaBadge({
       ? t("region.places_n", { n: waypointCount })
       : t("note.add_region");
 
-  // §P3 Phase B 항목 2 — 닫힌 칩 자체엔 목록을 늘어놓지 않고(팝오버를 열어야 아는 게 맞다), 툴팁
-  // (title)에만 감지 개수를 덧붙인다. aria-label은 그대로 label만 — 스크린리더 사용자가 매
-  // 스캔마다 바뀌는 문구를 듣게 하지 않는다(팝오버를 열면 RegionDetectedSection이 직접 알린다).
-  const detectedTitle = detectedCount > 0 ? `${label} · ${t("region.detected_badge_hint", { n: detectedCount })}` : label;
-
   return (
     <>
       <div
@@ -118,6 +114,7 @@ export function RegionMetaBadge({
         tabIndex={0}
         className="tag-btn tb-quiet-chip"
         data-testid="region-meta-badge"
+        data-empty={!(hasPrimary || waypointCount > 0) || undefined}
         data-ai-glow={isGlow || undefined}
         data-ai-glow-inset="true"
         onClick={() => (open ? closePopover() : openPopover())}
@@ -128,7 +125,6 @@ export function RegionMetaBadge({
             open ? closePopover() : openPopover();
           }
         }}
-        title={detectedTitle}
         aria-label={label}
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -194,6 +190,10 @@ export function RegionMetaBadge({
               width: 296,
             }}
           >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--space-2)" }}>
+              <span style={{ color: "var(--faint)", fontSize: "var(--text-xs)" }}>{t("region.chip_caption")}</span>
+              <HintBadge glyph="?" hint={t("region.chip_hint")} />
+            </div>
             <Suspense fallback={<div style={{ minHeight: 80 }} />}>
               <NoteRegionsList
                 noteId={noteId}

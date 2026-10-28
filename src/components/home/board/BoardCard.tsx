@@ -15,6 +15,7 @@ import { useAttachmentsBase } from "../../../lib/attachmentsBase";
 import { formatEventBadge } from "../../titlebar/eventDate";
 import { startNoteDrag } from "../../../lib/noteDrag";
 import { displayTitle } from "../../../stores/notes";
+import { useSettingsStore } from "../../../stores/settings";
 import { IconCheckboxEmpty, IconCaret } from "../../icons";
 import { NO_STATUS_TARGET, isPinned } from "./status";
 
@@ -140,7 +141,10 @@ export const BoardCard = memo(function BoardCard({
 
   const cardRef = useRef<HTMLDivElement>(null);
   const inView = useOnceInView(cardRef);
-  const coverRel = useCardCover(note.id, inView);
+  // 설정 › 대시보드 › 칸반의 카드 표시 요소 — 꺼진 썸네일은 내려받지도 않는다.
+  const showThumb = useSettingsStore((s) => s.boardCardThumb);
+  const showDate = useSettingsStore((s) => s.boardCardDate);
+  const coverRel = useCardCover(note.id, inView && showThumb);
   const { baseDir, convert } = useAttachmentsBase();
   const thumbSrc = coverRel && baseDir && convert ? convert(`${baseDir}/${coverRel}`) : null;
 
@@ -212,7 +216,7 @@ export const BoardCard = memo(function BoardCard({
       )}
 
       <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
-        {thumbSrc && (
+        {showThumb && thumbSrc && (
           <img
             src={thumbSrc}
             alt=""
@@ -251,7 +255,7 @@ export const BoardCard = memo(function BoardCard({
           flexWrap: "wrap",
         }}
       >
-        <DateRangeText note={note} />
+        {showDate && <DateRangeText note={note} />}
         {hasTodos && (
           <button
             type="button"

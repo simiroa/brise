@@ -201,6 +201,19 @@ commands:
       post_process="none". `key`는 `"claude_prompts"` | `"codex_prompts"` |
       `"chrome:<profile dir>"` | `"edge:<profile dir>"` — 그 외는 VALIDATION.
 
+  collect_history:
+    http: false   # 설정 창(데스크톱) 수집 페이지의 표 — briefing_recent_collected 와 같은 판단. 브라우저 모드엔 이 표가 마운트되지 않는다.
+    input:
+      workspace_id: "uuid|omit=active"
+      limit: "integer|omit"   # 기본 30, 1..100 로 클램프.
+    output:
+      items: "CollectHistoryNote[]"   # collected_at 내림차순
+    notes: |
+      repo::briefing::collect_history. 수집 소스가 만든 노트(notes.origin_source_id/collected_at)를 최근 수집순으로.
+      briefing_recent_collected 와 FROM/WHERE 뼈대(COLLECTED_NOTES_BASE)를 공유하되 **show_in_briefing 조건이 없다** —
+      브리핑에서 끈 소스의 노트도 이력엔 나온다. 발췌·태그·new_count 는 돌려주지 않는다(표가 안 쓴다). 삭제된 노트·
+      다른 노트북은 제외, 원본 소스가 삭제된 노트는 source_name 이 null.
+
   collect_get_stats:
     http: false
     input:
@@ -224,6 +237,7 @@ shared_types:
   DetectedChatSession: "{ id: string, kind: string, project: string, title: string, last_prompt: string, prompt_count: integer, last_active_at: string|null, relative_time: string }"
   CollectSource: "{ id: uuid, workspace_id: uuid, kind: string, name: string, config: string, enabled: boolean, dry_run: boolean, show_in_briefing: boolean, target_folder_id: string|null, post_process: string, post_process_model: string|null, interval_minutes: integer|null, last_run_at: timestamp|null, last_status: string|null, last_error: string|null, created_at: timestamp, updated_at: timestamp }"
   DryRunItem: "{ title: string, guid: string, seen: boolean, preview: string }"
+  CollectHistoryNote: "{ note_id: uuid, title: string, source_name: string|null, collected_at: timestamp }"
   CollectActionStat: "{ action_type: string, calls: integer, providers: CollectProviderBreakdown[] }"
   CollectProviderBreakdown: "{ provider: string, calls: integer }"
   LocalCandidate: "{ key: string, kind: string, label: string, detail: string, recent_count: integer, last_seen_at: string|null, source_id: string|null, config: string }"

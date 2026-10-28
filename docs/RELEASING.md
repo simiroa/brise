@@ -4,6 +4,36 @@
 > 서명한다. 이 키를 잃어버리면 기존 사용자에게 자동 업데이트를 더 보낼 수 없고(재설치를
 > 유도해야 함), 유출되면 그 키로 서명된 가짜 업데이트를 배포당할 수 있다.
 
+## 0. 릴리스 절차 (2026-10-27 — 공개 레포에만 올린다)
+
+레포는 둘이다. 비공개 `simiroa/brise-dev` 가 원본(전체 이력·개발 문서)이고, 공개 `simiroa/brise`
+(Apache-2.0) 가 배포처다 — 사용자가 내려받는 설치 파일과 **앱 자동 업데이트가 보는 주소**가 전부 공개
+레포에 있다. **설치 파일은 공개 레포 릴리스에만 올린다.** `brise-dev` 에는 태그만 남긴다(예전처럼 dev 에
+Pre-release 설치 파일을 따로 올리면 일만 두 배이고 사용자는 보지도 못한다).
+
+v0.5.3 까지는 공개 레포 릴리스가 **Pre-release** 로, `latest.json`·`.sig` 없이 올라가서 업데이트 주소가
+404 였다(2026-10-27 실측). Pre-release 는 `releases/latest` 에 잡히지 않는다. 앱은 이 실패를 화면에 내지
+않고 진단에만 남기므로(`updater.ts` → `reportFallback("updater.probe", …)`) 아무도 몰랐다 — 그래서 아래
+5·6 단계를 스크립트 하나(`scripts/release-public.mjs`)로 묶고, 끝에 그 주소를 직접 쳐서 확인한다.
+
+1. 릴리스할 변경이 전부 `brise-dev` main 에 커밋·푸시돼 있고 오너 실기 확인이 끝났다.
+2. 버전을 세 곳에서 같이 올린다: `package.json` · `src-tauri/tauri.conf.json` · `src-tauri/Cargo.toml`(+ `Cargo.lock`).
+3. 푸시 전 게이트(CLAUDE.md): 전체 `npx vitest run`, 앱을 끈 상태에서 전체 `cargo test`, `npx vite build && npm run check:bundle`,
+   의존성·번들 자산이 바뀌었으면 `npm run gen:notices`(§7), 성능 기준선(§9).
+4. `brise-dev` 에 커밋·태그(`vX.Y.Z`)·푸시. 공개 레포 스냅샷: `node scripts/export-public.mjs --out <공개 레포 클론>` →
+   그 클론에서 커밋·푸시(릴리스마다 한 커밋, 유출 점검이 걸리면 푸시하지 않는다).
+5. 릴리스 노트를 파일로 쓴다(사용자 관점 변경 요약 — CHANGELOG 대용).
+6. 서명 빌드 + latest.json + 공개 레포 정식 릴리스:
+   ```bash
+   node scripts/release-public.mjs --build --notes <릴리스노트.md>
+   ```
+   여기까지는 미리보기다(만든 latest.json 과 실행할 `gh release create` 명령을 보여 준다). 확인 뒤:
+   ```bash
+   node scripts/release-public.mjs --notes <릴리스노트.md> --publish
+   ```
+   정식(`--latest`) 릴리스로 설치 파일·`.sig`·`latest.json` 을 올리고, 업데이트 주소가 새 버전을 돌려주지 않으면
+   실패로 끝난다. 공개 레포·주소는 `tauri.conf.json` 의 `plugins.updater.endpoints[0]` 에서 읽는다.
+
 ## 1. 기능 개요
 
 `tauri-plugin-updater`(Rust) + `@tauri-apps/plugin-updater`(JS)로 배선된 자동 업데이트다.
@@ -77,11 +107,15 @@ NSIS/MSI 등)과 별개로 **업데이트 전용 아티팩트 + 그 서명(`.sig
   "platforms": {
     "windows-x86_64": {
       "signature": "<빌드가 만든 .sig 파일 내용>",
-      "url": "https://github.com/simiroa/brise/releases/download/v0.6.0/brise_0.6.0_x64-setup.nsis.zip"
+      "url": "https://github.com/simiroa/brise/releases/download/v0.6.0/Brise_0.6.0_x64-setup.exe"
     }
   }
 }
 ```
+
+Tauri v2 에서 `createUpdaterArtifacts: true`(v1Compatible 아님)면 업데이트 대상은 `.nsis.zip` 이 아니라 NSIS
+설치 파일(`*-setup.exe`) 자체이고 서명은 `*-setup.exe.sig` 다(Tauri v2 문서 기준 — 첫 실제 빌드에서 산출물 이름을
+확인할 것; `scripts/release-public.mjs` 가 이 이름을 찾고 없으면 멈춘다).
 
 `platforms`의 키는 타깃 트리플 기반 식별자(예: `windows-x86_64`, `darwin-aarch64`,
 `linux-x86_64`)이고, 여러 OS를 지원할수록 이 매니페스트는 여러 플랫폼 빌드의 결과물을
@@ -91,20 +125,24 @@ NSIS/MSI 등)과 별개로 **업데이트 전용 아티팩트 + 그 서명(`.sig
 이 매트릭스 빌드 후 `latest.json` 조립·릴리스 업로드까지 자동화해준다 — 이 프로젝트는 아직
 그 CI를 구성하지 않았다(§5).
 
-## 5. 엔드포인트는 현재 자리표시자
+## 5. 엔드포인트
 
 ```json
 "endpoints": ["https://github.com/simiroa/brise/releases/latest/download/latest.json"]
 ```
 
-레포(`simiroa/brise`)가 **현재 private**이라 이 URL은 인증 없이는 아무것도 반환하지 않는다 —
-`check()` 호출은 항상 실패하고, `src/lib/updater.ts`가 그 실패를 조용히 삼켜 "error"로 되돌릴
-뿐이다(수동 확인이면 설정 화면에 실패 문구가 뜨고, 자동 확인이면 완전 무음 — 의도된 동작).
-실제로 자동 업데이트를 켜려면 둘 중 하나가 먼저 필요하다:
+`simiroa/brise` 는 공개 레포다(2026-10-27 확인 — 예전 이 절의 "private" 서술은 낡았다). 주소가 404 였던
+진짜 이유는 §0(Pre-release + latest.json 미업로드)이다. 실패 시 `check()` 는 "error" 로 돌아오고 원인은
+진단(`updater.probe`)에 남는다(수동 확인이면 설정 화면에 실패 문구, 자동 확인이면 무음 — 의도된 동작).
 
-1. **레포를 public으로 전환**하고 이 GitHub Releases 엔드포인트를 그대로 쓴다(가장 단순).
-2. **레포는 private으로 유지**하고, `latest.json`을 자체 도메인(또는 공개 오브젝트 스토리지)에
-   올린 뒤 `endpoints`를 그 URL로 교체한다. 여러 URL을 배열에 나열하면 순서대로 폴백된다.
+**주소를 나중에 바꾸는 법**(예: 자체 도메인·다른 레포) — 어렵지 않지만 한 번의 "다리 릴리스"가 필요하다:
+1. 새 주소에도 `latest.json` 을 올릴 준비를 한다.
+2. `endpoints` 배열을 `[새 주소, 옛 주소]` 로 바꿔 빌드한 버전을 **옛 주소에 마지막으로** 릴리스한다.
+   기존 설치본은 옛 주소에서 이 버전을 받아 설치하고, 그때부터 새 주소를 먼저 본다(배열은 순서대로 폴백).
+3. 대부분의 사용자가 넘어올 때까지 옛 주소의 `latest.json` 을 몇 릴리스 동안 같이 갱신한다(이 스크립트는
+   `endpoints[0]` 하나만 올리므로 그 기간엔 옛 주소 쪽도 같이 올리도록 고친다).
+공개 레포 **이름을 바꾸거나 지우는 것**만 피하면 된다 — 옛 설치본이 아는 유일한 주소다(GitHub 은 이름 변경 시
+리다이렉트를 두지만 그 레포 이름을 다시 쓰면 끊긴다).
 
 어느 쪽이든 `tauri.conf.json`의 `endpoints` 배열을 갱신하고 재빌드해야 한다 — 이 값은
 바이너리에 컴파일되므로(CLAUDE.md 함정 §7과 같은 이유) 기존 설치본은 재시작만으로는 새
@@ -152,10 +190,13 @@ meteocons 아이콘, Fluent UI Emoji, yt-dlp, SQLite)은 스크립트 안에 정
 
 ## 8. 알려진 한계 / 결정
 
-- **CI 미구성** — 서명 빌드는 현재 수동(§3). 릴리스 빈도가 늘면 `tauri-apps/tauri-action`
-  도입을 검토한다.
-- **엔드포인트는 자리표시자** — §5의 결정(public 전환 또는 자체 latest.json) 전까지 자동
-  업데이트는 항상 "error"로 조용히 실패한다. 유료 판매 전 반드시 해결해야 하는 항목이다.
+- **CI 미구성** — 서명 빌드는 이 PC 에서 `scripts/release-public.mjs --build`(§0). 릴리스 빈도가 늘거나
+  macOS/Linux 를 열면(플랫폼별 빌드를 모아 latest.json 을 조립해야 함) `tauri-apps/tauri-action` 으로 옮긴다.
+- **Windows 코드 서명 없음** — 설치 때 SmartScreen 경고가 뜬다(인증서 구매 필요, AUDIT-2026-10-23 O-7).
+- **서명 키 백업** — `~/.tauri/brise_updater.key` 는 이 PC 에만 있다(2026-10-27 파일 존재 확인, 백업 여부는
+  오너 확인 사항). 잃으면 자동 업데이트 체인이 끊긴다(§2).
+- **공개 소스 + Apache-2.0** — 공개 레포에 소스 전체가 Apache-2.0 으로 나간다. 누구나 빌드·재배포·판매할 수
+  있는 허락이고 이름(상표)만 보호된다. 유료 판매 방식과 맞는지는 오너 결정 사항(법률 판단 아님).
 - **dev 빌드도 실제 네트워크 요청을 보낸다** — `tauri.dev.conf.json`은 `identifier`만
   덮어쓰고 `plugins.updater`는 그대로 병합되므로, `npm run tauri:dev` 중에도 15초 뒤 실제
   엔드포인트로 확인 요청이 나간다. 실패는 무음이라 개발 중 눈에 띄는 부작용은 없다.

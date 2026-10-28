@@ -7,7 +7,6 @@ import { MetricTileGroup } from "./MetricTileGroup";
 import { Toggle } from "./Toggle";
 import { Badge } from "./Badge";
 import { SettingsRow } from "./SettingsRow";
-import { groupCardStyle } from "./shared";
 import { SettingsTable } from "./SettingsTable";
 import { IconActivity, IconCalendar, IconCalendarDays, IconFileImport, IconPlus, IconRefresh, IconSearch } from "../icons";
 import { anchorId, useSettingsAnchorOnce } from "./settingsAnchor";
@@ -28,6 +27,8 @@ import { CollectSourceFormModal } from "./collect/CollectSourceFormModal";
 import { CollectSourceRow } from "./collect/CollectSourceRow";
 import { CollectDryRunModal, type DryRunPreview } from "./collect/CollectDryRunModal";
 import { ExcludedDomainsSection } from "./ExcludedDomainsSection";
+import { CollectHistorySection } from "./collect/CollectHistorySection";
+import { SettingsCard } from "./SettingsCard";
 
 export function CollectSection() {
   // 언어가 바뀌면 이 페이지의 t() 문구를 다시 그리도록 구독만 해 둔다(t() 는 스토어를 반응형으로 읽지 않는다).
@@ -217,28 +218,7 @@ export function CollectSection() {
 
   return (
     <>
-      {/* 마스터 스위치 + 일시중지 배지는 페이지 첫 줄 설정 행(PLAN-2026-10-24 D4). */}
-      <div className="card" style={groupCardStyle} data-testid="settings-collect-master-card">
-        <SettingsRow
-          anchor="collect_enabled"
-          label={
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-2)" }}>
-              {t("settings.collect_enabled_label")}
-              {paused && <Badge tone="neutral">{t("settings.collect_badge_paused")}</Badge>}
-            </span>
-          }
-          hint={t("settings.collect_enabled_hint")}
-          control={
-            <Toggle
-              checked={!paused}
-              onChange={(next) => setCollectEnabled(next)}
-              aria-label={t("settings.collect_enabled_label")}
-              data-testid="settings-collect-enabled-toggle"
-            />
-          }
-        />
-      </div>
-      {/* 오너 R1(2026-09-15): 통계 타일은 카드 밖, 마스터 행 카드 아래 페이지 최상위. */}
+      {/* 오너 R1(2026-09-15): 통계 타일은 카드 밖, 페이지 최상위(맨 위). */}
       <MetricTileGroup
         tiles={[
           {
@@ -262,6 +242,28 @@ export function CollectSection() {
           },
         ]}
       />
+
+      {/* 정보 스트립(위 타일)이 페이지 맨 위다(2026-10-27 설정 디자인 개편) — 마스터 스위치 + 일시중지 배지는 그 아래 "수집" 카드의 첫 줄. */}
+      <SettingsCard title={t("settings.page_collect")} icon={<IconFileImport size={14} strokeWidth={2} />} testId="settings-collect-master-card">
+        <SettingsRow
+          anchor="collect_enabled"
+          label={
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-2)" }}>
+              {t("settings.collect_enabled_label")}
+              {paused && <Badge tone="neutral">{t("settings.collect_badge_paused")}</Badge>}
+            </span>
+          }
+          hint={t("settings.collect_enabled_hint")}
+          control={
+            <Toggle
+              checked={!paused}
+              onChange={(next) => setCollectEnabled(next)}
+              aria-label={t("settings.collect_enabled_label")}
+              data-testid="settings-collect-enabled-toggle"
+            />
+          }
+        />
+      </SettingsCard>
 
       <div id={anchorId("sources")} data-testid="collect-sources-block">
       {/* 소스 표 — 카드 밖, 제목 행(제목 + 소스 추가) + 유령 행 + 표 (오너 R1). */}
@@ -354,6 +356,9 @@ export function CollectSection() {
         ))}
       </SettingsTable>
       </div>
+
+      {/* 수집 이력 — 소스가 가져온 최근 노트. 행을 누르면 본 창에서 연다(2026-10-28). */}
+      <CollectHistorySection />
 
       {/* 수집 경로가 읽는 제외 도메인 — 이 페이지 맨 아래(오너 결정: 연결 페이지에서 이사). */}
       <ExcludedDomainsSection />

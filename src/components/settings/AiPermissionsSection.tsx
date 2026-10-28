@@ -1,13 +1,11 @@
 import { useSettingsStore } from "../../stores/settings";
 import { t } from "../../i18n/t";
-import { groupCardStyle, isExternalProvider } from "./shared";
-import { SectionHeader } from "./SectionHeader";
 import { SubGroup } from "./SubGroup";
-import { Badge } from "./Badge";
+import { Toggle } from "./Toggle";
 import { SwitchGrid, type SwitchGridItem } from "./SwitchGrid";
 import { AiOffLink } from "./AiOffLink";
-import { useAiConnectionSettings } from "./useAiConnectionSettings";
 import { IconShield } from "../icons";
+import { SettingsCard } from "./SettingsCard";
 
 /**
  * 설정 > AI > 권한 (PLAN-2026-09-12 D8 — 권한 6종의 **유일한 거처**).
@@ -29,12 +27,9 @@ import { IconShield } from "../icons";
  * 마스터 스위치(`ai_enabled`)는 AI 제공자 페이지 첫 줄에만 있다(PLAN-2026-10-24 D7) — 이 페이지는
  * 꺼져 있을 때 거기로 가는 링크 한 줄(AiOffLink)만 보인다.
  *
- * 외부 전송 요약의 프로바이더는 저장값을 스스로 읽는다(useAiConnectionSettings) — 모르는 저장값은
- * 외부로 센다.
+ * 제목 줄 우측은 "외부 전송 N" 칩에서 **전체 토글**로 바뀌었다(2026-10-28 — 칩이 무엇을 세는지 알 수 없었다).
  */
 interface AiPermissionsSectionProps {
-  /** 시험용 덮어쓰기 — 주지 않으면 저장된 프로바이더를 읽는다. */
-  provider?: string;
   /** 꺼짐 링크(AiOffLink)가 AI 제공자 페이지로 가는 길. */
   onNavigate?: (page: string) => void;
 }
@@ -57,10 +52,7 @@ function nameWithVisibleLabel(visible: string, full: string): string {
   return full.includes(visible) ? full : `${visible} — ${full}`;
 }
 
-export function AiPermissionsSection({ provider: providerOverride, onNavigate }: AiPermissionsSectionProps = {}) {
-  const storedProvider = useAiConnectionSettings().fields.provider;
-  const provider = providerOverride ?? storedProvider;
-  const aiEnabled = useSettingsStore((s) => s.aiEnabled);
+export function AiPermissionsSection({ onNavigate }: AiPermissionsSectionProps = {}) {
   const chatReadHistory = useSettingsStore((s) => s.chatReadHistory);
   const setChatReadHistory = useSettingsStore((s) => s.setChatReadHistory);
   const chatReadFiles = useSettingsStore((s) => s.chatReadFiles);
@@ -73,11 +65,14 @@ export function AiPermissionsSection({ provider: providerOverride, onNavigate }:
   const setAiConfirmBeforeApply = useSettingsStore((s) => s.setAiConfirmBeforeApply);
   const aiDebugVerbose = useSettingsStore((s) => s.aiDebugVerbose);
   const setAiDebugVerbose = useSettingsStore((s) => s.setAiDebugVerbose);
-  const linkSuggestions = useSettingsStore((s) => s.linkSuggestions);
+  const setSimplePrefs = useSettingsStore((s) => s.setSimplePrefs);
 
-  const isProviderExternal = aiEnabled && isExternalProvider(provider);
-  const isLinkExternal = aiEnabled && linkSuggestions;
-  const externalCount = (isProviderExternal ? 1 : 0) + (isLinkExternal ? 1 : 0);
+  // 전체 토글(2026-10-28): 읽기 2 + 쓰기 2 만 한꺼번에 켜고 끈다. 안전장치(적용 전 확인·로그 본문)는 권한이 아니라
+  // 감시 스위치라 일괄 대상이 아니다 — 끄는 쪽이 위험한 것을 일괄로 켜지 않는다. 일부만 켜져 있으면 꺼진 쪽으로 보인다.
+  const allGranted = chatReadHistory && chatReadFiles && chatWriteEnabled && collectChatRegister;
+  // 키 넷을 한 번에 — IPC 한 번(settings_set { entries })·롤백 한 번(예전엔 각각 4번이었다).
+  const setAllGranted = (next: boolean) =>
+    setSimplePrefs({ chatReadHistory: next, chatReadFiles: next, chatWriteEnabled: next, collectChatRegister: next });
 
   /** 읽기 — AI 가 답을 만들기 전에 열어 보는 것. */
   const readItems: SwitchGridItem[] = [
@@ -158,20 +153,23 @@ export function AiPermissionsSection({ provider: providerOverride, onNavigate }:
 
       {/* R2 (오너 QA 2026-09-15): 카드 셋 → 카드 하나 + SubGroup 셋. 위험도 층은 하위 그룹의
           제목·구분선이 지킨다. 카드는 페이지 최상위 형제라 페이지 간격이 그대로 먹는다. */}
-      <div className="card" style={groupCardStyle} data-testid="settings-ai-permissions">
+      <SettingsCard
+        title={t("settings.page_ai_permissions")}
+        hint={t("settings.ai_perm_master_hint")}
+        icon={<IconShield size={14} strokeWidth={2} />}
+        actions={
+          <Toggle
+            checked={allGranted}
+            onChange={(next) => void setAllGranted(next)}
+            aria-label={t("settings.ai_perm_master")}
+            data-testid="ai-permissions-master"
+          />
+        }
+        testId="settings-ai-permissions"
+      >
         {/* 외부 전송 요약은 첫 카드 제목 줄의 Badge 하나로(PLAN-2026-09-15 W3, D4). 개별 스위치는
             AiCapabilityCatalog 에 있다 — 이 숫자는 "지금 밖으로 나가는 채널이 총 몇 개인가"의 한 줄 요약이다. */}
-        <SectionHeader
-          title={t("settings.page_ai_permissions")}
-          icon={<IconShield size={14} strokeWidth={2} />}
-          actions={
-            <span data-testid="ai-external-summary">
-              <Badge tone={externalCount > 0 ? "accent" : "neutral"}>
-                {t("settings.ai_perm_badge_external", { n: externalCount })}
-              </Badge>
-            </span>
-          }
-        />
+
 
         <SubGroup
           title={t("settings.ai_perm_read_title")}
@@ -210,7 +208,7 @@ export function AiPermissionsSection({ provider: providerOverride, onNavigate }:
             data-testid="ai-permissions-safety-grid"
           />
         </SubGroup>
-      </div>
+      </SettingsCard>
     </>
   );
 }

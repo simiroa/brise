@@ -224,7 +224,7 @@ commands:
       AI 호출 0 · 템플릿 문구(페르소나 톤 변형)만. 소스 2종:
       (a) 리마인드 도래 — repo::dashboard 의 핀 판정(is_pinned)과 **같은** 규칙:
           remind=1 AND 종료일이 연·월·일 풀 정밀도 AND 오늘보다 과거 AND status != 'done'.
-      (b) 백업 넛지 — settings.backup_nudge_pending(BackupNudgeBanner 와 같은 조건).
+      (b) 백업 넛지 — settings.backup_nudge_pending(ReminderBell 백업 알림과 같은 조건).
       펫 프론트가 ~5분 간격으로 폴링한다(푸시 채널을 새로 만들지 않는다).
 
   pet_open_main:

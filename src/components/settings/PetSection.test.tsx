@@ -5,7 +5,9 @@ import { PetSection } from "./PetSection";
 import { useSettingsStore } from "../../stores/settings";
 
 const callMock = vi.fn();
-vi.mock("../../lib/invoke", () => ({
+// PetPersonaSection(대화·성격 탭)이 stores/ai → stores/notes 를 끌고 와서 registerFlush 등 나머지 export 가 필요하다.
+vi.mock("../../lib/invoke", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/invoke")>()),
   call: (...args: unknown[]) => callMock(...args),
   callSilent: (...args: unknown[]) => callMock(...args),
   emitNotice: vi.fn(),
@@ -33,6 +35,10 @@ vi.mock("@tauri-apps/api/window", () => ({
 }));
 
 let settings: Record<string, unknown> = {};
+/** 서브탭(캐릭터 / 위치·동작 / 대화·성격)을 라벨로 연다 — 위쪽 미리보기는 탭과 무관하게 남는다. */
+async function openTab(name: string) {
+  await userEvent.click(await screen.findByRole("radio", { name }));
+}
 function mockBackend(s: Record<string, unknown>, packages: Array<Record<string, unknown>> = []) {
   settings = s;
   callMock.mockReset().mockImplementation((cmd: string) => {
@@ -70,18 +76,30 @@ describe("PetSection — 설정 > 펫 (PET.md §0.6 재설계)", () => {
     const { container } = render(<PetSection />);
     expect(await screen.findByTestId("settings-pet-off-hint")).toBeTruthy();
     expect(screen.getByTestId("settings-pet-toggle").getAttribute("aria-checked")).toBe("false");
-    expect([...container.querySelectorAll(".card")].map((c) => c.getAttribute("data-testid"))).toEqual(["settings-pet-master-card"]);
+    // 마스터 행은 카드 없이 PageLead(2026-10-28) — 꺼지면 카드가 하나도 없다.
+    expect(screen.getByTestId("settings-pet-master-card").classList.contains("card")).toBe(false);
+    expect([...container.querySelectorAll(".card")]).toHaveLength(0);
     expect(screen.queryByTestId("settings-pet-gallery")).toBeNull();
   });
 
-  it("켜져 있으면 캐릭터 · 동작 · 화면 위치 세 그룹이 이 순서로, 무드별 파일 표는 없다", async () => {
+  it("켜져 있으면 미리보기가 서브탭 위에 고정되고, 캐릭터 · 위치·동작 · 대화·성격 세 탭이 각자의 그룹만 그린다", async () => {
     mockBackend({ pet_enabled: "1" });
     const { container } = render(<PetSection />);
     await screen.findByTestId("settings-pet-gallery");
-    const cards = [...container.querySelectorAll(".card")].map((c) => c.getAttribute("data-testid"));
-    expect(cards).toEqual(["settings-pet-master-card", "settings-pet-gallery", "settings-pet-reaction-section", "settings-pet-position"]);
-    // 미리보기는 갤러리와 같은 카드
-    expect(screen.getByTestId("settings-pet-preview-frame").closest(".card")).toBe(screen.getByTestId("settings-pet-gallery"));
+    const cardIds = () => [...container.querySelectorAll(".card")].map((c) => c.getAttribute("data-testid"));
+
+    // 미리보기는 탭 밖 — 갤러리 카드 안이 아니다.
+    const strip = screen.getByTestId("settings-pet-preview-strip");
+    expect(strip.contains(screen.getByTestId("settings-pet-preview-frame"))).toBe(true);
+    expect(screen.getByTestId("settings-pet-gallery").contains(screen.getByTestId("settings-pet-preview-frame"))).toBe(false);
+    expect(cardIds()).toEqual(["settings-pet-gallery"]);
+
+    await userEvent.click(screen.getByRole("radio", { name: "Position · behavior" }));
+    expect(cardIds()).toEqual(["settings-pet-reaction-section", "settings-pet-position"]);
+    expect(screen.getByTestId("settings-pet-preview-frame")).toBeTruthy(); // 탭을 옮겨도 그대로
+
+    await userEvent.click(screen.getByRole("radio", { name: "Chat · personality" }));
+    expect(cardIds()).toEqual(["settings-pet-persona-card"]);
     expect(screen.queryByTestId("settings-pet-asset-registry")).toBeNull();
     expect(screen.queryByTestId("settings-pet-off-hint")).toBeNull();
   });
@@ -105,13 +123,14 @@ describe("PetSection — 설정 > 펫 (PET.md §0.6 재설계)", () => {
     );
   });
 
-  it("동작: 더블클릭 드롭다운 + 페르소나 링크는 AI > 채팅으로 이동", async () => {
+  it("동작: 더블클릭 드롭다운은 위치·동작 탭에, 페르소나는 대화·성격 탭에 산다(링크 행 없음)", async () => {
     mockBackend({ pet_enabled: "1" });
-    const onNavigate = vi.fn();
-    render(<PetSection onNavigate={onNavigate} />);
+    render(<PetSection />);
+    await openTab("Position · behavior");
     expect(await screen.findByTestId("settings-pet-dblclick-action")).toBeTruthy();
-    await userEvent.click(screen.getByTestId("settings-pet-persona-link"));
-    expect(onNavigate).toHaveBeenCalledWith("ai_chat");
+    expect(screen.queryByTestId("settings-pet-persona-link")).toBeNull();
+    await openTab("Chat · personality");
+    expect(await screen.findByTestId("settings-pet-persona-section")).toBeTruthy();
   });
 
   it("갤러리: 썸네일을 누르면 pet_package_select, 기본 타일은 실제 기본 캐릭터(SVG)를 그린다", async () => {
@@ -148,6 +167,7 @@ describe("PetSection — 설정 > 펫 (PET.md §0.6 재설계)", () => {
   it("화면 위치: 저장된 자유 위치를 표시하고, 창 포커스가 돌아오면 다시 읽는다", async () => {
     mockBackend({ pet_enabled: "1", pet_pos_x: 500, pet_pos_y: 300 });
     render(<PetSection />);
+    await openTab("Position · behavior");
     const marker = await screen.findByTestId("settings-pet-position-current");
     const left1 = parseFloat(marker.style.left);
 
@@ -163,6 +183,7 @@ describe("PetSection — 설정 > 펫 (PET.md §0.6 재설계)", () => {
   it("화면 위치: 저장값이 없으면 기본 위치(주 모니터 우하단)를 그린다", async () => {
     mockBackend({ pet_enabled: "1" });
     render(<PetSection />);
+    await openTab("Position · behavior");
     const marker = await screen.findByTestId("settings-pet-position-current");
     // 미니맵 안쪽은 퍼센트 좌표다(좁은 창에서 넘치지 않게) — 우하단 앵커 x=1744 / 모니터 폭 1920.
     expect(marker.style.left).toMatch(/%$/);
@@ -173,6 +194,7 @@ describe("PetSection — 설정 > 펫 (PET.md §0.6 재설계)", () => {
   it("화면 위치: 앵커는 pet_set_position, '기본 위치로'는 pet_position_reset", async () => {
     mockBackend({ pet_enabled: "1" });
     render(<PetSection />);
+    await openTab("Position · behavior");
     await userEvent.click(await screen.findByTestId("settings-pet-anchor-0-2-2"));
     expect(callMock).toHaveBeenCalledWith("pet_set_position", { x: 1744, y: 884 });
     await userEvent.click(screen.getByRole("button", { name: "Default position" }));

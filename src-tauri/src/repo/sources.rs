@@ -226,8 +226,7 @@ mod tests {
         // 12MB 짜리 pptx — 옛 게이트(10MB)라면 여기서 잘렸다. 텍스트는 한 줄뿐이다.
         let path = dir.path().join("deck.pptx");
         let mut zw = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
-        let opts: zip::write::FileOptions<'_, ()> =
-            zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
         zw.start_file("ppt/slides/slide1.xml", opts).unwrap();
         zw.write_all(br#"<p:sld xmlns:a="ns"><p:sp><a:t>Hello</a:t></p:sp></p:sld>"#)
             .unwrap();

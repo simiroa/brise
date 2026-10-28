@@ -15,7 +15,7 @@ import { storedTitleOrEmpty } from "../../lib/noteTitle";
 import { t } from "../../i18n/t";
 import { holidaysForYear } from "../../lib/holidays";
 import { collapseOccurrencesForDay, rowIsSameDay, startsOnDay } from "../../components/home/calendarLayout";
-import { isoWeekdayBit } from "../../components/home/dateFmt";
+import { addDaysIso, isoWeekdayBit } from "../../components/home/dateFmt";
 import { FACTORY_DEFAULT_MAP_LOCATION, useSettingsStore } from "../../stores/settings";
 import {
   fetchDailyForecast,
@@ -46,12 +46,9 @@ export type LoadStatus = "loading" | "ready" | "error";
 /** (연, 0기준 월, 일) → "YYYY-MM-DD". */
 export const ymd = (y: number, m0: number, d: number) => `${y}-${String(m0 + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 
-/** "YYYY-MM-DD" 에 n 일을 더한다 — UTC 산술이라 DST·타임존에 흔들리지 않는다. */
+/** "YYYY-MM-DD" 에 n 일을 더한다 — 구현은 `addDaysIso`(dateFmt) 한 곳이고, 여기는 형식이 깨졌으면 입력 그대로 돌려주는 폴백만 얹는다. */
 export function dayAfter(day: string, n: number): string {
-  const m = day.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) return day;
-  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + n));
-  return ymd(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  return addDaysIso(day, n) ?? day;
 }
 
 export interface DayEntry {
@@ -292,6 +289,8 @@ export interface DayItems {
   day: string;
   /** 그 날을 품은 달의 dashboard_calendar 항목 그대로 — 축은 planTimedDay 로 그 날 것만 고른다. */
   items: CalendarItem[];
+  /** 다음 날을 품은 달의 항목 — 축의 익일 구간(tailPlan)이 쓴다. 같은 달이면 `items` 와 같은 배열이다(조회 재사용). */
+  nextItems: CalendarItem[];
   /** 그 날 요일에 걸리는 반복 루틴(공휴일 제외 규칙까지 적용) — 축의 배경 띠. */
   routines: TimelineRoutine[];
   /** 그 날의 공휴일 이름(없으면 null). */
@@ -315,9 +314,15 @@ export function useDayItems(day: string): { status: LoadStatus; data: DayItems |
             scheduleMonth(workspaceId, y, m, fresh).then((r) => r, (): CalendarItem[] | null => null),
           ]);
           if (cal === null) throw new Error("calendar_unavailable");
+          // 익일 구간 — 다음 날이 다른 달이면 그 달만 한 번 더(scheduleMonth 캐시). 실패는 빈 구간으로 둔다(당일 축은 그대로).
+          const [ny, nm] = dayAfter(day, 1).split("-").map(Number);
+          const nextItems =
+            ny === y && nm === m
+              ? cal
+              : await scheduleMonth(workspaceId, ny, nm, fresh).then((r) => r, (): CalendarItem[] => []);
           if (routines === null) reportFallback("briefing", "routine_list_failed", "axis shown without routine bands");
           const holidayName = holidaysForYear(holidayRegion, y).get(day) ?? null;
-          return { day, items: cal, routines: routinesForDay(routines ?? [], day, holidayName !== null), holidayName };
+          return { day, items: cal, nextItems, routines: routinesForDay(routines ?? [], day, holidayName !== null), holidayName };
         }
       : null,
     [workspaceId, day, holidayRegion],

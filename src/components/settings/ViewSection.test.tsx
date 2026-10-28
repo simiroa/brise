@@ -67,7 +67,7 @@ describe("ViewSection (PLAN-2026-09-15 지역 및 날씨 R1~R6)", () => {
 
     const strip = screen.getByTestId("settings-region-strip");
     const cards = container.querySelectorAll(".card");
-    expect(cards).toHaveLength(2); // 마스터 행 카드 + 지역 카드
+    expect(cards).toHaveLength(1); // 지역 카드 하나 — 마스터 줄은 그 카드의 첫 줄로 흡수됐다(2026-10-27)
     // R1: 통계 띠는 박스에 넣지 않는다 — 스트립은 어떤 카드 안에도 없다.
     for (const card of Array.from(cards)) expect(card.contains(strip)).toBe(false);
     expect(strip.style.gridTemplateColumns).toBe("minmax(0, 3fr) minmax(0, 7fr)");
@@ -76,6 +76,14 @@ describe("ViewSection (PLAN-2026-09-15 지역 및 날씨 R1~R6)", () => {
     expect(screen.queryByTestId("settings-region-tiles")).toBeNull();
     expect(screen.queryByTestId("metric-tile-local-time")).toBeNull();
     expect(screen.queryByTestId("metric-tile-today-temp")).toBeNull();
+  });
+
+  // 2026-10-27(PLAN-2026-10-27): 위에서 지역을 정하고 아래에서 날씨를 확인한다.
+  it("지역 카드(마스터 행·지도)가 위, 날씨 스트립이 아래에 선다", async () => {
+    render(<ViewSection />);
+    const master = await screen.findByTestId("settings-region-master-card");
+    const strip = screen.getByTestId("settings-region-strip");
+    expect(!!(master.compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
   });
 
   it("R4: 예보 머리는 지역 이름이고, 시계는 예보가 준 시간대로만 그린다", async () => {

@@ -6,7 +6,8 @@ import type { CSSProperties } from "react";
 // (카드↔카드, 하위 그룹↔하위 그룹)에만 긋고 그때 쓰는 선은 `--divider` 하나다. 행을 가르던
 // 일은 여백이 대신하므로 세로 패딩이 --space-3 → --space-4 로 올라갔다(SettingsRow 와 같은 값).
 export const groupCardStyle: CSSProperties = {
-  padding: "var(--space-6)",
+  // 제목이 박스 밖으로 나갔으므로(settingsLayout.css) 위쪽 패딩은 아래와 같은 한 단 줄인 값이다.
+  padding: "var(--space-4) var(--space-6)",
   width: "100%",
   boxSizing: "border-box",
 };
@@ -15,14 +16,28 @@ export const row: CSSProperties = {
   alignItems: "center",
   justifyContent: "space-between",
   gap: "var(--space-5)",
-  minHeight: "calc(var(--ctrl-h-lg) + var(--space-4) * 2)",
+  minHeight: "calc(var(--ctrl-h-lg) + var(--space-2) * 2)",
   boxSizing: "border-box",
-  padding: "var(--space-4) 0",
+  // 항목 간 위아래 간격 — 2026-10-27 개편: --space-4 → --space-2. 제목이 박스 밖으로 나가 그룹이 박스로 구분되므로
+  // 행 사이를 더 벌릴 이유가 없다. SettingsRow · SwitchGrid 가 이 값을 같이 쓴다.
+  padding: "var(--space-2) 0",
 };
 // W1 이 호환용으로 남겼던 `rowNoBorder` 별칭은 W3 에서 지웠다(호출부는 전부 `row` 로 옮겼다).
 // 되살리지 마라: `export const rowNoBorder = row` 는 **같은 객체 참조**라 누가 한쪽을
 // `Object.assign` 하는 순간 다른 쪽까지 오염된다. 선이 없는 것이 이제 `row` 의 기본값이므로
 // "선 없는 행"이라는 별도 이름은 가리킬 대상이 없다.
+
+/**
+ * 열거형 설정의 UI 옵션 목록 — **값 목록은 stores/prefs.ts 의 `as const` 배열**이고(타입·Rust 검증과 같은 집합), 라벨은 호출부의
+ * `Record<값, () => string>` 다. 라벨 맵이 모든 값을 덮어야 컴파일되므로 값이 늘면 옵션·라벨 누락이 빌드에서 잡힌다(i18n 키는 호출부에
+ * 리터럴로 남아 check:i18n 이 그대로 본다).
+ */
+export function optionsOf<T extends string>(
+  list: readonly T[],
+  labels: Record<T, () => string>,
+): Array<{ value: T; label: string }> {
+  return list.map((value) => ({ value, label: labels[value]() }));
+}
 
 /** 설정 화면 우측 파라미터 컨트롤 표준 너비 */
 export const SETTINGS_CTRL_WIDTH = "var(--settings-ctrl-w, 220px)";

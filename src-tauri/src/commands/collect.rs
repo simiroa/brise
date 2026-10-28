@@ -33,6 +33,29 @@ pub fn collect_source_list(
 }
 
 #[derive(Serialize)]
+pub struct CollectHistoryResult {
+    pub items: Vec<crate::models::CollectHistoryNote>,
+}
+
+/// 설정 > 수집 > 수집 이력 표 — 소스가 만든 노트를 최근 수집순으로(repo::briefing::collect_history). 브리핑에서 끈 소스의 노트도 포함한다.
+// sync-ok: collected_at 부분 인덱스 + LIMIT ≤100, 발췌·태그 조회 없음 — 가벼운 읽기 한 번.
+#[tauri::command(rename_all = "snake_case")]
+pub fn collect_history(
+    state: State<AppState>,
+    workspace_id: Option<String>,
+    limit: Option<i64>,
+) -> Result<CollectHistoryResult, AppError> {
+    let conn = state.db.lock();
+    let ws = match workspace_id {
+        Some(w) => w,
+        None => folders::active_workspace_id(&conn)?,
+    };
+    Ok(CollectHistoryResult {
+        items: crate::repo::briefing::collect_history(&conn, &ws, limit.unwrap_or(30))?,
+    })
+}
+
+#[derive(Serialize)]
 pub struct OkResult {
     pub ok: bool,
 }

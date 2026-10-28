@@ -86,7 +86,10 @@ describe("AiProviderSection — collapse when AI disabled", () => {
   // PLAN-2026-10-24 D7: 마스터 스위치의 유일한 거처. 접히는 본문 밖이라 꺼진 상태에서도 보인다.
   it("the master AI toggle is the first row of this page and stays visible while collapsed", () => {
     const { container } = render(<AiProviderSection />);
-    expect(container.firstElementChild).toBe(screen.getByTestId("settings-ai-master-card"));
+    // 2026-10-27: 마스터 줄은 연결 카드의 첫 줄로 흡수됐다(맨 위는 정보 스트립 자리). 꺼진 상태에서도 카드 안에 늘 보인다.
+    const providerCard = screen.getByTestId("settings-ai-provider-card");
+    expect(providerCard.contains(screen.getByTestId("settings-ai-master-card"))).toBe(true);
+    expect(container.firstElementChild).toBe(providerCard);
     const toggle = screen.getByTestId("settings-ai-enabled-toggle");
     expect(toggle.getAttribute("aria-checked")).toBe("false");
     expect(screen.queryByTestId("ai-off-banner")).toBeNull();

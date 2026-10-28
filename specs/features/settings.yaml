@@ -110,6 +110,8 @@ features:
         - src/components/settings/AiProviderSection.test.tsx
         - src/components/settings/ViewSection.test.tsx
         - src/components/settings/EditorSection.test.tsx
+        - src/components/settings/PastePolicyCard.test.tsx
+        - src/components/settings/NotificationsCard.test.tsx
         - src/components/editor/SpellcheckToggle.test.tsx
     notes: |
       PLAN-2026-09-12 §1(D1·D7~D10). 레일은 일반·기능·AI·시스템·플러그인 **5그룹 16페이지**(2026-09-15 R5 알림 및 일정 추가,
@@ -223,16 +225,17 @@ features:
       # "일반-에디터 페이지 신설해서, 날짜 자동등록, 지역 제한, 드롭 정책 등 관련 내용을 모으는
       # 게 좋아 보임". 자동 제안·붙여넣기·드롭·입력·새 노트·표시 여섯(→다섯) 관심사가 한 페이지에
       # 모인다.
+      # 2026-10-27(PLAN-2026-10-27): 붙여넣기·드롭 카드는 "첨부파일" 페이지(PastePolicyCard)로 이사했고, 순서는
+      # 표시 → 새 노트 → 자동 제안 → 입력이 됐다. 케이스 id 는 그대로(이력).
       - id: editor-page-collects-editor-settings-into-five-cards
         given:
           open: editor
         expect:
-          auto_suggest_card: "settings-editor-auto-suggest"
-          paste_drop_card: "settings-editor-paste-drop"
-          input_card: "settings-editor-input"
-          new_note_card: "settings-editor-new-note"
           display_card: "settings-editor-display"
-        covered_by: "자동 제안·붙여넣기·드롭·입력·새 노트·표시 다섯 카드가 이 순서로 선다"
+          new_note_card: "settings-editor-new-note"
+          auto_suggest_card: "settings-editor-auto-suggest"
+          input_card: "settings-editor-input"
+        covered_by: "표시·새 노트·자동 제안·입력 네 카드가 이 순서로 선다 (붙여넣기·드롭은 첨부파일 페이지로 이사, 2026-10-27)"
 
       # 2026-09-20 세 번째 웨이브("4~7번도 넣어봐") — **실험적** 설정 4종. 각 케이스는 해당 값이
       # 스토어를 반영하고 settings_set 을 부르는 것까지만 본다(실효 게이트는 다른 에이전트 소관).
@@ -248,7 +251,7 @@ features:
           open: editor
         expect:
           entries: "new_note_date_precision"
-        covered_by: "새 노트 카드가 입력과 표시 사이에 있고 기본 날짜 세그먼트가 newNoteDatePrecision 을 반영한다"
+        covered_by: "새 노트 카드가 표시와 자동 제안 사이에 있고 기본 날짜 세그먼트가 newNoteDatePrecision 을 반영한다"
 
       - id: experimental-new-note-section-name-commits-on-blur-not-keystroke
         given:
@@ -297,7 +300,7 @@ features:
       # 토글. 넷 다 simplePrefs(낙관적 set() + settings_set, 함정 9 롤백 규약).
       - id: paste-and-autoformat-toggles-follow-store
         given:
-          open: editor
+          open: attachments
         expect:
           entries: "paste_link_nudge"
         covered_by: "붙여넣기 제안 토글 세 개가 붙여넣기·드롭 카드에 있고 클릭하면 각자의 스토어 값과 settings_set 을 함께 바꾼다"

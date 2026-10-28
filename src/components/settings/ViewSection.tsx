@@ -1,9 +1,6 @@
-import { anchorId } from "./settingsAnchor";
 import type { CSSProperties } from "react";
 import { t } from "../../i18n/t";
 import { useSettingsStore } from "../../stores/settings";
-import { groupCardStyle } from "./shared";
-import { SectionHeader } from "./SectionHeader";
 import { SettingsRow } from "./SettingsRow";
 import { Toggle } from "./Toggle";
 import { MapSection } from "./MapSection";
@@ -11,13 +8,14 @@ import { WeatherSection, useWeatherReadout } from "./WeatherSection";
 import { usePlaceName } from "../home/usePlaceName";
 import { formatHeaderDate } from "../home/greeting";
 import { IconMapPin } from "../icons";
+import { SettingsCard } from "./SettingsCard";
 
 /**
  * 설정 > 지역 및 날씨 (PLAN-2026-09-15-settings-pet-region §0 R1~R6).
  *
  * **한 장의 서사**: 지역을 정하면 현지 시간·날씨·공휴일이 따라온다.
  *
- * 페이지 = 첫 줄 마스터 토글 행(R2, D4) + 3:7 스트립(**카드 밖** — R1/R4) + 지역 카드(R5)
+ * 페이지 = 지역 카드(첫 줄 마스터 토글 행 R2·D4 + 지도 R5) → 그 아래 3:7 스트립(**카드 밖** — R1/R4) (2026-10-27: 순서를 뒤집었다 — 위에서 정하고 아래서 확인)
  * + "달력은 달력 및 일정에서" 한 줄(R6 은 2026-09-19 재번복 — 달력 카드는 NotificationsSection). 블록은 전부 프래그먼트의 직계 자식이라 SettingsPanel 본문의 flex gap 이
  * 간격을 맡는다.
  *
@@ -41,27 +39,48 @@ export function ViewSection() {
 
   return (
     <>
-      {/* 마스터 스위치는 페이지 첫 줄 설정 행(PLAN-2026-10-24 D4). 이 토글이 끄는 것(현지 시간·날씨·장소 이름
-          조회)은 라벨과 힌트가 말한다 — 지도는 안 꺼진다. */}
-      <div className="card" style={groupCardStyle} data-testid="settings-region-master-card">
-        <SettingsRow
-          anchor="region_enabled"
-          label={t("settings.region_enabled")}
-          hint={t("settings.region_enabled_hint")}
-          data-testid="settings-region-enabled-control"
-          control={
-            <Toggle
-              checked={regionEnabled}
-              onChange={(next) => void setRegionEnabled(next)}
-              aria-label={t("settings.region_enabled")}
-              data-testid="settings-switch-region-enabled"
-            />
-          }
-        />
-      </div>
+      <SettingsCard
+        title={t("settings.region_weather_environment")}
+        icon={<IconMapPin size={14} strokeWidth={2} />}
+        anchor="weather"
+      >
 
+        {/* 마스터 스위치(PLAN-2026-10-24 D4) — 위 스트립 아래 이 카드의 첫 줄로 흡수됐다(2026-10-27). 이 토글이 끄는 것(현지 시간·날씨·장소 이름
+            조회)은 라벨과 힌트가 말한다 — 지도는 안 꺼진다. */}
+        <div data-testid="settings-region-master-card">
+          <SettingsRow
+            anchor="region_enabled"
+            label={t("settings.region_enabled")}
+            hint={t("settings.region_enabled_hint")}
+            data-testid="settings-region-enabled-control"
+            control={
+              <Toggle
+                checked={regionEnabled}
+                onChange={(next) => void setRegionEnabled(next)}
+                aria-label={t("settings.region_enabled")}
+                data-testid="settings-switch-region-enabled"
+              />
+            }
+          />
+        </div>
+        {/* 서사는 ⓘ 뒤가 아니라 화면에 있다 — 이 페이지의 요점 자체가 "하나를 정하면 둘이
+            따라온다"는 인과라, 툴팁으로 내리면 페이지가 자기 설명을 잃는다. 한 줄 상한은 지킨다
+            (docs/DESIGN.md §설정 레이아웃 ③). */}
+        <p style={lede} data-testid="settings-region-lede">
+          {t("settings.region_weather_hint")}
+        </p>
+
+        {/* R5: 한 줄 2단 — 좌 지도, 우 지역 이름·주소 검색·[초기화][좌표 지우기]. 그 2단은
+            RegionPickerFields 가 6:4 퍼센트 flex 로 갖고 있다(카드 폭을 따라 늘어난다) — 여기서
+            두 번째 격자를 덧대지 않는다. */}
+        <MapSection />
+      </SettingsCard>
+
+      {/* 날씨 스트립은 지역 카드 아래(2026-10-27, PLAN-2026-10-27) — 위에서 지역을 정하면 아래에서 날씨(지역 이름 포함)가
+          따라오는 읽는 순서. */}
       <div
         data-testid="settings-region-strip"
+        className="settings-strip"
         style={{ ...strip, gridTemplateColumns: resolved ? "minmax(0, 3fr) minmax(0, 7fr)" : "1fr" }}
       >
         {resolved ? (
@@ -95,24 +114,6 @@ export function ViewSection() {
         )}
       </div>
 
-      <div id={anchorId("weather")} className="card" style={groupCardStyle}>
-        <SectionHeader
-          title={t("settings.region_weather_environment")}
-          icon={<IconMapPin size={14} strokeWidth={2} />}
-        />
-        {/* 서사는 ⓘ 뒤가 아니라 화면에 있다 — 이 페이지의 요점 자체가 "하나를 정하면 둘이
-            따라온다"는 인과라, 툴팁으로 내리면 페이지가 자기 설명을 잃는다. 한 줄 상한은 지킨다
-            (docs/DESIGN.md §설정 레이아웃 ③). */}
-        <p style={lede} data-testid="settings-region-lede">
-          {t("settings.region_weather_hint")}
-        </p>
-
-        {/* R5: 한 줄 2단 — 좌 지도, 우 지역 이름·주소 검색·[초기화][좌표 지우기]. 그 2단은
-            RegionPickerFields 가 6:4 퍼센트 flex 로 갖고 있다(카드 폭을 따라 늘어난다) — 여기서
-            두 번째 격자를 덧대지 않는다. */}
-        <MapSection />
-      </div>
-
       {/* R6 재번복(2026-09-19, PLAN-2026-09-19-calendar-schedule §0): 달력 카드(주 시작일·공휴일)는
           "달력 및 일정"(알림 페이지)으로 갔다 — 공휴일이 목록이 되어 일정의 재료가 됐다. 여기엔 찾아갈
           곳을 말하는 한 줄만 남긴다. */}
@@ -130,9 +131,6 @@ const strip: CSSProperties = {
   gridTemplateColumns: "minmax(0, 3fr) minmax(0, 7fr)",
   gap: "var(--space-7)",
   alignItems: "center",
-  background: "var(--surface-sunken)",
-  border: "1px solid var(--divider)",
-  borderRadius: "var(--radius-md)",
   padding: "var(--space-6) var(--space-7)",
   boxSizing: "border-box",
   width: "100%",

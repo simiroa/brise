@@ -3,6 +3,7 @@ import { t } from "../../i18n/t";
 import { call, callSilent } from "../../lib/invoke";
 import { useSettingsStore, type AttachmentStorageMode } from "../../stores/settings";
 import { useOnboardingSession } from "../../stores/onboardingSession";
+import { attachmentStorageOptions } from "../settings/enumLabels";
 import { formatSize } from "../../lib/ui";
 import { Select } from "../Select";
 import { StorageGauge } from "../settings/StorageGauge";
@@ -212,11 +213,7 @@ export function OnboardingDataStep() {
           value={attachmentStorageMode}
           onChange={(v) => void setAttachmentStorageMode(v as AttachmentStorageMode)}
           ariaLabel={t("settings.attachment_storage_mode")}
-          options={[
-            { value: "copy", label: t("settings.attachment_storage_mode_copy") },
-            { value: "link", label: t("settings.attachment_storage_mode_link") },
-            { value: "reference", label: t("settings.attachment_storage_mode_reference") },
-          ]}
+          options={attachmentStorageOptions()}
         />
         <p className={attachmentStorageMode === "reference" ? "ob-hint ob-hint--warn" : "ob-hint"}>
           {attachmentStorageMode === "reference"

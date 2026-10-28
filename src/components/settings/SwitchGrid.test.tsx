@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
-import { SwitchGrid, SWITCH_GRID_COLUMNS, type SwitchGridItem } from "./SwitchGrid";
+import { SwitchGrid, type SwitchGridItem } from "./SwitchGrid";
 
 function items(overrides: Partial<SwitchGridItem>[] = []): SwitchGridItem[] {
   const base: SwitchGridItem[] = [
@@ -12,15 +12,14 @@ function items(overrides: Partial<SwitchGridItem>[] = []): SwitchGridItem[] {
 }
 
 describe("SwitchGrid (PLAN-2026-09-12 §3, D3)", () => {
-  // 좁은 폭에서 2열 → 1열로 무너지는 것은 CSS(auto-fit)가 하는 일이라 jsdom 이 볼 수 없다.
-  // 스냅샷 대신 **컬럼 규칙 문자열**을 단언한다 — 규칙이 바뀌면 여기서 걸린다.
-  it("3개 이상이면 auto-fit 그리드로 서고 셀 최소 폭은 210px 다", () => {
+  // 2026-10-27 설정 디자인 개편: 좌우 2단을 없앴다 — 항상 한 열(라벨 | 컨트롤 한 줄)이다.
+  it("한 열로 쌓이고 열 규칙(grid)이 없다", () => {
     render(<SwitchGrid items={items()} aria-label="스위치 묶음" />);
 
     const grid = screen.getByTestId("switch-grid");
-    expect(grid.style.display).toBe("grid");
-    expect(grid.style.gridTemplateColumns).toBe(SWITCH_GRID_COLUMNS);
-    expect(SWITCH_GRID_COLUMNS).toBe("repeat(auto-fit, minmax(210px, 1fr))");
+    expect(grid.style.display).toBe("flex");
+    expect(grid.style.flexDirection).toBe("column");
+    expect(grid.style.gridTemplateColumns).toBe("");
   });
 
   it("그리드는 role=group + aria-label 이고 각 토글은 자기 라벨로 불린다", () => {
@@ -70,7 +69,11 @@ describe("SwitchGrid (PLAN-2026-09-12 §3, D3)", () => {
     expect(cell.style.opacity).toBe("var(--dim-disabled)");
     expect(cell.getAttribute("title")).toBe("AI 가 꺼져 있습니다");
     expect(cell.getAttribute("aria-disabled")).toBe("true");
-    expect(cell.textContent).not.toContain("AI 가 꺼져 있습니다");
+    // 사유는 화면 텍스트로 상주하지 않는다 — SettingsRow 로 통일하면서 보조기술용 화면 밖 노드(aria-describedby)로만 남는다(2026-10-28 C4).
+    const reasonNode = document.getElementById(cell.getAttribute("aria-describedby") ?? "");
+    expect(reasonNode?.textContent).toBe("AI 가 꺼져 있습니다");
+    expect(reasonNode?.style.clip).toBe("rect(0px, 0px, 0px, 0px)");
+    expect(cell.querySelector("[data-settings-row-control]")?.hasAttribute("inert")).toBe(true);
 
     fireEvent.click(screen.getByTestId("switch-grid-toggle-a"));
     expect(onA).not.toHaveBeenCalled();
@@ -96,12 +99,12 @@ describe("SwitchGrid (PLAN-2026-09-12 §3, D3)", () => {
 
   // 셀 안에서 토글은 라벨 **바로 뒤**에 붙는다(우측 정렬 금지) — 라벨이 남은 폭을 다 먹으면
   // 토글이 오른쪽 끝으로 밀려 그 계약이 깨진다.
-  it("셀은 라벨을 늘려 토글을 오른쪽 끝으로 밀지 않는다", () => {
+  it("셀은 SettingsRow 와 같은 한 줄 — 라벨이 늘어나 토글이 오른쪽 끝에 선다 (2026-10-27)", () => {
     render(<SwitchGrid items={items()} aria-label="스위치 묶음" />);
 
     const cell = screen.getByTestId("switch-grid-cell-a");
-    expect(cell.style.justifyContent).toBe("");
+    expect(cell.style.justifyContent).toBe("space-between");
     const label = cell.firstElementChild as HTMLElement;
-    expect(label.style.flex).toBe("");
+    expect(label.style.flex).toContain("1");
   });
 });

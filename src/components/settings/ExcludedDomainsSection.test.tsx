@@ -9,13 +9,20 @@ vi.mock("../../lib/invoke", () => ({
   emitNotice: vi.fn(),
 }));
 
+// 카드는 접힌 채로 뜬다(2026-10-27) — 본문을 보는 테스트는 먼저 펼친다.
+function renderOpen() {
+  const r = render(<ExcludedDomainsSection />);
+  fireEvent.click(screen.getByTestId("settings-collect-excluded-toggle"));
+  return r;
+}
+
 describe("ExcludedDomainsSection", () => {
   beforeEach(() => {
     useSettingsStore.setState({ collectExcludedDomains: ["a.com"] } as any);
   });
 
   it("스토어의 도메인 목록을 한 줄에 하나로 보여준다", () => {
-    render(<ExcludedDomainsSection />);
+    renderOpen();
     const ta = screen.getByLabelText(/도메인|domain/i) as HTMLTextAreaElement;
     expect(ta.value).toBe("a.com");
     expect(screen.getByTestId("settings-collect-excluded")).toBeTruthy();
@@ -24,7 +31,7 @@ describe("ExcludedDomainsSection", () => {
   it("blur 시 정규화(공백·앞 점·대문자 제거)해서 저장한다", async () => {
     const setSpy = vi.fn(async () => {});
     useSettingsStore.setState({ setCollectExcludedDomains: setSpy } as any);
-    render(<ExcludedDomainsSection />);
+    renderOpen();
     const ta = screen.getByLabelText(/도메인|domain/i);
     fireEvent.change(ta, { target: { value: " .Foo.com \n\nbar.io" } });
     fireEvent.blur(ta);
@@ -38,7 +45,7 @@ describe("ExcludedDomainsSection", () => {
       useSettingsStore.setState({ collectExcludedDomains: ["a.com"] } as any); // 실패 → 롤백
     });
     useSettingsStore.setState({ setCollectExcludedDomains: setSpy } as any);
-    render(<ExcludedDomainsSection />);
+    renderOpen();
     const ta = screen.getByLabelText(/도메인|domain/i) as HTMLTextAreaElement;
     fireEvent.change(ta, { target: { value: "a.com\nnew.io" } });
     fireEvent.blur(ta);
@@ -51,7 +58,7 @@ describe("ExcludedDomainsSection", () => {
       useSettingsStore.setState({ collectExcludedDomains: v } as any);
     });
     useSettingsStore.setState({ setCollectExcludedDomains: setSpy } as any);
-    render(<ExcludedDomainsSection />);
+    renderOpen();
     const ta = screen.getByLabelText(/도메인|domain/i);
     const many = Array.from({ length: 203 }, (_, i) => `d${i}.com`).join("\n");
     fireEvent.change(ta, { target: { value: many } });
@@ -63,8 +70,17 @@ describe("ExcludedDomainsSection", () => {
 
   it("빈 칸에 예시 placeholder 를 보여준다", () => {
     useSettingsStore.setState({ collectExcludedDomains: [] } as any);
-    render(<ExcludedDomainsSection />);
+    renderOpen();
     const ta = screen.getByLabelText(/도메인|domain/i) as HTMLTextAreaElement;
     expect(ta.placeholder).toContain("example.com");
+  });
+
+  it("접힌 채로는 텍스트칸 없이 요약 한 줄만 보이고, 펼치면 텍스트칸이 나온다", () => {
+    useSettingsStore.setState({ collectExcludedDomains: ["a.com", "b.com"] } as any);
+    render(<ExcludedDomainsSection />);
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.getByTestId("settings-collect-excluded-summary").textContent).toContain("2");
+    fireEvent.click(screen.getByTestId("settings-collect-excluded-toggle"));
+    expect(screen.getByRole("textbox")).toBeTruthy();
   });
 });

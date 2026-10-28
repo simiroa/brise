@@ -20,7 +20,7 @@ import { clamp, popoverRoot } from "../../lib/ui";
  * `title` 이 맡아 툴팁이 두 개 겹치지 않는다). 설정 본문은 스크롤 컨테이너라 자식으로 두면
  * 잘리므로 FolderDotFilter 툴팁처럼 popoverRoot 에 fixed 로 띄운다. Escape 로 걷을 수 있다.
  */
-export function HintBadge({ hint }: { hint: string }) {
+export function HintBadge({ hint, glyph = "ⓘ" }: { hint: string; glyph?: string }) {
   const ref = useRef<HTMLSpanElement>(null);
   const [focusRect, setFocusRect] = useState<DOMRect | null>(null);
   return (
@@ -58,7 +58,7 @@ export function HintBadge({ hint }: { hint: string }) {
         flexShrink: 0,
       }}
     >
-      ⓘ
+      {glyph}
       <span
         style={{
           position: "absolute",
@@ -98,23 +98,9 @@ function HintTip({ hint, rect }: { hint: string; rect: DOMRect }) {
       ref={ref}
       aria-hidden="true"
       data-testid="hint-badge-tip"
-      // 표면은 .overlay 가 소유한다(불투명 판). 모양은 FolderDotFilter 툴팁(.folder-dot-tooltip)과 같지만
-      // 그 CSS 는 대시보드에서만 로드돼 설정 창에 없다 — 그래서 여기 인라인으로.
-      className="overlay"
-      style={{
-        position: "fixed",
-        left: pos.left,
-        top: pos.top,
-        zIndex: "var(--z-tooltip)",
-        maxWidth: 320,
-        padding: "var(--space-1) var(--space-2)",
-        fontSize: "var(--text-xs)",
-        fontWeight: 400,
-        color: "var(--text)",
-        borderRadius: "var(--radius-sm)",
-        boxShadow: "var(--shadow-md)",
-        pointerEvents: "none",
-      }}
+      // 모양은 전역 .tip(tokens.css) — FolderDotFilter 툴팁·title= 위임 툴팁과 한 벌이다.
+      className="overlay tip"
+      style={{ left: pos.left, top: pos.top }}
     >
       {hint}
     </div>

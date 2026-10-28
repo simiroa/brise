@@ -1,0 +1,66 @@
+/*
+ * 시간축 칩의 상태(평소 · 호버 · 포커스 · 선택 · 끄는 중) — TimeChip.tsx 의 인라인 style 에서 옮겼다(2026-10-27).
+ *
+ * 배경은 **상태와 무관하게 30% 투명 고정**이다(오너 2026-10-27) — 호버·선택이 배경을 바꾸지 않고 테두리(outline)만
+ * 바꾼다. 겹친 칩은 뒤가 30% 비쳐 보이고, 호버·포커스·선택이면 맨 위(z-index)로 올라와 가려졌던 제목이 드러난다.
+ * 리사이즈 손잡이(z 2, DOM 에서 칩 뒤)는 여전히 위라 그대로 잡힌다.
+ * 뒤를 흐리는 유리(backdrop-filter)는 쓰지 않는다 — 앱 창이 transparent: true 라 WebView2 가 blur 를 화면에
+ * 반영하지 않는다(tokens.css 의 "떠 있는 표면은 항상 불투명" 주석, 2026-08-14 실측).
+ */
+.cal-chip {
+  background-color: color-mix(in srgb, var(--surface-base) 70%, transparent);
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+  transition:
+    outline-color var(--dur-med) ease,
+    opacity var(--dur-med) ease;
+}
+.cal-chip:hover,
+.cal-chip:focus-within,
+.cal-chip[data-focused="true"] {
+  z-index: 2;
+}
+.cal-chip:hover,
+.cal-chip:focus-within {
+  outline-color: var(--muted);
+}
+.cal-chip[data-focused="true"],
+.cal-chip[data-moving="true"] {
+  outline-color: var(--accent);
+}
+/* 끄는 중인 칩은 이웃 위로 — 이웃은 새 데이터가 와야 다시 자리를 잡는다. */
+.cal-chip[data-moving="true"] {
+  z-index: 2;
+}
+/* 설정(⚙) 버튼 — 마우스를 올렸을 때만 보인다(오너 2026-10-27). display:none 이 아니라 투명도라 키보드 포커스(:focus-within)로도
+ * 닿는다. 호버가 없는 터치 기기에선 롱프레스가 같은 모달을 여는 길이라 버튼을 숨겨 둔 채로 둔다. */
+.cal-chip-gear {
+  opacity: 0;
+  color: var(--faint);
+  transition: opacity var(--dur-med) ease, color var(--dur-med) ease;
+}
+.cal-chip:hover .cal-chip-gear,
+.cal-chip:focus-within .cal-chip-gear {
+  opacity: 1;
+}
+.cal-chip-gear:hover {
+  color: var(--text);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cal-chip,
+  .cal-chip-gear { transition: none; }
+}
+/* 시간 눈금 라벨 아래의 시간별 날씨(DayAxis HourRuler, 브리핑 창) — 라벨 열(24px) 안에 아이콘, 확대하면 온도가 아이콘 밑에.
+   width 24px 는 calendarLayout.ts 의 TIME_LABEL_W 와 같은 값이다 — 한쪽을 바꾸면 다른 쪽도(CSS 가 TS 상수를 못 읽어 상호 주석으로 묶는다). */
+.cal-hour-wx {
+  position: absolute;
+  left: 0;
+  width: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: var(--text-xs);
+  line-height: var(--lh-tight);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}

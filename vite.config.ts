@@ -5,9 +5,24 @@ import bundleGraph from "./scripts/bench/bundleGraph.vite.mjs";
 
 const host = process.env.TAURI_DEV_HOST;
 
+// docs/PLAN-2026-10-27-fonts.md W0 — @fontsource CSS 는 woff2 뒤에 woff 폴백을 적어 두고, Vite 는 둘 다 내보낸다.
+// WebView2·모바일 브라우저(동기화 뷰어)는 전부 woff2 를 받으므로 woff 는 설치본에만 실리는 짐(≈12MB)이다.
+// 산출 CSS 에서 폴백 줄을 지우고 woff 파일을 뺀다. bundleGraph 보다 **앞**에 둬야 그래프가 줄어든 CSS 크기를 잰다.
+const dropWoffFallback = {
+  name: "drop-woff-fallback",
+  generateBundle(_: unknown, bundle: Record<string, { type: string; fileName: string; source?: string | Uint8Array }>) {
+    for (const [key, out] of Object.entries(bundle)) {
+      if (out.type === "asset" && out.fileName.endsWith(".woff")) delete bundle[key];
+      else if (out.type === "asset" && out.fileName.endsWith(".css") && typeof out.source === "string") {
+        out.source = out.source.replace(/,\s*url\([^)]*\.woff\)\s*format\(["']?woff["']?\)/g, "");
+      }
+    }
+  },
+};
+
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [react(), bundleGraph()],
+  plugins: [react(), dropWoffFallback, bundleGraph()],
 
   // Browser mode: the sync server serves this same build under /app/ instead of the origin
   // root. Relative asset URLs work under any sub-path (/app/assets/... or /assets/... both

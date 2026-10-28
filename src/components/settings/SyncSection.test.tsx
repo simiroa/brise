@@ -48,6 +48,27 @@ describe("SyncSection", () => {
     expect(screen.getByRole("switch", { name: "Turn on sync server" })).toBeTruthy();
   });
 
+  // 2026-10-27: 꺼짐일 때 빈 카드 머리만 남던 것을 — 구성은 그대로 두되 흐리게 잠가 보여 준다. 마스터 스위치는 잠금 밖.
+  it("꺼져 있으면 연결 구성은 inert 로 잠기고 마스터 스위치만 눌린다", async () => {
+    callMock.mockResolvedValue(disabledStatus);
+    const { container } = render(<SyncSection />);
+
+    const locked = await screen.findByTestId("settings-sync-locked");
+    expect(locked.querySelector("[inert]")).not.toBeNull();
+    expect(locked.querySelector("[inert]")?.contains(screen.getByTestId("settings-sync-port"))).toBe(true);
+    const toggle = screen.getByTestId("settings-sync-toggle");
+    expect(container.querySelector("[inert]")?.contains(toggle)).toBe(false);
+    // 마스터 행은 박스(.card)가 아니다.
+    expect(screen.getByTestId("settings-sync-master-card").classList.contains("card")).toBe(false);
+  });
+
+  it("켜져 있으면 잠금 래퍼가 없다", async () => {
+    callMock.mockResolvedValue(runningStatus);
+    render(<SyncSection />);
+    await screen.findByText("Running");
+    expect(screen.queryByTestId("settings-sync-locked")).toBeNull();
+  });
+
   it("shows running status without address, bound address in tile, and copyable URL when enabled+running", async () => {
     callMock.mockResolvedValue(runningStatus);
     render(<SyncSection />);

@@ -93,6 +93,8 @@ pub(crate) fn is_device_local_setting_key(key: &str) -> bool {
             // 화면 저장 폴더 — 이 기기 파일시스템 경로다. 번들을 받는 쪽에선 없는 경로고(사용자명이
             // 든 경로를 남에게 넘기기도 한다), remote_policy 가 원격 쓰기를 막는 것과 같은 이유.
             | "capture_screenshot_dir"
+            // 내보내기 기본 폴더 — 같은 종류(이 기기 파일시스템 경로, 사용자명이 든 경로를 번들에 실어 남에게 넘긴다).
+            | "export_default_dir"
     )
 }
 
@@ -1358,6 +1360,7 @@ mod tests {
         assert!(is_device_local_setting_key("device_id"));
         assert!(is_device_local_setting_key("search_recent"));
         assert!(is_device_local_setting_key("capture_screenshot_dir"));
+        assert!(is_device_local_setting_key("export_default_dir"));
         assert!(!is_device_local_setting_key("theme"));
         assert!(!is_device_local_setting_key("onboarding_completed"));
     }

@@ -1,13 +1,11 @@
 import { useSettingsStore, type BriefingNotify, type BriefingWhen } from "../../../stores/settings";
 import { Toggle } from "../Toggle";
 import { t } from "../../../i18n/t";
-import { groupCardStyle } from "../shared";
-import { SectionHeader } from "../SectionHeader";
 import { SettingsRow } from "../SettingsRow";
 import { TimeField } from "../TimeField";
-import { anchorId } from "../settingsAnchor";
 import { Select } from "../../Select";
 import { IconClock } from "../../icons";
+import { SettingsCard } from "../SettingsCard";
 
 /**
  * 브리핑을 언제 띄우나 — 지정 시각 / 앱 실행 시 / 수동만(PLAN-2026-09-30 D3). 사용 토글은 페이지 헤더.
@@ -30,8 +28,7 @@ export function ScheduleWhenSection() {
   const offReason = off ? t("settings.briefing_off_reason") : undefined;
 
   return (
-    <div className="card" style={groupCardStyle} id={anchorId("schedule")} data-testid="briefing-schedule-card">
-      <SectionHeader title={t("settings.briefing_schedule_section")} icon={<IconClock size={14} strokeWidth={2} />} />
+    <SettingsCard title={t("settings.briefing_schedule_section")} icon={<IconClock size={14} strokeWidth={2} />} anchor="schedule" testId="briefing-schedule-card">
       <SettingsRow
         anchor="briefing_when"
         label={t("settings.briefing_when")}
@@ -117,6 +114,6 @@ export function ScheduleWhenSection() {
         }
         data-testid="briefing-notify-row"
       />
-    </div>
+    </SettingsCard>
   );
 }

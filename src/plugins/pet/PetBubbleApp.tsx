@@ -21,6 +21,7 @@ import {
   type PetChatUpdatedPayload,
 } from "./bridge/petChatHistory";
 import { pickRenderableSuggestion, type PendingSuggestion } from "./bridge/petSuggestionCards";
+import { emitSuggestionAccept, emitSuggestionDismiss, emitSuggestionsRefresh } from "./petSuggestionActions";
 import { usePetTheme } from "./usePetTheme";
 import { applySavedAppearanceSeed } from "../../lib/appearance";
 // W8-h: PetApp.tsx 와 같은 이유(주석 참고) — mobile/MobileApp.tsx 판례를 따라 엔트리에서 직접 로드.
@@ -238,7 +239,7 @@ export function PetBubbleApp() {
       if (cancelled) un();
       else unlisten = un;
     });
-    void emit("pet-suggestions-refresh").catch(() => {});
+    void emitSuggestionsRefresh();
     return () => {
       cancelled = true;
       unlisten?.();
@@ -309,7 +310,7 @@ export function PetBubbleApp() {
     if (!suggestion) return;
     const id = suggestion.id;
     setSuggestion(null);
-    void emit("pet-suggestion-dismiss", { id }).catch(() => {});
+    void emitSuggestionDismiss(id);
   }, [suggestion]);
 
   /** 새 커맨드를 만들지 않는다 — pet_open_main(기존, 노트 클릭과 같은 경로)으로 메인 창을
@@ -317,9 +318,9 @@ export function PetBubbleApp() {
    *  메인 창은 App.tsx 의 PetSuggestionReviewBridge 가 "pet-review-suggestion" 을 받아 처리한다. */
   const reviewSuggestion = useCallback(() => {
     if (!suggestion || suggestion.kind !== "overlap") return;
-    const { id, noteId, relatedNoteId } = suggestion;
+    const { noteId } = suggestion;
     setSuggestion(null);
-    void emit("pet-review-suggestion", { id, note_id: noteId, related_note_id: relatedNoteId }).catch(() => {});
+    void emitSuggestionAccept(suggestion);
     void callSilent("pet_open_main", { note_id: noteId }).catch(() => {});
     close();
   }, [suggestion, close]);
@@ -331,11 +332,9 @@ export function PetBubbleApp() {
    *  액션이라, 펫 창에 계속 머물러도 된다). */
   const acceptLinkSuggestion = useCallback(() => {
     if (!suggestion || suggestion.kind !== "link") return;
-    const { id, title, summary, url, targetNoteId } = suggestion;
+    const accepted = suggestion;
     setSuggestion(null);
-    void emit("pet-accept-link-suggestion", { id, target_note_id: targetNoteId, title, summary, url }).catch(
-      () => {},
-    );
+    void emitSuggestionAccept(accepted);
   }, [suggestion]);
 
   /** kind='theme' 카드의 "모으기" — 여기서 처음이자 유일하게 LLM 1콜이 돈다(Q3: 무시된 제안에
@@ -345,9 +344,9 @@ export function PetBubbleApp() {
    *  액션이라 메인 창을 포커스하지 않는다. */
   const acceptThemeSuggestion = useCallback(() => {
     if (!suggestion || suggestion.kind !== "theme") return;
-    const { id, noteIds } = suggestion;
+    const accepted = suggestion;
     setSuggestion(null);
-    void emit("pet-accept-theme-suggestion", { id, note_ids: noteIds }).catch(() => {});
+    void emitSuggestionAccept(accepted);
   }, [suggestion]);
 
   /** kind='collect' 카드의 "정리하기" — reviewSuggestion과 같은 이유로 메인 창을 포커스한다:
@@ -358,14 +357,14 @@ export function PetBubbleApp() {
    *  PET_ALLOWED_COMMANDS 좁은 allowlist). */
   const acceptCollectSuggestion = useCallback(() => {
     if (!suggestion || suggestion.kind !== "collect") return;
-    const { id, noteId, postProcessModel } = suggestion;
+    const { noteId } = suggestion;
     const prevSuggestion = suggestion;
     setSuggestion(null);
     // C(AUDIT-2026-09-26): SidebarChat.tsx의 같은 카드와 짝이 되는 수정 — emit() 자체가
     // 실패하면(드물지만 IPC 채널 문제 등) 카드는 사라졌는데 메인 창엔 아무 요청도 안 갔다.
     // 창을 곧장 닫긴 하지만(다음 줄 close()), 그 사이 실패가 잡히면 카드를 되돌려 둔다.
-    void emit("pet-accept-collect-suggestion", { id, note_id: noteId, model: postProcessModel }).catch(() => {
-      setSuggestion(prevSuggestion);
+    void emitSuggestionAccept(prevSuggestion).then((ok) => {
+      if (!ok) setSuggestion(prevSuggestion);
     });
     void callSilent("pet_open_main", { note_id: noteId }).catch(() => {});
     close();

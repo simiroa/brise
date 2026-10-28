@@ -2,10 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import { call } from "../../../lib/invoke";
 import { reportFallback } from "../../../lib/diag";
 import { t } from "../../../i18n/t";
-import { groupCardStyle } from "../shared";
-import { SectionHeader } from "../SectionHeader";
 import { IconMapPin } from "../../icons";
 import type { PetPositionResetOutput } from "../../../lib/commands.gen";
+import { SettingsCard } from "../SettingsCard";
 
 /**
  * 설정 > 펫 — 화면 위치 선택기 (PLAN-2026-09-15 P7).
@@ -218,21 +217,21 @@ export function PetPositionPicker({
   const pctY = (v: number) => (bounds ? `${(v / bounds.height) * 100}%` : "0");
 
   return (
-    <div className="card" style={groupCardStyle} data-testid="settings-pet-position">
-      <SectionHeader
-        title={t("settings.pet_position_section")}
-        icon={<IconMapPin size={14} strokeWidth={2} />}
-        actions={
-          <button
-            type="button"
-            className="btn btn--sm"
-            data-testid="settings-pet-position-reset"
-            onClick={() => void reset()}
-          >
+    <SettingsCard
+      title={t("settings.pet_position_section")}
+      icon={<IconMapPin size={14} strokeWidth={2} />}
+      actions={
+        <button
+          type="button"
+          className="btn btn--sm"
+          data-testid="settings-pet-position-reset"
+          onClick={() => void reset()}
+        >
             {t("settings.pet_position_reset")}
           </button>
         }
-      />
+        testId="settings-pet-position"
+      >
       {!bounds ? (
         <div style={{ fontSize: "var(--text-sm)", color: "var(--muted)" }}>
           {t("settings.pet_position_unavailable")}
@@ -315,6 +314,6 @@ export function PetPositionPicker({
           )}
         </div>
       )}
-    </div>
+    </SettingsCard>
   );
 }

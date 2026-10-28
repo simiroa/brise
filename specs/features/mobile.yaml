@@ -228,7 +228,7 @@ features:
           isBrowser: true
         expect:
           testid: "settings-nav-license"
-        covered_by: "브라우저 모드에서는 레일에 7페이지(일반·에디터·알림 및 일정·모양·지역·대시보드·라이선스)와 그룹 헤더 둘(일반·시스템)만 남는다"
+        covered_by: "브라우저 모드에서는 레일에 8페이지(일반·에디터·첨부파일·알림 및 일정·모양·지역·대시보드·라이선스)와 그룹 헤더 둘(일반·시스템)만 남는다"
 
   - id: F-MO10
     name: 태블릿 세로 안내 배너 (D3, CSS 전용)

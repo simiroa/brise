@@ -73,7 +73,7 @@
    --text-label above. */
 .mobile-app .label-caps { text-transform: none; letter-spacing: 0; }
 
-/* `.ProseMirror`/`.mdbody` (tokens.css) sets a literal `calc(15px*var(--fs))`, not one of the
+/* `.ProseMirror`/`.mdbody` (tokens.css) sets a literal `calc(14px*var(--fs))`, not one of the
    --text-* tokens above, so it needs its own override — `.mobile-app .mdbody` (0,2,0) beats
    tokens.css's bare `.mdbody` (0,1,0) regardless of stylesheet import order. */
 .mobile-app .mdbody, .mobile-app .ProseMirror {

@@ -26,6 +26,8 @@ pub struct AttachmentQuery {
     pub limit: Option<i64>,
     /// `None` = active workspace (same as search).
     pub workspace_id: Option<String>,
+    /// `newest`(기본, 삽입 최신순) | `oldest` | `name`(이름 가나다·ABC 순, 대소문자 무시). 모르는 값은 newest.
+    pub sort: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -60,9 +62,30 @@ pub struct AttachmentQueryResult {
 /// without it the planner (which after boot has no statistics at all, see
 /// db::scrub_zero_row_stats) drives from notes instead and the sort comes back.
 pub(crate) fn gallery_sql(kind_count: usize, has_name: bool) -> String {
+    gallery_sql_ordered(kind_count, has_name, "a.created_at DESC, a.id DESC")
+}
+
+/// 이름순 ORDER BY — idx_attachments_name(V98: name COLLATE NOCASE, id)과 식이 같아야 정렬 없이 인덱스 순서를 그대로 쓴다.
+const NAME_ORDER_BY: &str = "a.name COLLATE NOCASE ASC, a.id ASC";
+
+/// 정렬 설정(`gallery_sort`) → ORDER BY 조각. 화이트리스트라 SQL 주입 여지가 없다.
+/// newest/oldest 는 created_at 인덱스, name 은 idx_attachments_name(V98)을 그대로 타 LIMIT 이 일찍 끊는다
+/// (전체 종류 페이지 기준 — 종류 필터 페이지는 플래너가 고른다, `gallery_sql_ordered`).
+pub(crate) fn order_by_for_sort(sort: Option<&str>) -> &'static str {
+    match sort {
+        Some("oldest") => "a.created_at ASC, a.id ASC",
+        Some("name") => NAME_ORDER_BY,
+        _ => "a.created_at DESC, a.id DESC",
+    }
+}
+
+pub(crate) fn gallery_sql_ordered(kind_count: usize, has_name: bool, order_by: &str) -> String {
     let (from_clause, kind_clause) = if kind_count == 0 {
+        // 정렬이 이름순이면 이름 인덱스를 고정한다 — created_at 을 고정한 채 이름으로 정렬하면 전수 스캔 + 임시 B-tree 정렬이다.
+        // `kind <> 'internal'` 은 인덱스 순서대로 훑으며 거른다(internal 은 갤러리에 안 나온다).
+        let index = if order_by == NAME_ORDER_BY { "idx_attachments_name" } else { "idx_attachments_created" };
         (
-            "attachments a INDEXED BY idx_attachments_created".to_string(),
+            format!("attachments a INDEXED BY {index}"),
             "a.kind <> 'internal'".to_string(),
         )
     } else {
@@ -88,7 +111,7 @@ pub(crate) fn gallery_sql(kind_count: usize, has_name: bool) -> String {
             AND n.archived_at IS NULL
             AND n.folder_id IN (SELECT id FROM folders WHERE workspace_id = ?)
             {name_clause}
-          ORDER BY a.created_at DESC, a.id DESC
+          ORDER BY {order_by}
           LIMIT ? OFFSET ?"
     )
 }
@@ -127,7 +150,7 @@ pub fn query(
         .filter(|s| !s.is_empty())
         .map(|s| format!("%{}%", escape_like(s)));
 
-    let sql = gallery_sql(kinds.len(), name_pat.is_some());
+    let sql = gallery_sql_ordered(kinds.len(), name_pat.is_some(), order_by_for_sort(q.sort.as_deref()));
 
     let mut binds: Vec<Value> = kinds.into_iter().map(Value::Text).collect();
     binds.push(Value::Text(ws));
@@ -618,6 +641,126 @@ mod tests {
         )
         .unwrap();
         assert!(r.items.is_empty());
+    }
+
+    #[test]
+    fn sort_setting_maps_to_a_whitelisted_order_by_and_unknown_falls_back_to_newest() {
+        assert_eq!(order_by_for_sort(None), "a.created_at DESC, a.id DESC");
+        assert_eq!(order_by_for_sort(Some("newest")), "a.created_at DESC, a.id DESC");
+        assert_eq!(order_by_for_sort(Some("oldest")), "a.created_at ASC, a.id ASC");
+        assert_eq!(order_by_for_sort(Some("name")), "a.name COLLATE NOCASE ASC, a.id ASC");
+        assert_eq!(order_by_for_sort(Some("a; DROP TABLE attachments")), "a.created_at DESC, a.id DESC");
+        let sql = gallery_sql_ordered(0, false, order_by_for_sort(Some("name")));
+        assert!(sql.contains("ORDER BY a.name COLLATE NOCASE ASC, a.id ASC"));
+        // 이름순은 이름 인덱스를 고정한다(V98) — created_at 인덱스를 고정하면 전수 스캔 + 임시 정렬이다.
+        assert!(sql.contains("INDEXED BY idx_attachments_name"));
+        assert!(!sql.contains("idx_attachments_created"));
+        let newest = gallery_sql_ordered(0, false, order_by_for_sort(None));
+        assert!(newest.contains("INDEXED BY idx_attachments_created"));
+    }
+
+    /// 쿼리 플랜의 detail 줄들 — 인덱스 고정(INDEXED BY)이라 빈 DB 에서도 결정적이다(고정하지 않은 플랜은 통계에 따라 흔들린다).
+    fn plan_of(conn: &Connection, sql: &str, binds: &[Value]) -> Vec<String> {
+        let mut st = conn.prepare(&format!("EXPLAIN QUERY PLAN {sql}")).unwrap();
+        let rows = st
+            .query_map(params_from_iter(binds.iter()), |r| r.get::<_, String>(3))
+            .unwrap();
+        rows.map(|r| r.unwrap()).collect()
+    }
+
+    /// 이름순 + 전체 종류 페이지는 idx_attachments_name 을 따라 읽어 임시 B-tree 정렬이 없다(V98). 예전엔 created_at 인덱스를
+    /// 고정한 채 이름으로 정렬해 전수 스캔 + "USE TEMP B-TREE FOR ORDER BY" 였다.
+    #[test]
+    fn name_sort_all_kinds_page_reads_the_name_index_without_a_temp_btree() {
+        let conn = setup_db();
+        for has_name in [false, true] {
+            let sql = gallery_sql_ordered(0, has_name, order_by_for_sort(Some("name")));
+            let mut binds = vec![Value::Text("ws".into())];
+            if has_name {
+                binds.push(Value::Text("%x%".into()));
+            }
+            binds.push(Value::Integer(60));
+            binds.push(Value::Integer(0));
+            let plan = plan_of(&conn, &sql, &binds);
+            assert!(
+                plan.iter().any(|d| d.contains("idx_attachments_name")),
+                "name sort must read idx_attachments_name: {plan:?}"
+            );
+            assert!(
+                !plan.iter().any(|d| d.contains("TEMP B-TREE")),
+                "name sort must not need a temp b-tree sort: {plan:?}"
+            );
+        }
+        // 최신/오래된 순은 그대로 created_at 인덱스다.
+        for sort in [None, Some("oldest")] {
+            let sql = gallery_sql_ordered(0, false, order_by_for_sort(sort));
+            let plan = plan_of(
+                &conn,
+                &sql,
+                &[Value::Text("ws".into()), Value::Integer(60), Value::Integer(0)],
+            );
+            assert!(plan.iter().any(|d| d.contains("idx_attachments_created")), "{sort:?}: {plan:?}");
+        }
+    }
+
+    /// 이름순 결과가 대소문자를 무시한 가나다·ABC 순이고, internal 은 빠지며, 페이지 경계가 안정적이다(인덱스 순서 경로).
+    #[test]
+    fn name_sort_pages_are_case_insensitive_stable_and_skip_internal() {
+        let conn = setup_db();
+        let folder = default_folder(&conn);
+        seed_note(&conn, "n1", &folder, "Host");
+        for (id, name, kind) in [
+            ("a1", "banana.png", "image"),
+            ("a2", "Apple.png", "image"),
+            ("a3", "cherry.png", "image"),
+            ("a4", "apple.png", "image"), // 이름이 대소문자만 다르다 → id 로 가른다
+            ("a5", "aaa-internal", "internal"),
+            ("a6", "zebra.png", "image"),
+        ] {
+            seed_attachment(&conn, id, "n1", name, kind, "2020-01-01T00:00:00Z");
+        }
+        let data = empty_data_dir();
+        let ids = |offset, limit| {
+            query(
+                &conn,
+                data.path(),
+                AttachmentQuery { sort: Some("name".into()), offset, limit: Some(limit), ..Default::default() },
+            )
+            .unwrap()
+            .items
+            .into_iter()
+            .map(|i| i.id)
+            .collect::<Vec<_>>()
+        };
+        assert_eq!(ids(0, 10), vec!["a2", "a4", "a1", "a3", "a6"]);
+        assert_eq!(ids(0, 2), vec!["a2", "a4"]);
+        assert_eq!(ids(2, 2), vec!["a1", "a3"]);
+    }
+
+    /// 종류 필터 + 이름순은 플래너에 맡긴다 — 어느 인덱스를 고르든 결과는 같은 이름순이어야 한다(플랜은 보고용으로 남긴다).
+    #[test]
+    fn name_sort_with_a_kind_filter_still_returns_name_order() {
+        let conn = setup_db();
+        let folder = default_folder(&conn);
+        seed_note(&conn, "n1", &folder, "Host");
+        for (id, name, kind) in [("a1", "b.png", "image"), ("a2", "A.png", "image"), ("a3", "c.pdf", "doc")] {
+            seed_attachment(&conn, id, "n1", name, kind, "2020-01-01T00:00:00Z");
+        }
+        let data = empty_data_dir();
+        let r = query(
+            &conn,
+            data.path(),
+            AttachmentQuery { kinds: vec!["image".into()], sort: Some("name".into()), ..Default::default() },
+        )
+        .unwrap();
+        assert_eq!(r.items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(), vec!["a2", "a1"]);
+        let sql = gallery_sql_ordered(1, false, order_by_for_sort(Some("name")));
+        let plan = plan_of(
+            &conn,
+            &sql,
+            &[Value::Text("image".into()), Value::Text("ws".into()), Value::Integer(60), Value::Integer(0)],
+        );
+        eprintln!("[plan name+kind-filter] {plan:?}");
     }
 
     /// Shape lock: gallery SQL must drive from attachments and join notes by PK.

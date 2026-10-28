@@ -142,6 +142,7 @@ commands:
       offset: "integer|omit=0"
       limit: "integer|omit=60"    # 하드 상한 300 (ATTACHMENT_QUERY_MAX_LIMIT)
       workspace_id: "uuid|omit=active"
+      sort: "string?"             # newest(기본) | oldest | name — 설정 gallery_sort. 모르는 값은 newest
     output: { items: "AttachmentQueryItem[]" }
     errors: []
     notes: >

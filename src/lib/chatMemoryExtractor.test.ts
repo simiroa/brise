@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { useSettingsStore } from "../stores/settings";
-import { extractAndSaveChatMemory } from "./chatMemoryExtractor";
+import { extractAndSaveChatMemory, proposeChatMemories, saveChatMemories } from "./chatMemoryExtractor";
 
 const callSilentMock = vi.fn();
 // stores/settings.ts::setSimplePref (chatMemory 도 이 경로를 지난다) 는 call() 도 쓴다 — call
@@ -195,5 +195,75 @@ describe("chatMemoryExtractor (W17)", () => {
 
     const memory = useSettingsStore.getState().chatMemory;
     expect(memory.map((m) => m.text)).toEqual(["사용자는 요리사다", "동시에 추가된 항목"]);
+  });
+});
+
+// 수동 추출(사이드바 채팅 도구 메뉴 › 이 대화에서 기억 추출, 오너 2026-10-28) — 후보만 돌려주고 저장은 사용자가 고른 뒤.
+describe("proposeChatMemories / saveChatMemories (수동 추출)", () => {
+  beforeEach(() => {
+    callSilentMock.mockReset();
+    useSettingsStore.setState({ aiEnabled: true, chatMemory: [{ id: "m0", text: "이미 있는 기억", created_at: "2026-08-22T00:00:00Z" }] } as never);
+  });
+
+  it("휴리스틱 없이 대화 전체에서 후보를 뽑고, 이미 있는 기억·중복은 걸러며, 저장은 하지 않는다", async () => {
+    mockAiPipeline(async () => ({ generated: '앞말 ["사용자는 디자이너다", "이미 있는 기억", "사용자는 디자이너다"] 뒷말' }));
+    const out = await proposeChatMemories([
+      { role: "user", text: "요즘 일이 바쁘다" },
+      { role: "assistant", text: "무슨 일을 하세요?" },
+    ]);
+    expect(out).toEqual(["사용자는 디자이너다"]);
+    expect(useSettingsStore.getState().chatMemory).toHaveLength(1);
+  });
+
+  it("AI 가 꺼져 있으면 모델을 부르지 않고 빈 배열", async () => {
+    useSettingsStore.setState({ aiEnabled: false } as never);
+    mockAiPipeline(async () => ({ generated: "[]" }));
+    expect(await proposeChatMemories([{ role: "user", text: "나는 개발자다" }])).toEqual([]);
+    expect(callSilentMock).not.toHaveBeenCalledWith("ai_generate_from_prompt", expect.anything());
+  });
+
+  const turns = [
+    { role: "user" as const, text: "요즘 일이 바쁘다" },
+    { role: "assistant" as const, text: "무슨 일을 하세요?" },
+  ];
+
+  it("모델 호출이 실패하면 null — 후보 없음([])과 구분된다", async () => {
+    mockAiPipeline(async () => {
+      throw new Error("403 forbidden");
+    });
+    expect(await proposeChatMemories(turns)).toBeNull();
+  });
+
+  it("설정 조회(aiCreds)가 실패해도 null", async () => {
+    callSilentMock.mockImplementation((cmd: string) =>
+      cmd === "settings_get_all" ? Promise.reject(new Error("db")) : Promise.resolve({ ok: true }),
+    );
+    expect(await proposeChatMemories(turns)).toBeNull();
+    expect(callSilentMock).not.toHaveBeenCalledWith("ai_generate_from_prompt", expect.anything());
+  });
+
+  it("성공했지만 후보가 없으면 빈 배열([]) — null 이 아니다", async () => {
+    mockAiPipeline(async () => ({ generated: "[]" }));
+    expect(await proposeChatMemories(turns)).toEqual([]);
+    mockAiPipeline(async () => ({ generated: "" }));
+    expect(await proposeChatMemories(turns)).toEqual([]);
+  });
+
+  it("답이 JSON 배열이 아니라 못 읽으면 진단에 남기고 [] (호출 자체는 성공)", async () => {
+    reportFallbackMock.mockClear();
+    mockAiPipeline(async () => ({ generated: "[not json" }));
+    expect(await proposeChatMemories(turns)).toEqual([]);
+    mockAiPipeline(async () => ({ generated: '["깨진 ' }));
+    expect(await proposeChatMemories(turns)).toEqual([]);
+    mockAiPipeline(async () => ({ generated: "[불량, 형식]" }));
+    expect(await proposeChatMemories(turns)).toEqual([]);
+    expect(reportFallbackMock).toHaveBeenCalledWith("chat", "memory_propose_failed", expect.anything());
+  });
+
+  it("saveChatMemories 는 고른 후보를 앞에 붙이고 캡·중복을 넘지 않는다", async () => {
+    mockAiPipeline(async () => ({ generated: "[]" }));
+    const n = await saveChatMemories(["새 기억", "이미 있는 기억"]);
+    expect(n).toBe(1);
+    expect(useSettingsStore.getState().chatMemory.map((m) => m.text)).toEqual(["새 기억", "이미 있는 기억"]);
   });
 });

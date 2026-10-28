@@ -69,8 +69,8 @@ export function SettingsNav({
       {...hover.handlers}
       style={{
         flex: "none",
-        // 레일 폭 168 고정(오너 QA 2026-09-15 R4 이래 좁혀 왔다).
-        width: 168,
+        // 레일 폭은 패널 그리드가 정한다(--settings-rail-w, settingsLayout.css) — 위 노트북 칸과 한 폭.
+        width: "var(--settings-rail-w)",
         minHeight: 0,
         display: "flex",
         flexDirection: "column",

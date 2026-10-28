@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
+import { SegmentedControl } from "../common/SegmentedControl";
+import { groupCardStyle } from "./shared";
 import { listenMany } from "../../lib/tauriListen";
 import { call, callSilent } from "../../lib/invoke";
 import { useSettingsStore } from "../../stores/settings";
 import { t } from "../../i18n/t";
 import { SettingsRow } from "./SettingsRow";
-import { groupCardStyle } from "./shared";
+import { PageLead } from "./PageLead";
+import { Badge } from "./Badge";
 import { SegGroup } from "./SegGroup";
 import { Banner } from "./Banner";
 import { Toggle } from "./Toggle";
@@ -14,6 +17,10 @@ import type { PetPackage, PetPackagesListOutput } from "../../lib/commands.gen";
 import { PetReactionSection } from "./pet/PetReactionSection";
 import { PetPackageGallery } from "./pet/PetPackageGallery";
 import { PetPositionPicker, type PetPos } from "./pet/PetPositionPicker";
+import { PetPersonaSection } from "./PetPersonaSection";
+
+/** 펫 페이지의 서브탭(2026-10-28, PLAN-2026-10-27 W6): 위쪽 라이브 미리보기는 탭과 무관하게 늘 보인다. */
+type PetTab = "character" | "behavior" | "persona";
 
 /**
  * 설정 > 펫 (PET.md §0.4 경계 · §0.6 재설계, 2026-10-16).
@@ -40,13 +47,14 @@ function readPos(settings: Record<string, unknown>): PetPos | null {
   return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
 }
 
-export function PetSection({ onNavigate }: { onNavigate?: (page: string) => void } = {}) {
+export function PetSection() {
   const closeToTray = useSettingsStore((s) => s.closeToTray);
   const setCloseToTray = useSettingsStore((s) => s.setCloseToTray);
   const [enabled, setEnabled] = useState(false);
   const [pos, setPos] = useState<PetPos | null>(null);
   const [mood, setMood] = useState<PetMood>("idle");
   const [packages, setPackages] = useState<PetPackage[]>([]);
+  const [tab, setTab] = useState<PetTab>("character");
 
   // settings_get_all 은 여기서 한 번 읽어 내려준다. 펫을 드래그해 옮기는 사건은 이 창에 오지 않으므로
   // 창 포커스가 돌아올 때 다시 읽어 미니맵의 현재 위치를 맞춘다. callSilent 가 실패를 진단 로그에 남긴다.
@@ -135,10 +143,14 @@ export function PetSection({ onNavigate }: { onNavigate?: (page: string) => void
   return (
     <>
       {/* 마스터 스위치는 페이지 첫 줄 설정 행(PLAN-2026-10-24 D4) — 꺼진 상태에서도 항상 보인다. */}
-      <div className="card" style={groupCardStyle} data-testid="settings-pet-master-card">
+      <PageLead testId="settings-pet-master-card">
         <SettingsRow
           anchor="pet_enable"
-          label={t("settings.pet_enable")}
+          label={
+            <>
+              {t("settings.pet_enable")} <Badge>{t("settings.sync_beta_badge")}</Badge>
+            </>
+          }
           control={
             <Toggle
               checked={enabled}
@@ -148,7 +160,7 @@ export function PetSection({ onNavigate }: { onNavigate?: (page: string) => void
             />
           }
         />
-      </div>
+      </PageLead>
       {!enabled ? (
         <p data-testid="settings-pet-off-hint" style={{ margin: 0, fontSize: "var(--text-sm)", color: "var(--muted)" }}>
           {t("settings.pet_off_hint")}
@@ -174,9 +186,35 @@ export function PetSection({ onNavigate }: { onNavigate?: (page: string) => void
               {t("settings.pet_needs_tray")}
             </Banner>
           )}
-          <PetPackageGallery packages={packages} onSelect={selectPackage} onChanged={loadPackages} preview={preview} />
-          <PetReactionSection onNavigate={onNavigate} />
-          <PetPositionPicker current={pos} onCurrentChange={setPos} />
+          {/* 라이브 미리보기 — 서브탭 위에 고정. 캐릭터를 고르거나 위치·말투를 만지는 동안 계속 보인다. */}
+          <div data-testid="settings-pet-preview-strip" className="settings-strip" style={{ padding: "var(--space-5)", display: "flex", justifyContent: "center" }}>
+            {preview}
+          </div>
+          <SegmentedControl<PetTab>
+            fill
+            value={tab}
+            onChange={setTab}
+            ariaLabel={t("settings.pet_tabs_label")}
+            options={[
+              { value: "character", label: t("settings.pet_tab_character") },
+              { value: "behavior", label: t("settings.pet_tab_behavior") },
+              { value: "persona", label: t("settings.pet_tab_persona") },
+            ]}
+          />
+          {tab === "character" && (
+            <PetPackageGallery packages={packages} onSelect={selectPackage} onChanged={loadPackages} />
+          )}
+          {tab === "behavior" && (
+            <>
+              <PetReactionSection />
+              <PetPositionPicker current={pos} onCurrentChange={setPos} />
+            </>
+          )}
+          {tab === "persona" && (
+            <div className="card" style={groupCardStyle} data-testid="settings-pet-persona-card">
+              <PetPersonaSection />
+            </div>
+          )}
         </>
       )}
     </>

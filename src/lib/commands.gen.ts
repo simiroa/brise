@@ -298,6 +298,13 @@ export interface DryRunItem {
   preview: string;
 }
 
+export interface CollectHistoryNote {
+  note_id: string;
+  title: string;
+  source_name: string | null;
+  collected_at: string;
+}
+
 export interface CollectActionStat {
   action_type: string;
   calls: number;
@@ -497,6 +504,13 @@ export interface DiagNotice {
   code: string;
   params: { [key: string]: string };
   ts: string;
+}
+
+export interface AutoBackupEntry {
+  name: string;
+  path: string;
+  created_at: string;
+  size_bytes: number;
 }
 
 export interface DocExportSection {
@@ -750,6 +764,12 @@ export interface Suggestion {
   created_at: string;
 }
 
+export interface AgentSkillInstall {
+  skill_path: string;
+  cli_path: string;
+  mcp_command: string;
+}
+
 export interface SyncStatus {
   enabled: boolean;
   running: boolean;
@@ -828,6 +848,9 @@ export interface ActivityListInput {
   limit?: number;
 }
 export type ActivityListOutput = ActivityItem[];
+
+export interface AgentSkillInstallInput {}
+export type AgentSkillInstallOutput = AgentSkillInstall;
 
 export interface AiApplyOrganizeInput {
   id: string;
@@ -1060,6 +1083,7 @@ export interface AttachmentQueryInput {
   offset?: number;
   limit?: number;
   workspace_id?: string;
+  sort?: string;
 }
 export interface AttachmentQueryOutput {
   items: AttachmentQueryItem[];
@@ -1126,6 +1150,11 @@ export interface AudioTranscribeInput {
 export interface AudioTranscribeOutput {
   text: string;
 }
+
+export interface BackupAutoListInput {
+  limit: number;
+}
+export type BackupAutoListOutput = AutoBackupEntry[];
 
 export interface BackupAutoRunInput {}
 export interface BackupAutoRunOutput {
@@ -1313,6 +1342,14 @@ export interface CollectGetStatsOutput {
   total_since: number;
 }
 
+export interface CollectHistoryInput {
+  workspace_id?: string;
+  limit?: number;
+}
+export interface CollectHistoryOutput {
+  items: CollectHistoryNote[];
+}
+
 export interface CollectImportLocalInput {
   workspace_id?: string;
   key: string;
@@ -1459,6 +1496,13 @@ export interface DataLocationInspectOutput {
   free_bytes: number | null;
   total_bytes: number | null;
   current_data_bytes: number;
+}
+
+export interface DataSubdirOpenInput {
+  kind: string;
+}
+export interface DataSubdirOpenOutput {
+  ok: boolean;
 }
 
 export interface DbResetInput {
@@ -1715,6 +1759,24 @@ export interface FolderSetRulesInput {
   rules: string | null;
 }
 export type FolderSetRulesOutput = Folder;
+
+export interface FontDownloadInput {
+  id: string;
+}
+export interface FontDownloadOutput {
+  started: boolean;
+}
+
+export interface FontStatusInput {}
+export interface FontStatusOutput {
+  installed: string[];
+  downloading: object;
+}
+
+export interface FontsBaseDirInput {}
+export interface FontsBaseDirOutput {
+  base: string;
+}
 
 export interface GeoTimezoneInput {
   lat: number;
@@ -3042,6 +3104,7 @@ export type WorkspaceStatusRenameOutput = StatusEntry;
 
 export type CommandName =
   | 'activity_list'
+  | 'agent_skill_install'
   | 'ai_apply_organize'
   | 'ai_apply_plan'
   | 'ai_call_annotate'
@@ -3076,6 +3139,7 @@ export type CommandName =
   | 'attachment_transcript_mark_inserted'
   | 'attachments_base_dir'
   | 'audio_transcribe'
+  | 'backup_auto_list'
   | 'backup_auto_run'
   | 'backup_auto_status'
   | 'backup_create'
@@ -3098,6 +3162,7 @@ export type CommandName =
   | 'collect_detect_chat_sessions'
   | 'collect_detect_local'
   | 'collect_get_stats'
+  | 'collect_history'
   | 'collect_import_local'
   | 'collect_resolve_youtube_channel'
   | 'collect_source_add_nl'
@@ -3118,6 +3183,7 @@ export type CommandName =
   | 'data_location_apply'
   | 'data_location_get'
   | 'data_location_inspect'
+  | 'data_subdir_open'
   | 'db_reset'
   | 'db_stats'
   | 'diag_recent'
@@ -3148,6 +3214,9 @@ export type CommandName =
   | 'folder_set_icon'
   | 'folder_set_open'
   | 'folder_set_rules'
+  | 'font_download'
+  | 'font_status'
+  | 'fonts_base_dir'
   | 'geo_timezone'
   | 'geocode_reverse'
   | 'geocode_search'

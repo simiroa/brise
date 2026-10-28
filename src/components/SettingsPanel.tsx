@@ -1,10 +1,11 @@
-import { Suspense, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { Suspense, useEffect, useRef, useState, type ComponentType, type CSSProperties, type ReactNode } from "react";
 import { t } from "../i18n/t";
 import { isBrowser } from "../lib/env";
 import { BROWSER_SETTINGS_PAGES } from "../lib/remoteSettingsPolicy";
 import { reportFallback } from "../lib/diag";
 import { startIdlePreload, type PreloadableComponent } from "../lib/lazyPreload";
 import "../styles/settingsAnchor.css";
+import "../styles/settingsLayout.css";
 import { anchorId, SettingsAnchorContext, type SettingsAnchor } from "./settings/settingsAnchor";
 import { listenMany } from "../lib/tauriListen";
 import { useSettingsStore } from "../stores/settings";
@@ -20,6 +21,7 @@ import { useSettingsBusy } from "./settings/settingsBusy";
 import {
   IconSettings,
   IconBell,
+  IconPaperclip,
   IconPalette,
   IconMapPin,
   IconLayoutGrid,
@@ -33,10 +35,9 @@ import {
   IconScale,
   IconSmile,
   IconEdit,
-  IconBookmark,
   IconNewspaper,
 } from "./icons";
-import { DashboardTabsSection, ViewSection, NotificationsSection, AiChatSection, LicenseSection, CollectSection, AiPermissionsSection, AiCapabilityCatalog, AiProviderSection, AiPresetsSection, AiActionsCard, DataManagementSection, SyncSection, PetSection, BriefingSection } from "../lazySurfaces";
+import { DashboardTabsSection, ViewSection, NotificationsSection, AiChatSection, LicenseSection, CollectSection, AiPermissionsSection, AiCapabilityCatalog, AiProviderSection, AiPresetsSection, AiActionsCard, DataManagementSection, AttachmentsSection, SyncSection, PetSection, BriefingSection } from "../lazySurfaces";
 
 // 라이선스 페이지는 고지 요약(noticesSummary.json)만 싣고 전문은 OS 브라우저로 연다 — 그 요약도
 // 페이지를 열기 전엔 필요 없으니 다른 페이지처럼 lazy 로 둔다.
@@ -61,6 +62,14 @@ interface SettingsPanelProps {
  * 이 컴포넌트는 창 셸이다 — 레일·페이지 전환·딥링크 앵커·닫기만 갖는다. 페이지 상태(AI 연결 값,
  * 가져오기 대화상자, 재편 계획 등)는 각 섹션이 스스로 갖는다.
  */
+/** 없어진 페이지 id → 지금 사는 페이지(와 그 안의 기본 앵커). 딥링크·`settings-navigate`·AI 기능 카드가 옛 id 를 아직 쓸 수 있다.
+ *  ai_presets: 2026-10-28 에 AI 기능 페이지 맨 아래로 합쳐졌다(별도 페이지 폐지) — 프리셋 카드는 그 페이지의 맨 아래라
+ *  앵커 없이 열면 맨 위에 떨어진다. 호출자가 앵커를 따로 주지 않았을 때만 이 기본 앵커를 쓴다. */
+const LEGACY_PAGES: Record<string, { page: string; anchor?: string }> = {
+  ai_presets: { page: "ai_features", anchor: "ai_presets" },
+};
+const resolveLegacyPage = (id: string): { page: string; anchor?: string } => LEGACY_PAGES[id] ?? { page: id };
+
 export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const aiEnabled = useSettingsStore((s) => s.aiEnabled);
   const updateCheckAuto = useSettingsStore((s) => s.updateCheckAuto);
@@ -89,24 +98,41 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   // 딥링크(2026-09-27): 설정 창이 새로 만들어질 때 Rust 가 `index.html?page=<id>#/settings` 로 연다
   // (settings_window_open 의 page 인자). 해시 라우트(main.tsx)는 `#/settings` 정확 일치라 쿼리는 해시
   // 앞에 온다. 모르는 id 는 아래 `activePage` 의 폴백이 첫 페이지로 떨어뜨린다.
-  const [page, setPage] = useState(() => new URLSearchParams(window.location.search).get("page") || "general");
+  const [page, setPage] = useState(() => resolveLegacyPage(new URLSearchParams(window.location.search).get("page") || "general").page);
   // 딥링크 앵커(?anchor= / settings-navigate {page,anchor}) — 아래 effect 가 스크롤·강조 뒤 지운다.
   const [anchor, setAnchor] = useState<SettingsAnchor | null>(() => {
     const q = new URLSearchParams(window.location.search);
     const a = q.get("anchor");
-    return a && q.get("page") ? { name: a } : null;
+    if (a && q.get("page")) return { name: a };
+    const legacyAnchor = resolveLegacyPage(q.get("page") || "").anchor;
+    return legacyAnchor ? { name: legacyAnchor } : null;
   });
   const contentRef = useRef<HTMLDivElement | null>(null);
+  // 본문 스크롤바가 차지하는 폭 — 위 검색 줄이 같은 만큼 오른쪽을 비워 두 줄의 열이 한 줄로 정렬된다(scrollbarGutter: stable 이라
+  // 늘 같은 값이지만 OS·확대 배율마다 다르다). jsdom 에는 레이아웃이 없어 0 이다.
+  const [sbW, setSbW] = useState(0);
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const measure = () => setSbW(Math.max(0, el.offsetWidth - el.clientWidth));
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // 마지막 이동 요청 번호 — 아직 받는 중인 페이지의 늦은 완료가 그 뒤에 고른 페이지를 덮지 않게.
   const navSeq = useRef(0);
 
-  const handleSelectPage = (id: string, anchorName?: string) => {
+  const handleSelectPage = (rawId: string, anchorName?: string) => {
+    const { page: id, anchor: legacyAnchor } = resolveLegacyPage(rawId);
     const seq = ++navSeq.current;
     const go = () => {
       if (seq !== navSeq.current) return;
       setPage(id);
-      setAnchor(anchorName ? { name: anchorName } : null);
+      const target = anchorName ?? legacyAnchor;
+      setAnchor(target ? { name: target } : null);
       if (contentRef.current) {
         contentRef.current.scrollTop = 0;
       }
@@ -214,9 +240,20 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       render: () => <EditorSection />,
     },
 
-    // 알림 (2026-09-15 1차 R5 신설, 2차 R7 로 "알림 및 일정" → "알림" 개명 — id 는 그대로).
-    // 일반의 알림 행들 + 시간축 배경 루틴 표. 달력 두 행은 2차 R6 으로 지역 페이지에 돌려줬다.
-    // 루틴 표의 브라우저 분기는 섹션 안에서 한다.
+    // 첨부파일 (PLAN-2026-10-27 신설) — 붙여넣기·드롭 정책(에디터에서) + 첨부 저장 방식(데이터 관리에서).
+    {
+      id: "attachments",
+      scope: "notebook",
+      label: t("settings.page_attachments"),
+      group: "general",
+      icon: <IconPaperclip size={12} strokeWidth={2} />,
+      surfaces: [AttachmentsSection],
+      render: () => <AttachmentsSection />,
+    },
+
+    // 달력 및 일정 (id 는 `notifications` 그대로 — 딥링크 호환; 이력은 NotificationsSection 머리 주석).
+    // 달력 카드(주 시작일·기본 공휴일) + 공휴일·기념일 표 + 반복 일정 표. 알림 카드는 일반 페이지로 이사했다.
+    // 반복 일정 표의 브라우저 분기는 섹션 안에서 한다.
     {
       id: "notifications",
       scope: "notebook",
@@ -256,7 +293,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       label: t("settings.page_dashboard"),
       group: "general",
       icon: <IconLayoutGrid size={12} strokeWidth={2} />,
-      // 히어로·탭 카드·미리보기 SubGroup 은 DashboardTabsSection 이 소유한다(PLAN-2026-09-15 §4).
+      // 탭 순서·활성 칩 줄, 켜진 탭별 하위 설정 카드, 미리보기는 DashboardTabsSection 이 소유한다.
       // 문구 팩 카드(PhrasePacksSection)는 문구와 함께 브리핑 페이지로 이사했다(GRILL-2026-10-19 R4 ·
       // PLAN-2026-10-19-briefing-rewrite §8) — BriefingSection 이 마운트한다.
       surfaces: [DashboardTabsSection],
@@ -317,34 +354,23 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     },
 
     // 기능. AiCapabilityCatalog(W2) 는 ai_enabled 와 무관하게 항상 렌더된다 — 꺼져 있어도
-    // "이런 게 있구나"를 알아야 한다(PLAN-2026-08-30 §2-4). 켜져 있으면 아래 카드가 AI 프리셋
-    // 페이지로 가는 버튼과 "노트북 재편 (AI)" 를 준다(편집면은 AI 프리셋 페이지 한 곳).
+    // "이런 게 있구나"를 알아야 한다(PLAN-2026-08-30 §2-4). 켜져 있으면 아래에 "노트북 재편 (AI)" 카드(AiActionsCard)가 붙고,
+    // 맨 아래에 AI 프리셋(커스텀 프롬프트) 편집면이 온다 — AI 프리셋은 별도 페이지가 아니다.
     {
       id: "ai_features",
       scope: "notebook",
       label: t("settings.page_ai_features"),
       group: "ai",
       icon: <IconWrench size={12} strokeWidth={2} />,
-      surfaces: [AiCapabilityCatalog, AiActionsCard],
+      surfaces: [AiCapabilityCatalog, AiActionsCard, AiPresetsSection],
       render: () => (
         <>
           <AiCapabilityCatalog onNavigate={handleSelectPage} />
-          {aiEnabled && <AiActionsCard onNavigate={handleSelectPage} />}
+          {aiEnabled && <AiActionsCard />}
+          {/* AI 프리셋(커스텀 프롬프트)은 별도 페이지가 아니라 기능 페이지 맨 아래(2026-10-28, 오너). */}
+          <AiPresetsSection />
         </>
       ),
-    },
-
-    // AI 프리셋(2026-09-27 신설, 오너). 기능 페이지 바로 뒤 — 거기 카드의 버튼이 이 페이지로 온다.
-    // aiEnabled 와 무관하게 늘 보인다(AiPresetsSection 헤더 주석). 브라우저 모드 목록
-    // (BROWSER_SETTINGS_PAGES)에는 다른 AI 페이지처럼 넣지 않는다.
-    {
-      id: "ai_presets",
-      scope: "app",
-      label: t("settings.page_ai_presets"),
-      group: "ai",
-      icon: <IconBookmark size={12} strokeWidth={2} />,
-      surfaces: [AiPresetsSection],
-      render: () => <AiPresetsSection onNavigate={handleSelectPage} />,
     },
 
     // 채팅 (PLAN-2026-09-01 §1 신설 — 사용자 이름 · 기억 · 자동 추출 스위치)
@@ -365,7 +391,8 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       label: t("settings.data_management"),
       group: "system",
       icon: <IconArchive size={12} strokeWidth={2} />,
-      // 히어로·첨부 저장·데이터 이동·위험 작업(개발 빌드면 테스트 DB)까지 DataManagementSection 이 페이지째 그린다.
+      // 저장 공간 게이지·저장 및 백업·데이터 이동·위험 작업(개발 빌드면 테스트 DB)까지 DataManagementSection 이 페이지째 그린다.
+      // 첨부 저장 방식은 "첨부파일" 페이지(AttachmentsSection)로 이사했다.
       surfaces: [DataManagementSection],
       render: () => <DataManagementSection onClose={onClose} />,
     },
@@ -390,7 +417,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       group: "plugins",
       icon: <IconSmile size={12} strokeWidth={2} />,
       surfaces: [PetSection],
-      render: () => <PetSection onNavigate={handleSelectPage} />,
+      render: () => <PetSection />,
     },
 
     // 브리핑(PLAN-2026-09-30-briefing W4) — 펫 바로 아래. 브라우저 모드 목록엔 넣지 않는다(창·습관 커맨드가 데스크톱 전용).
@@ -416,7 +443,17 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   return (
     <div
       data-testid="settings-panel"
-      style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, overflow: "hidden" }}
+      // 창 전체가 **하나의 그리드**다(2026-10-27): 열 = [레일 | 본문], 행 = [맨 위 한 줄 | 나머지]. 노트북 칸·검색 줄·내비·본문이
+      // 같은 트랙을 공유해, 창 폭이 바뀌어도 검색 카드·본문 열·사이드바가 함께 움직인다(settingsLayout.css 의 .settings-column).
+      style={{
+        display: "grid",
+        gridTemplateColumns: "var(--settings-rail-w) minmax(0, 1fr)",
+        gridTemplateRows: "var(--row-chrome) minmax(0, 1fr)",
+        height: "100%",
+        minHeight: 0,
+        overflow: "hidden",
+        ...({ "--settings-sb-w": `${sbW}px` } as CSSProperties),
+      }}
     >
       {/* 맨 위 한 줄이 레일·본문 위를 가로지른다(PLAN-2026-10-24 D1) — 창 타이틀 스트립이 없는 이 창(D10 ①)의
           드래그 손잡이·닫기 X 가 여기 산다. 스크롤 컨테이너 밖이라 본문을 내려도 따라 올라가지 않는다. */}
@@ -429,13 +466,12 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
         browser={browser}
         onPick={handleSelectPage}
       />
-      <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
       <SettingsNav items={pages} activeId={activePage?.id ?? "appearance"} onSelect={handleSelectPage} />
       {/* 레일 오른쪽 칸은 메인 창의 본문 칸과 같은 관계다(GRILL-2026-10-19 R1-D): 헤더 아래에서 틴트·프레임을
           다 가진 .content-canvas(상·좌 외곽선, 좌상단 라운드, 8px 인셋 — tokens.css 클래스 그대로).
           PLAN-2026-09-15 D10 ③ "프레임을 지워 2단 분리" 는 이 결정으로 대체됐다 — 경계는 레일의
           칠·선이 아니라 본문 캔버스의 외곽선이 만든다(메인 사이드바와 같다). 되돌리지 말 것. */}
-      <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
+      <div style={{ gridColumn: 2, gridRow: 2, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
         {/* 본문은 메인 창 본문과 같은 틴트·표면 파생(.content-canvas, tokens.css)을 쓴다 — 오너 2차 QA
             "설정 본문 틴트는 본문과 동기화". overflow 만 인라인으로 덮는다(클래스는 hidden — 여기는
             스크롤 컨테이너다). 스크롤바 자리는 늘 비워 둔다 — 길고 짧은 페이지를 오갈 때 본문 폭이
@@ -451,11 +487,11 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
               프래그먼트의 직계 자식으로 내놓아야 한다(바깥 div 로 감싸면 gap 이 안 먹는다). */}
           <div
             data-testid="settings-page-body"
+            className="settings-column"
             style={{
-              maxWidth: 960,
-              margin: "0 auto",
-              // 위쪽도 좌우와 같은 인셋.
-              padding: "var(--space-8)",
+              // 위쪽도 좌우와 같은 인셋. 열의 폭·좌우 안쪽 여백은 .settings-column 이 쥔다(위 검색 줄과 공유).
+              paddingTop: "var(--space-8)",
+              paddingBottom: "var(--space-8)",
               display: "flex",
               flexDirection: "column",
               gap: "var(--space-7)",
@@ -468,7 +504,6 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             </SettingsAnchorContext.Provider>
           </div>
         </div>
-      </div>
       </div>
       {/* PLAN-2026-08-30 §4 W7 — 단일 마운트 지점. 트리거 지점(위 페이지들)이 여럿이어도 모달은
           여기 하나뿐이다(useFeatureBriefStore 로 연결) — activeId 가 없으면 스스로 null을 그린다. */}

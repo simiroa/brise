@@ -1,3 +1,4 @@
+import { withExportDir } from "./exportDir";
 import { call, callSilent, emitNotice, flushAll } from "./invoke";
 import { useNotesStore, isNoteContentLocked } from "../stores/notes";
 import { useSettingsStore } from "../stores/settings";
@@ -50,7 +51,7 @@ export async function exportNote(id: string, noteTitle: string): Promise<boolean
 
     const { save } = await import("@tauri-apps/plugin-dialog");
     const dest = await save({
-      defaultPath: `${slug}.md`,
+      defaultPath: withExportDir(`${slug}.md`),
       filters: [{ name: "Markdown", extensions: ["md"] }],
     });
     if (!dest) return false;
@@ -358,7 +359,7 @@ export async function exportSectionMd(id: string, sectionName: string): Promise<
     const slug = (sectionName.trim() || "section").replace(/[\\/:*?"<>|]/g, "_");
     const { save } = await import("@tauri-apps/plugin-dialog");
     const dest = await save({
-      defaultPath: `${slug}.md`,
+      defaultPath: withExportDir(`${slug}.md`),
       filters: [{ name: "Markdown", extensions: ["md"] }],
     });
     if (!dest) return false;

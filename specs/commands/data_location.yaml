@@ -69,3 +69,13 @@ commands:
       그 틈에 들어온 쓰기가 스냅샷 뒤에 일어나 재시작 후 사라지기 때문. 그래서 이 커맨드는
       **성공하면 호출부의 Promise 가 영원히 resolve 되지 않는다**(창이 다시 뜨는 게 응답이다) —
       프런트는 성공 시 응답을 기다리지 않고, 실패(reject)만 잡아 에러를 보여준다.
+
+  data_subdir_open:
+    http: false   # 서버 머신의 OS 파일 탐색기를 여는 명령 — data_dir_open 과 같은 급(원격 클라이언트엔 의미 없음).
+    input: { kind: string }   # "data" | "attachments" | "backups"
+    output: { ok: boolean }
+    errors: [VALIDATION, IO]
+    notes: |
+      PLAN-2026-10-27 일반 > 폴더 바로가기. 포인터로 옮겨진 위치(db::attachments_dir / backups_dir)를 그대로 따라가
+      탐색기로 연다(data_dir_open 과 같은 opener 패턴). 모르는 kind 는 VALIDATION. 폴더가 아직 없으면 먼저 만든다
+      (백업을 한 번도 안 한 새 설치에서 열기가 실패하지 않게).

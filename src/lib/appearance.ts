@@ -1,6 +1,8 @@
 import { clamp } from "./ui";
 import { isBrowser } from "./env";
 import { call } from "./invoke";
+import { fontStack, needsLoader, DEFAULT_FONT_MONO } from "./fonts/stacks";
+import { reportFallback } from "./diag";
 import {
   DEFAULT_ACCENT,
   alphaForContrast,
@@ -43,6 +45,10 @@ export interface ApplyCssVarsInput {
   surfaceEffectApplied: boolean;
   sheetAlpha: number;
   fontFamily?: string;
+  /** PLAN-2026-10-27-fonts Q2/Q3 — 노트 본문 글꼴(빈 값/결측 = fontFamily 를 따름)과 코드체(결측 = Source Code Pro).
+   *  선택인 이유는 fontFamily 와 같다(구 시드에는 없다). */
+  fontEditor?: string;
+  fontMono?: string;
   /** PLAN-2026-09-12 §5 — 본문 캔버스 틴트의 **부호 있는 오프셋**(-30~40). 선택적인 이유는
    *  `applySavedAppearanceSeed` 가 시드(AppearanceSeed)를 그대로 넘기는데 시드에는 이 필드가
    *  없기 때문이다 — 결측이면 0(= tokens.css 의 기준값 그대로)으로 읽고, 곧이어 `load()` 가
@@ -195,6 +201,9 @@ export interface AppearanceSeed {
   surfaceStyle: SurfaceStyle;
   sheetAlpha: number;
   fontFamily: string;
+  /** PLAN-2026-10-27-fonts — 첫 페인트에 본문·코드체 글꼴도 맞춘다. 구 시드엔 없다(결측 = 기본값). */
+  fontEditor?: string;
+  fontMono?: string;
   /** W15: 지난 부팅에서 syncWindowEffect 가 실제로 돌려준 결과(추측이 아니라 실측) —
    *  stores/settings.ts::applySurfaceEffectAfterShow/setSurfaceStyle/setTheme 가 OS 호출
    *  결과를 얻을 때마다 이 필드까지 함께 저장한다. surfaceStyle이 "flat"이면 의미 없음(항상
@@ -281,6 +290,12 @@ export function loadAppearanceSeed(): AppearanceSeed {
       typeof parsed.fontFamily === "string" && parsed.fontFamily.trim().length > 0 && parsed.fontFamily.length <= 128
         ? parsed.fontFamily
         : DEFAULT_APPEARANCE_SEED.fontFamily;
+    const fontEditor =
+      typeof parsed.fontEditor === "string" && parsed.fontEditor.length <= 128 ? parsed.fontEditor : "";
+    const fontMono =
+      typeof parsed.fontMono === "string" && parsed.fontMono.trim().length > 0 && parsed.fontMono.length <= 128
+        ? parsed.fontMono
+        : DEFAULT_FONT_MONO;
     // 구 시드(이 필드 추가 이전 저장분)는 결측 -> 기본값(true)으로 읽는다. 딱 한 번, 다음
     // applySurfaceEffectAfterShow 가 실측값으로 되돌려 놓는다 — 회귀 아님(위 인터페이스 주석).
     const surfaceEffectApplied =
@@ -299,6 +314,8 @@ export function loadAppearanceSeed(): AppearanceSeed {
       surfaceStyle,
       sheetAlpha,
       fontFamily,
+      fontEditor,
+      fontMono,
       surfaceEffectApplied,
     };
   } catch {
@@ -324,6 +341,8 @@ export function saveAppearanceSeed(
       surfaceStyle: seed.surfaceStyle ?? DEFAULT_APPEARANCE_SEED.surfaceStyle,
       sheetAlpha: seed.sheetAlpha ?? DEFAULT_APPEARANCE_SEED.sheetAlpha,
       fontFamily: seed.fontFamily ?? DEFAULT_APPEARANCE_SEED.fontFamily,
+      fontEditor: seed.fontEditor ?? "",
+      fontMono: seed.fontMono ?? DEFAULT_FONT_MONO,
       surfaceEffectApplied: seed.surfaceEffectApplied ?? DEFAULT_APPEARANCE_SEED.surfaceEffectApplied,
     };
     payload.themeHex = themeColorFor(payload.accent, payload.theme);
@@ -631,18 +650,21 @@ export const applyCssVars = (s: ApplyCssVarsInput) => {
   // --font-editor 를 쓰는데 그 값이 :root 에 고정돼 있었기 때문이다. 기본값(serif)에서는 두
   // 스택이 같아 티가 안 나서 오래 묻혀 있었다. 설정 라벨이 그냥 "글꼴"이므로 본문까지 바뀌는 게
   // 맞다. 굵기 사다리는 두 스택 모두 400/600 만 쓰므로(CLAUDE.md 함정 10) 영향 없다.
-  const fontFam = s.fontFamily ?? "pretendard";
-  const stack =
-    fontFam === "pretendard"
-      ? '"Pretendard", "Source Sans 3", system-ui, sans-serif'
-      : fontFam === "serif"
-        ? '"Source Serif 4", "Noto Serif KR", serif'
-        : fontFam === "sans"
-          ? '"Source Sans 3", "Noto Sans KR", system-ui, sans-serif'
-          : // ponytail: 시스템 글꼴명 직접 입력까지만. ttf/otf 파일 임포트는 이걸로 부족하다는 실사용 피드백이 오면
-            `"${fontFam}", "Pretendard", system-ui, sans-serif`;
-  root.style.setProperty("--font-body", stack);
-  root.style.setProperty("--font-editor", stack);
+  //
+  // PLAN-2026-10-27-fonts Q2: 노트 본문 글꼴(fontEditor)이 따로 있으면 --font-editor 만 그걸로 — 비어 있으면
+  // 위 결정대로 앱 화면 글꼴을 따른다(기존 사용자는 화면 그대로). Q3: 코드체(--font-mono)도 여기서.
+  // 스택 규칙은 lib/fonts/stacks.ts 한 곳.
+  const body = fontStack(s.fontFamily ?? "pretendard", "text");
+  root.style.setProperty("--font-body", body);
+  root.style.setProperty("--font-editor", s.fontEditor ? fontStack(s.fontEditor, "text") : body);
+  root.style.setProperty("--font-mono", fontStack(s.fontMono ?? DEFAULT_FONT_MONO, "mono"));
+  const lazy = [s.fontFamily, s.fontEditor, s.fontMono].filter(needsLoader);
+  if (lazy.length > 0) {
+    // 지연 로더 — 카탈로그·Paper Mono 파일을 부팅 번들 밖에 둔다. 실패해도 스택 끝 번들 글꼴로 그려진다.
+    void import("./fonts/loader")
+      .then((m) => m.loadFonts(lazy))
+      .catch((e: unknown) => reportFallback("fonts", "loader_import_failed", e instanceof Error ? e.message : String(e)));
+  }
 };
 
 let systemThemeListenerAttached = false;

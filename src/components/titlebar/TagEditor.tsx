@@ -392,6 +392,7 @@ export function TagEditor({
         <button
           type="button"
           className="tag-btn tb-quiet-chip"
+          data-empty="true"
           onClick={() => setAddingTag(true)}
           style={{
             flex: "none",

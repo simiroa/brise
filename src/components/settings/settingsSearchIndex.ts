@@ -33,9 +33,12 @@ const KW_AI = "settings.search_kw_ai";
 
 export const SETTINGS_SEARCH_INDEX: readonly SettingsSearchEntry[] = [
   // ── 페이지 자체(앵커 없음 — 페이지만 연다) ──
-  { page: "general", labelKey: "settings.page_general" },
+  // 알림 카드(NotificationsCard)는 일반 페이지로 옮겨 왔다(42c622d7) — "알림" 동의어는 일반에 붙는다. "달력 및 일정"
+  // (notifications) 페이지엔 알림 설정이 없다(주 시작·공휴일·기념일·반복 일정 표뿐).
+  { page: "general", labelKey: "settings.page_general", keywordKeys: [KW_NOTIFY] },
   { page: "editor", labelKey: "settings.page_editor" },
-  { page: "notifications", labelKey: "settings.page_notifications", keywordKeys: [KW_NOTIFY] },
+  { page: "attachments", labelKey: "settings.page_attachments" },
+  { page: "notifications", labelKey: "settings.page_notifications" },
   { page: "appearance", labelKey: "settings.appearance", keywordKeys: [KW_THEME] },
   { page: "view", labelKey: "settings.page_view" },
   { page: "dashboard", labelKey: "settings.page_dashboard" },
@@ -44,7 +47,7 @@ export const SETTINGS_SEARCH_INDEX: readonly SettingsSearchEntry[] = [
   { page: "ai", labelKey: "settings.page_ai", keywordKeys: [KW_AI] },
   { page: "ai_permissions", labelKey: "settings.page_ai_permissions" },
   { page: "ai_features", labelKey: "settings.page_ai_features" },
-  { page: "ai_presets", labelKey: "settings.page_ai_presets" },
+  { page: "ai_features", anchor: "ai_presets", labelKey: "settings.page_ai_presets" },
   { page: "ai_chat", labelKey: "settings.page_ai_chat" },
   { page: "data", labelKey: "settings.data_management", keywordKeys: [KW_BACKUP] },
   { page: "license", labelKey: "settings.page_license" },
@@ -64,10 +67,13 @@ export const SETTINGS_SEARCH_INDEX: readonly SettingsSearchEntry[] = [
   // ── 에디터 ──
   { page: "editor", anchor: "date_nudge_mode", labelKey: "settings.date_nudge_mode_label", groupKey: "settings.editor_auto_suggest_group" },
   { page: "editor", anchor: "region_nudge_mode", labelKey: "settings.region_nudge_mode_label", groupKey: "settings.editor_auto_suggest_group" },
-  { page: "editor", anchor: "original_policy", labelKey: "settings.original_policy", groupKey: "settings.editor_paste_drop_group" },
-  { page: "editor", anchor: "paste_link_nudge", labelKey: "settings.paste_link_nudge_label", groupKey: "settings.editor_paste_drop_group" },
-  { page: "editor", anchor: "paste_path_inline_code", labelKey: "settings.paste_path_inline_code_label", groupKey: "settings.editor_paste_drop_group" },
-  { page: "editor", anchor: "paste_table_sheet_suggest", labelKey: "settings.paste_table_sheet_suggest_label", groupKey: "settings.editor_paste_drop_group" },
+  { page: "attachments", anchor: "original_policy", labelKey: "settings.original_policy", groupKey: "settings.editor_paste_drop_group" },
+  { page: "attachments", anchor: "gallery_tile_size", labelKey: "settings.gallery_tile_size", groupKey: "settings.gallery_options" },
+  { page: "attachments", anchor: "gallery_sort", labelKey: "settings.gallery_sort", groupKey: "settings.gallery_options" },
+  { page: "attachments", anchor: "gallery_show_names", labelKey: "settings.gallery_show_names", groupKey: "settings.gallery_options" },
+  { page: "attachments", anchor: "paste_link_nudge", labelKey: "settings.paste_link_nudge_label", groupKey: "settings.editor_paste_drop_group" },
+  { page: "attachments", anchor: "paste_path_inline_code", labelKey: "settings.paste_path_inline_code_label", groupKey: "settings.editor_paste_drop_group" },
+  { page: "attachments", anchor: "paste_table_sheet_suggest", labelKey: "settings.paste_table_sheet_suggest_label", groupKey: "settings.editor_paste_drop_group" },
   { page: "editor", anchor: "editor_md_autoformat", labelKey: "settings.editor_md_autoformat_label", groupKey: "settings.editor_input_group" },
   { page: "editor", anchor: "link_open_on_click", labelKey: "settings.link_open_on_click_label", groupKey: "settings.editor_input_group" },
   { page: "editor", anchor: "new_note_date_precision", labelKey: "settings.new_note_date_precision_label", groupKey: "settings.editor_new_note_group" },
@@ -79,11 +85,16 @@ export const SETTINGS_SEARCH_INDEX: readonly SettingsSearchEntry[] = [
 
   // ── 알림 및 일정 ──
   { page: "notifications", anchor: "week_start", labelKey: "settings.week_start", groupKey: "settings.view_calendar_section" },
+  { page: "notifications", anchor: "calendar_axis_tail_hours", labelKey: "settings.calendar_axis_tail", groupKey: "settings.view_calendar_section" },
   { page: "notifications", anchor: "holiday_region", labelKey: "settings.holiday_region", groupKey: "settings.view_calendar_section" },
   { page: "notifications", anchor: "day_marks", labelKey: "dayMarks.section" },
   { page: "notifications", anchor: "routines", labelKey: "settings.timeline_routine_section", requires: "desktop" },
-  { page: "notifications", anchor: "notifications_enabled", labelKey: "settings.notifications_enabled", groupKey: "settings.notifications_group", keywordKeys: [KW_NOTIFY] },
-  { page: "notifications", anchor: "notifications_all_day_at", labelKey: "settings.notifications_all_day_at", groupKey: "settings.notifications_group" },
+  { page: "general", anchor: "notifications_enabled", labelKey: "settings.notifications_enabled", groupKey: "settings.notifications_group", keywordKeys: [KW_NOTIFY] },
+  { page: "general", anchor: "folder_data", labelKey: "settings.folder_data", groupKey: "settings.folder_shortcuts", requires: "desktop" },
+  { page: "general", anchor: "folder_attachments", labelKey: "settings.folder_attachments", groupKey: "settings.folder_shortcuts", requires: "desktop" },
+  { page: "general", anchor: "folder_backups", labelKey: "settings.folder_backups", groupKey: "settings.folder_shortcuts", requires: "desktop" },
+  { page: "general", anchor: "export_default_dir", labelKey: "settings.export_default_dir", groupKey: "settings.folder_shortcuts", requires: "desktop" },
+  { page: "general", anchor: "notifications_all_day_at", labelKey: "settings.notifications_all_day_at", groupKey: "settings.notifications_group" },
 
   // ── 모양 ──
   { page: "appearance", anchor: "theme", labelKey: "settings.theme", groupKey: "settings.appearance_group_theme", keywordKeys: [KW_THEME] },
@@ -95,6 +106,8 @@ export const SETTINGS_SEARCH_INDEX: readonly SettingsSearchEntry[] = [
   { page: "appearance", anchor: "theme_export", labelKey: "settings.theme_export", groupKey: "settings.appearance_group_theme", requires: "desktop" },
   { page: "appearance", anchor: "theme_reset", labelKey: "settings.theme_reset", groupKey: "settings.appearance_group_theme", requires: "desktop" },
   { page: "appearance", anchor: "font_family", labelKey: "settings.font_family", groupKey: "settings.appearance_group_font", keywordKeys: [KW_FONT] },
+  { page: "appearance", anchor: "font_editor", labelKey: "settings.font_editor", groupKey: "settings.appearance_group_font", keywordKeys: [KW_FONT] },
+  { page: "appearance", anchor: "font_mono", labelKey: "settings.font_mono", groupKey: "settings.appearance_group_font", keywordKeys: [KW_FONT] },
   { page: "appearance", anchor: "font_scale", labelKey: "settings.font_scale", groupKey: "settings.appearance_group_font", keywordKeys: [KW_FONT] },
   { page: "appearance", anchor: "bg_brightness", labelKey: "settings.bg_brightness", groupKey: "settings.appearance_group_font" },
   { page: "appearance", anchor: "bg_saturation", labelKey: "settings.bg_saturation", groupKey: "settings.appearance_group_font" },
@@ -107,10 +120,17 @@ export const SETTINGS_SEARCH_INDEX: readonly SettingsSearchEntry[] = [
   // ── 대시보드 ──
   { page: "dashboard", anchor: "dashboard_tabs", labelKey: "settings.dashboard_top_tabs" },
   { page: "dashboard", anchor: "status_add_locked", labelKey: "settings.status_add_locked", groupKey: "home.tab_board" },
+  { page: "dashboard", anchor: "timeline_default_range", labelKey: "settings.timeline_default_range", groupKey: "home.tab_timeline" },
+  { page: "dashboard", anchor: "board_done_autohide", labelKey: "settings.board_done_autohide", groupKey: "home.tab_board" },
+  { page: "dashboard", anchor: "board_card_thumb", labelKey: "settings.board_card_thumb", groupKey: "home.tab_board" },
+  { page: "dashboard", anchor: "board_card_date", labelKey: "settings.board_card_date", groupKey: "home.tab_board" },
+  { page: "dashboard", anchor: "graph_hide_isolated", labelKey: "settings.graph_hide_isolated", groupKey: "home.tab_graph" },
+  { page: "dashboard", anchor: "graph_node_cap", labelKey: "settings.graph_node_cap", groupKey: "home.tab_graph" },
 
   // ── 수집 ──
   { page: "collect", anchor: "collect_enabled", labelKey: "settings.collect_enabled_label" },
   { page: "collect", anchor: "sources", labelKey: "settings.collect_sources_title" },
+  { page: "collect", anchor: "collect_history", labelKey: "settings.collect_history" },
   { page: "collect", anchor: "add", labelKey: "settings.collect_add_source", groupKey: "settings.collect_sources_title" },
   { page: "collect", anchor: "detect", labelKey: "settings.collect_detect_btn", groupKey: "settings.collect_sources_title" },
   { page: "collect", anchor: "excluded_domains", labelKey: "settings.collect_excluded_section" },
@@ -152,12 +172,13 @@ export const SETTINGS_SEARCH_INDEX: readonly SettingsSearchEntry[] = [
   { page: "ai_chat", anchor: "ai_chat_memory", labelKey: "aiCapabilities.ai_chat_memory_name", groupKey: "settings.chat_memory_title" },
 
   // ── 데이터 관리 ──
-  { page: "data", anchor: "attachment_storage_mode", labelKey: "settings.attachment_storage_mode", groupKey: "settings.attachment_storage_section" },
-  { page: "data", anchor: "slide_preview", labelKey: "settings.slide_preview", groupKey: "settings.attachment_storage_section" },
-  { page: "data", anchor: "soffice_path", labelKey: "settings.soffice_path", groupKey: "settings.attachment_storage_section" },
+  { page: "attachments", anchor: "attachment_storage_mode", labelKey: "settings.attachment_storage_mode", groupKey: "settings.attachment_storage_section" },
+  { page: "attachments", anchor: "slide_preview", labelKey: "settings.slide_preview", groupKey: "settings.attachment_storage_section" },
+  { page: "attachments", anchor: "soffice_path", labelKey: "settings.soffice_path", groupKey: "settings.attachment_storage_section" },
   { page: "data", anchor: "storage_backup", labelKey: "settings.storage_backup_group", keywordKeys: [KW_BACKUP] },
   { page: "data", anchor: "data_location", labelKey: "settings.data_location_row", groupKey: "settings.storage_backup_group" },
   { page: "data", anchor: "backup_auto", labelKey: "settings.backup_auto", groupKey: "settings.storage_backup_group", keywordKeys: [KW_BACKUP] },
+  { page: "data", anchor: "storage_alert_gb", labelKey: "settings.storage_alert_label", groupKey: "settings.storage_backup_group" },
   { page: "data", anchor: "export_notebook", labelKey: "settings.export_notebook", groupKey: "settings.transfer_tile" },
   { page: "data", labelKey: "settings.import_notebook", groupKey: "settings.transfer_tile" },
   { page: "data", anchor: "danger_zone", labelKey: "settings.danger_zone", requires: "desktop" },
@@ -187,5 +208,5 @@ export const SETTINGS_SEARCH_INDEX: readonly SettingsSearchEntry[] = [
   { page: "briefing", anchor: "phrase_pack_active", labelKey: "settings.phrase_pack_active", groupKey: "settings.phrase_packs" },
   { page: "briefing", anchor: "habits", labelKey: "settings.briefing_habits_section" },
   { page: "briefing", anchor: "habits_add", labelKey: "settings.briefing_habit_add", groupKey: "settings.briefing_habits_section" },
-  { page: "briefing", anchor: "routines", labelKey: "settings.timeline_routine_section" },
+  // 반복 일정 표(routines)는 4d7e87e5 로 브리핑 페이지에서 빠졌다 — 지금은 "달력 및 일정"(notifications) 페이지에 산다.
 ];

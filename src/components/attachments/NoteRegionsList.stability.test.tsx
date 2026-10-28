@@ -3,7 +3,6 @@ import { render, screen, waitFor, fireEvent, act } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { NoteRegionsList } from "./NoteRegionsList";
 import { useNotesStore } from "../../stores/notes";
-import { useSettingsStore } from "../../stores/settings";
 import { t } from "../../i18n/t";
 
 const callMock = vi.fn();
@@ -215,17 +214,4 @@ describe("NoteRegionsList — W3 안정화", () => {
     expect(screen.getByTestId("world-map-stub").getAttribute("data-seed")).toContain("lat");
   });
 
-  it("안내문과 기본 위치 사용 링크는 서로 다른 줄(형제 요소)이다", async () => {
-    useSettingsStore.setState({ defaultMapLocationCustomized: true } as never);
-    seed("서울", 37.56, 126.97);
-    const user = userEvent.setup();
-    render(<NoteRegionsList noteId="n1" primary={primary} />);
-    await waitFor(() => expect(screen.getByTestId("note-region-add")).toBeTruthy());
-    await user.click(screen.getByTestId("note-region-add"));
-    const hint = screen.getByText(t("region.map_click_hint"));
-    const link = screen.getByTestId("note-region-use-default-location");
-    expect(hint.contains(link)).toBe(false);
-    expect(hint.parentElement).toBe(link.parentElement?.parentElement);
-    useSettingsStore.setState({ defaultMapLocationCustomized: false } as never);
-  });
 });

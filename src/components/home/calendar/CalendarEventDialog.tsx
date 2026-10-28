@@ -11,6 +11,7 @@ import { t } from "../../../i18n/t";
 import { CreatePopover } from "../CreatePopover";
 import { CreateRangePopover, type CreateRangePopoverProps } from "./CreateRangePopover";
 import { orderIsoRange, parseIsoDay } from "../calendarLayout";
+import { addDaysIso } from "../dateFmt";
 
 /** AI schedule proposal for a right-clicked calendar day (Wave 3 L2). */
 export type CalendarScheduleProposal = {
@@ -19,17 +20,8 @@ export type CalendarScheduleProposal = {
   end: string;
 };
 
-/** Inclusive day arithmetic on YYYY-MM-DD (UTC calendar dates). */
-export function addDaysIso(iso: string, days: number): string | null {
-  const p = parseIsoDay(iso);
-  if (!p) return null;
-  const d = new Date(Date.UTC(p.year, p.month - 1, p.day));
-  d.setUTCDate(d.getUTCDate() + days);
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
+// 날짜 더하기의 구현은 ../dateFmt 한 곳 — 기존 import 경로(CalendarTab 재수출)를 위해 여기서도 내보낸다.
+export { addDaysIso };
 
 function isoFromYmd(year: unknown, month: unknown, day: unknown): string | null {
   if (typeof year !== "number" || typeof month !== "number" || typeof day !== "number") return null;

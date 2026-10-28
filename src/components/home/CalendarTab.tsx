@@ -95,6 +95,8 @@ export function CalendarTab() {
     setYearScroll({ year, month0, align, seq: yearScrollSeq.current });
   }, []);
   const [items, setItems] = useState<CalendarItem[]>([]);
+  const [itemsMonth, setItemsMonth] = useState<{ year: number; month: number } | null>(null);
+  const monthItems = useMemo(() => (itemsMonth ? { ...itemsMonth, items } : null), [itemsMonth, items]);
   const [recordCounts, setRecordCounts] = useState<Map<string, number>>(() => new Map());
   const [loading, setLoading] = useState(false);
   // Dashboard audit P1 #3: a fetch failure used to fall into the same empty state as "genuinely
@@ -230,11 +232,14 @@ export function CalendarTab() {
         ]);
         if (cancelled) return;
         setItems(calResults.flatMap((r) => r.items));
+        // 이 items 가 **어느 달**의 것인지 함께 기억한다 — 시간축 익일 구간이 같은 달이면 이 데이터를 그대로 쓴다(DayDetailPanel.monthItems).
+        setItemsMonth(viewMode === "month" ? { year: viewYear, month: apiMonth } : null);
         setRecordCounts(new Map(Object.entries(recordCounts)));
       } catch {
         if (!cancelled) {
           setError(true);
           setItems([]);
+          setItemsMonth(null);
           setRecordCounts(new Map());
         }
       } finally {
@@ -657,6 +662,7 @@ export function CalendarTab() {
         markLabel={selectedDay ? (dayLabels.get(selectedDay) ?? null) : null}
         forecast={forecast}
         detailNotes={detailNotes}
+        monthItems={monthItems}
         onOpen={onOpenNote}
         onFocus={onFocusNote}
         onCreateTimedNote={onCreateTimedNote}

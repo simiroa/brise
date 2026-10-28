@@ -1,6 +1,7 @@
 import { useId, type CSSProperties, type ReactNode } from "react";
 import { HintBadge } from "./HintBadge";
 import { anchorId } from "./settingsAnchor";
+import { row } from "./shared";
 
 interface SettingsRowProps {
   label: ReactNode;
@@ -33,13 +34,7 @@ export function SettingsRow(props: SettingsRowProps) {
   // "마지막 행"이라는 개념은 이 부품에 없다 — 카드 안 하위 그룹을 가르고 싶으면 그 그룹의
   // 컨테이너에 `borderTop: 1px solid var(--divider)` 를 준다.
   const style: CSSProperties = {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: "var(--space-5)",
-    minHeight: "calc(var(--ctrl-h-lg) + var(--space-4) * 2)",
-    boxSizing: "border-box",
-    padding: "var(--space-4) 0",
+    ...row, // 라벨 | 컨트롤 한 줄 — shared.ts 의 단일 정의
     ...(props.disabled ? { opacity: "var(--dim-disabled)" } : {}),
   };
   const reason = props.disabled ? props.disabledReason : undefined;

@@ -9,10 +9,9 @@ import { IconBell, IconStar, IconCaret, IconTrash, IconClose } from "../icons";
 import { Select, type SelectOption } from "../Select";
 import { formatDateBadgeLabel, guardTimeTyping, parseTimeInput } from "../titlebar/eventDate";
 import { bumpNoteQueryVersion } from "../../lib/noteQuery";
-import { weekdayShortLabels } from "../home/dateFmt";
+import { ByDayButtons } from "../titlebar/ByDayButtons";
 import {
   OFFSET_PRESETS,
-  WEEKDAY_CODES,
   REPEAT_OPTIONS,
   parseRruleForUi,
   buildRrule,
@@ -975,7 +974,6 @@ function RepeatFields({
   onPatch: (patch: RowSchedulePatch) => void;
 }) {
   const [repeat, setRepeat] = useState<RepeatDraft>(() => parseRruleForUi(row.rrule));
-  const weekdayLabels = weekdayShortLabels(uiLang);
   const repeatOptions: SelectOption[] = REPEAT_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }));
 
   const commit = (next: RepeatDraft) => {
@@ -1013,38 +1011,12 @@ function RepeatFields({
       )}
       {repeat.freq === "WEEKLY" && (
         <div style={{ display: "flex", gap: "var(--space-1)" }}>
-          {WEEKDAY_CODES.map((code, i) => {
-            const active = repeat.byday.includes(code);
-            return (
-              <button
-                key={code}
-                type="button"
-                data-testid={`reminder-byday-${code}`}
-                aria-pressed={active}
-                onClick={() =>
-                  commit({
-                    ...repeat,
-                    byday: active ? repeat.byday.filter((d) => d !== code) : [...repeat.byday, code],
-                  })
-                }
-                style={{
-                  // 생 26px 이 아니라 칩과 같은 토큰 — 사용자가 글꼴 배율을 올리면 칩만 커지고
-                  // 요일 버튼은 그대로 남아 줄이 어긋났다.
-                  width: "var(--ctrl-h-sm)",
-                  height: "var(--ctrl-h-sm)",
-                  padding: 0,
-                  borderRadius: "var(--radius-sm)",
-                  border: "1px solid var(--line)",
-                  background: active ? "var(--accent)" : "transparent",
-                  color: active ? "var(--on-solid)" : "var(--text)",
-                  fontSize: "var(--text-xs)",
-                  cursor: "pointer",
-                }}
-              >
-                {weekdayLabels[i]}
-              </button>
-            );
-          })}
+          <ByDayButtons
+            byday={repeat.byday}
+            onChange={(byday) => commit({ ...repeat, byday })}
+            uiLang={uiLang}
+            testIdPrefix="reminder-byday"
+          />
         </div>
       )}
       {/* 반복 종료일(UNTIL) 입력은 없다(2026-09-08 오너 결정). 네이티브 `<input type="date">` 는

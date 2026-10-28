@@ -295,30 +295,6 @@
   color: var(--text);
 }
 
-/* 즉시 툴팁 (P-2: SINGLE-SHEET ACRYLIC CONTRACT 준수 — 불투명 오버레이 표면, z-tooltip) */
-.folder-dot-tooltip {
-  padding: 3px 8px;
-  font-size: var(--text-2xs);
-  font-family: var(--font-body);
-  color: var(--text);
-  border-radius: var(--radius-sm);
-  box-shadow: 0 2px 8px color-mix(in srgb, black 25%, transparent);
-  white-space: nowrap;
-  pointer-events: none;
-  animation: folder-tooltip-in var(--dur-fast) ease-out;
-}
-
-@keyframes folder-tooltip-in {
-  from {
-    opacity: 0;
-    transform: translateY(-2px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 /* 그래프 레일의 "고립 노트" 토글 칩 (폴더 아님 — 그래프 로컬로 남는다) */
 .dashboard-legend {
   position: absolute;
@@ -441,8 +417,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .folder-dot,
-  .folder-dot svg,
-  .folder-dot-tooltip {
+  .folder-dot svg {
     transition: none;
     animation: none;
   }

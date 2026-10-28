@@ -183,7 +183,7 @@ mod tests {
             assert!(is_remote_blocked_settings_key(key), "{key} must be blocked from remote settings_set");
         }
         // 이 기기에서 실행·쓰기가 일어나는 경로 설정 — 원격이 바꾸면 코드 실행/파일 쓰기 위치가 넘어간다.
-        for key in ["soffice_path", "capture_screenshot_dir"] {
+        for key in ["soffice_path", "capture_screenshot_dir", "export_default_dir"] {
             assert!(is_remote_blocked_settings_key(key), "{key} points at this machine's filesystem and must be blocked from remote settings_set");
         }
         for key in ["theme", "ai_model", "accent", "font_scale"] {

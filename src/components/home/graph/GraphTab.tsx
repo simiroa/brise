@@ -160,6 +160,9 @@ export function GraphTab({ active = true }: { active?: boolean } = {}) {
   const [error, setError] = useState(false);
   const requestGeneration = useRef(0);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 설정 › 대시보드 › 관계: 노드 수 상한(0 = 서버 기본 500). **서버에 넘긴다** — 서버가 같은 규칙(연결 수 내림차순 → 최근순)으로 고르고
+  // capped·total 도 이 상한 기준으로 돌려준다. 예전엔 500개를 다 받아 클라에서 정렬·자르느라 IPC·직렬화를 낭비했고 배너도 틀렸다.
+  const nodeCap = useSettingsStore((s) => s.graphNodeCap);
 
   const cancelPendingClick = useCallback(() => {
     if (clickTimer.current != null) clearTimeout(clickTimer.current);
@@ -216,7 +219,10 @@ export function GraphTab({ active = true }: { active?: boolean } = {}) {
     setLoading(true);
     setError(false);
     try {
-      const next = await call<DashboardGraphResult>("dashboard_graph", { workspace_id: workspaceId });
+      const next = await call<DashboardGraphResult>("dashboard_graph", {
+        workspace_id: workspaceId,
+        ...(nodeCap > 0 ? { limit: nodeCap } : {}),
+      });
       if (requestGeneration.current === generation && fetchSeqRef.current === seq) setResult(next);
     } catch {
       if (requestGeneration.current === generation && fetchSeqRef.current === seq) setError(true);
@@ -226,7 +232,7 @@ export function GraphTab({ active = true }: { active?: boolean } = {}) {
     // 그래프가 실패해도 이미 쌓인 제안 행은 읽는다. 늦게 끝난 옛 요청(seq 뒤처짐)은 건너뛴다 —
     // 최신 요청이 끝나면서 어차피 다시 읽는다.
     if (requestGeneration.current === generation && fetchSeqRef.current === seq) void loadSuggestions(generation);
-  }, [loadSuggestions, workspaceId]);
+  }, [loadSuggestions, nodeCap, workspaceId]);
 
   // 연결·절단 후의 refetch 는 전부 이 디바운스를 탄다 — 레이저 한 스트로크가 엣지 N개를 자르거나
   // 연결을 연달아 만들 때 refetch 를 한 번으로 묶는다(위 latest-wins 의 1차 방어선). 즉시성이
@@ -385,10 +391,14 @@ export function GraphTab({ active = true }: { active?: boolean } = {}) {
     await loadGraph(generation);
   };
 
+  const hideIsolated = useSettingsStore((s) => s.graphHideIsolated);
   const visible = useMemo(() => {
     if (!result) return null;
     const nodes = result.nodes.filter((node) => {
       if (folderFilter && node.folder_id !== folderFilter) return false;
+      // 설정 › 대시보드 › 관계: 연결 없는 노트 숨기기. selectedId 를 이 계산에 넣지 않는다 — 선택마다 노드 배열이 새로 생겨
+      // 힘 시뮬레이션이 다시 시작된다. 연결이 없는 노트는 숨겨진 채 선택될 일이 없고, 연결을 만들면 degree 가 올라 다시 보인다.
+      if (hideIsolated && node.degree === 0) return false;
       return true;
     });
     const ids = new Set(nodes.map((node) => node.id));
@@ -397,7 +407,7 @@ export function GraphTab({ active = true }: { active?: boolean } = {}) {
       nodes,
       edges: result.edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target)),
     };
-  }, [folderFilter, result]);
+  }, [folderFilter, result, hideIsolated]);
   const selected = result?.nodes.find((node) => node.id === selectedId) ?? null;
   const neighbours = useMemo(() => {
     if (!selected || !result) return [];

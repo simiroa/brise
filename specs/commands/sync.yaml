@@ -37,7 +37,19 @@ commands:
     errors: [IO]
     notes: 실행 중이면 새 토큰으로 서버를 재기동한다(가장 단순한 반영 방법 — 껐다 켠다).
 
+  agent_skill_install:
+    http: false   # 로컬 파일시스템(홈 폴더)에 쓴다 — 원격 호출 불가. 동기화 서버 lifecycle 과 같은 데스크톱 전용 면.
+    input:  {}
+    output: AgentSkillInstall
+    errors: [IO]
+    notes: |
+      외부 에이전트(Claude Code 등)가 이 앱의 노트를 조작하도록 ~/.claude/skills/brise/SKILL.md 를 쓴다
+      (같은 이름이 있으면 덮어쓴다 — 이 파일은 앱이 소유). 앱에 번들된 cli/brise.mjs 의 절대경로와 이 앱의
+      데이터 폴더(BRISE_DATA_DIR)를 박은 MCP 등록 명령(mcp_command)을 함께 돌려준다. MCP 는 동기화 서버가
+      켜져 있어야 동작한다(docs/CLI.md §7). 노트는 SQLite 안에 있어 "노트북 폴더"는 없다.
+
 shared_types:
+  AgentSkillInstall: "{ skill_path: string, cli_path: string, mcp_command: string }"
   # qr_svg: url(토큰 포함)을 그대로 인코딩한 QR 코드 SVG 마크업 — running 일 때만 채워진다. 별도
   # 커맨드 없음(url 이 바뀌는 시점마다 결정적으로 같이 재계산, commands/sync.rs::build_qr_svg).
   # bind_stale(additive, 2026-07-30 추가): running=true 인 채로도 서버가 바인딩됐던 Tailscale

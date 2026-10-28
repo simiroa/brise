@@ -189,7 +189,7 @@ describe("GraphTab user boundaries", () => {
     fitViewMock.mockReset();
     zoomInMock.mockReset();
     zoomOutMock.mockReset();
-    useSettingsStore.setState({ activeWorkspaceId: "A", aiEnabled: false, uiLang: "ko" });
+    useSettingsStore.setState({ activeWorkspaceId: "A", aiEnabled: false, uiLang: "ko", graphNodeCap: 0 } as never);
     useNotesStore.setState({ folders: [], selectNote: vi.fn() } as never);
     useSearchStore.setState({ query: "", searchResults: [] });
     useUiStore.setState({ dashboardFolderFilter: null });
@@ -375,6 +375,54 @@ describe("GraphTab user boundaries", () => {
 
     expect(await screen.findByTestId("graph-node-note-in-f1")).toBeTruthy();
     expect(screen.queryByTestId("graph-node-note-in-f2")).toBeNull();
+  });
+
+  describe("노드 수 상한(graph_node_cap)은 서버에 넘긴다", () => {
+    const graphCalls = () => callMock.mock.calls.filter((c) => c[0] === "dashboard_graph");
+    const serve = (g: DashboardGraphResult) =>
+      callMock.mockImplementation((command: string) =>
+        Promise.resolve(command === "dashboard_graph" ? g : { suggestions: [] }),
+      );
+
+    it("상한이 있으면 limit 으로 보내고, 0(서버 기본)이면 limit 을 생략한다", async () => {
+      serve(graph("A-note"));
+      useSettingsStore.setState({ graphNodeCap: 120 } as never);
+      const first = render(<GraphTab />);
+      await screen.findByTestId("graph-node-A-note");
+      expect(graphCalls()[0][1]).toEqual({ workspace_id: "A", limit: 120 });
+      first.unmount();
+
+      callMock.mockClear();
+      useSettingsStore.setState({ graphNodeCap: 0 } as never);
+      render(<GraphTab />);
+      await screen.findByTestId("graph-node-A-note");
+      expect(graphCalls()[0][1]).toEqual({ workspace_id: "A" });
+      expect(graphCalls()[0][1]).not.toHaveProperty("limit");
+    });
+
+    it("실행 중에 상한을 바꾸면 새 limit 으로 다시 읽는다", async () => {
+      serve(graph("A-note"));
+      useSettingsStore.setState({ graphNodeCap: 0 } as never);
+      render(<GraphTab />);
+      await screen.findByTestId("graph-node-A-note");
+      expect(graphCalls()).toHaveLength(1);
+
+      act(() => {
+        useSettingsStore.setState({ graphNodeCap: 50 } as never);
+      });
+      await waitFor(() => expect(graphCalls()).toHaveLength(2));
+      expect(graphCalls()[1][1]).toEqual({ workspace_id: "A", limit: 50 });
+    });
+
+    it("서버가 고른 노드를 클라가 다시 자르지 않는다 — 상한보다 많이 와도 그대로 그리고 서버의 capped 를 따른다", async () => {
+      // 서버는 limit 을 지켜 오지만, 클라가 자체 정렬·slice 를 하던 때의 회귀(연결 많은 노드만 남기던 것)를 막는다.
+      const g = graph("A-note");
+      serve({ ...g, nodes: [...g.nodes, { id: "extra", folder_id: "f", title: "extra", year: 2026, snippet: "", degree: 0 }], total: 3 });
+      useSettingsStore.setState({ graphNodeCap: 1 } as never);
+      render(<GraphTab />);
+      expect(await screen.findByTestId("graph-node-extra")).toBeTruthy();
+      expect(screen.getByTestId("graph-node-A-note")).toBeTruthy();
+    });
   });
 
   it("renders search highlights for query hits and dims non-matches", async () => {

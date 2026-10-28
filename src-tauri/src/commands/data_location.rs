@@ -1,13 +1,14 @@
 // 커맨드: data_location — 저장 위치 조회/점검/이동 (specs/commands/data_location.yaml).
 // 전부 http:false — 서버 머신의 파일시스템에 부수효과가 있거나 로컬 경로 인자를 받는다
 // (_conventions.yaml 규칙).
-use super::AppState;
+use super::{AppState, Okay};
 use crate::db;
 use crate::error::AppError;
 use crate::repo::data_location as loc;
 use serde::Serialize;
 use std::path::Path;
 use tauri::{Manager, State};
+use tauri_plugin_opener::OpenerExt;
 
 #[derive(Serialize)]
 pub struct DataLocationGetOutput {
@@ -104,4 +105,26 @@ pub fn data_location_apply(app: tauri::AppHandle, state: State<AppState>, path: 
     loc::apply(&conn, &default_dir, &layout, Path::new(&path))?;
     // 성공: 포인터가 이미 기록됐다 — conn 락을 쥔 채로 곧장 재시작한다(never returns).
     app.restart();
+}
+
+/// 일반 > 폴더 바로가기 — kind 에 맞는 폴더를 OS 탐색기로 연다(PLAN-2026-10-27).
+/// 포인터로 옮겨진 위치를 따라가므로 `db::attachments_dir`/`backups_dir` 를 그대로 쓴다.
+#[tauri::command(rename_all = "snake_case")]
+pub fn data_subdir_open(
+    app: tauri::AppHandle,
+    state: State<AppState>,
+    kind: String,
+) -> Result<Okay, AppError> {
+    let dir = match kind.as_str() {
+        "data" => state.data_dir.clone(),
+        "attachments" => db::attachments_dir(&state.data_dir),
+        "backups" => db::backups_dir(&state.data_dir),
+        other => return Err(AppError::Validation(format!("알 수 없는 폴더 종류: {other}"))),
+    };
+    // 한 번도 쓰지 않은 폴더(새 설치의 backups 등)도 열 수 있게.
+    std::fs::create_dir_all(&dir).map_err(|e| AppError::Io(e.to_string()))?;
+    app.opener()
+        .open_path(dir.to_string_lossy().to_string(), None::<&str>)
+        .map_err(|e| AppError::Io(e.to_string()))?;
+    Ok(Okay { ok: true })
 }

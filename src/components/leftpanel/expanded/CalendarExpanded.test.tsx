@@ -114,7 +114,7 @@ describe("CalendarExpanded", () => {
     });
     noteQueryCollectMock.mockReset().mockResolvedValue({ notes: [], total: 0 });
     noteRecordHistogramMock.mockReset().mockResolvedValue({ [CURRENT_MONTH_15]: 3 });
-    useSettingsStore.setState({ activeWorkspaceId: "ws1" });
+    useSettingsStore.setState({ activeWorkspaceId: "ws1", calendarAxisTailHours: 0 });
     useNotesStore.setState({
       activeNote: null,
       inboxId: "inbox1",

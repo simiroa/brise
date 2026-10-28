@@ -1,0 +1,15 @@
+# cargo audit 예외 — "검토했고 우리 빌드에 해당하지 않는다"는 기록이다. 근거가 사라지면 지운다.
+# cargo-audit 은 이 파일을 **실행한 폴더**의 .cargo/audit.toml 에서만 읽는다 → src-tauri 에서 실행할 것
+# (루트에서 --file src-tauri/Cargo.lock 으로 돌리면 이 파일을 무시한다, 2026-10-27 실측).
+# 다시 볼 때: xcap·tauri 를 올릴 때마다 이 목록을 비우고 `cargo audit` 을 돌려 본다.
+[advisories]
+ignore = [
+  # quick-xml 0.30.0 — xcap → xcb 의 build-dependency. xcap 은 cfg(windows) 로만 쓰고 xcb 는 xcap 의
+  # 리눅스 의존성이라, 어느 대상에서도 컴파일되지 않는다(Cargo.lock 에만 있음).
+  # 해소 조건: xcb 가 quick-xml >=0.41 로 올리거나 xcap 을 걷어낼 때.
+  "RUSTSEC-2026-0194", # 시작 태그 중복 속성 검사의 이차 시간
+  "RUSTSEC-2026-0195", # NsReader 네임스페이스 선언 무제한 할당
+  # glib 0.18.5 (unsound) — tauri → tray-icon/gtk 경유, 리눅스 GTK 백엔드 전용. 윈도우·맥 빌드엔 없고
+  # 우리 코드는 glib::VariantStrIter 를 쓰지 않는다. 해소 조건: tauri 가 gtk-rs 0.20+ 로 올릴 때.
+  "RUSTSEC-2024-0429",
+]

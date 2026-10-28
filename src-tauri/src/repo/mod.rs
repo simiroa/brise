@@ -13,6 +13,7 @@ pub mod data_location;
 pub mod doc_export;
 pub mod doc_import;
 pub mod emoji;
+pub mod fonts;
 pub mod extraction;
 pub mod folders;
 pub mod fts;

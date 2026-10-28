@@ -59,9 +59,6 @@
 .brf-nav-rel { font-size: var(--text-sm); color: var(--accent-text); }
 .brf-nav-today { margin-left: var(--space-2); min-height: var(--ctrl-h); padding: 0 var(--space-4); font-size: var(--text-sm); }
 .brf-nav-add { margin-left: auto; min-height: var(--ctrl-h); padding: 0 var(--space-4); font-size: var(--text-sm); }
-.brf-hourly { display: flex; gap: var(--space-5); flex: none; overflow: hidden; font-size: var(--text-xs); color: var(--text-muted); font-variant-numeric: tabular-nums; }
-.brf-hourly-cell { display: inline-flex; align-items: center; gap: var(--space-1); }
-.brf-hourly-h { color: var(--text-tertiary); }
 .brf-draft { display: flex; align-items: center; gap: var(--space-3); flex: none; padding: var(--space-2) var(--space-3); border: 1px dashed var(--accent); border-radius: var(--radius-sm); }
 .brf-draft-range { font-size: var(--text-sm); color: var(--accent-text); font-variant-numeric: tabular-nums; flex: none; }
 .brf-draft-input { flex: 1 1 auto; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--text-md); outline: none; }

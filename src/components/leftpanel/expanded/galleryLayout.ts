@@ -14,11 +14,17 @@ export const GALLERY_MIN_TILE = 56;
 
 /** 폭 기반 열 수: 타일이 GALLERY_MIN_TILE 아래로 내려가지 않는 한 최대한 많이(바닥 GALLERY_MIN_COLS).
  *  폭을 아직 모르면(0) 기본 4열. */
-export function galleryColumnCount(listWidth: number): number {
-  if (!(listWidth > 0)) return GALLERY_COLS;
-  const net = listWidth - 2 * GALLERY_SIDEBAR_PAD;
-  const fit = Math.floor((net + GALLERY_GAP) / (GALLERY_MIN_TILE + GALLERY_GAP));
-  return Math.max(GALLERY_MIN_COLS, fit);
+export function galleryColumnCount(listWidth: number, size: "small" | "medium" | "large" = "medium"): number {
+  const base = (() => {
+    if (!(listWidth > 0)) return GALLERY_COLS;
+    const net = listWidth - 2 * GALLERY_SIDEBAR_PAD;
+    const fit = Math.floor((net + GALLERY_GAP) / (GALLERY_MIN_TILE + GALLERY_GAP));
+    return Math.max(GALLERY_MIN_COLS, fit);
+  })();
+  // 설정 › 첨부파일의 타일 크기: 작게 = 한 열 더, 크게 = 한 열 덜(바닥 2열). 보통은 위 폭 기반 값 그대로.
+  if (size === "small") return base + 1;
+  if (size === "large") return Math.max(2, base - 1);
+  return base;
 }
 
 /** Tile width calculated from container width minus sidebar padding and column gaps. */

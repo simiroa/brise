@@ -60,7 +60,9 @@
 --     프런트 stores/search.ts. 기기 로컬(export.rs::is_device_local_setting_key)이라 내보내기
 --     번들·백업에서 제외),
 --   user_name(string, 기본 "" — W10 사용자 이름(선택, 최대 64자)),
---   font_family(string, 기본 'serif' — W11 글꼴 패밀리 ('serif'|'sans'|시스템 글꼴명)),
+--   font_family(string, 기본 'pretendard' — W11 앱 화면 글꼴 (번들 'pretendard'|'serif'|'sans' · 'catalog:<id>' 내려받기 글꼴 · 시스템 글꼴명)),
+--   font_editor(string, 기본 '' — PLAN-2026-10-27-fonts Q2 노트 본문 글꼴, 값 형식은 font_family 와 같고 '' = font_family 를 따름),
+--   font_mono(string, 기본 'source-code-pro' — Q3 코드체 ('source-code-pro'|'paper-mono'|'catalog:<id>'|시스템 글꼴명)),
 --   pet_dblclick_action('chat'|'new_note'|'off', 기본 'new_note' — W18 펫 더블클릭 반응),
 --   chat_memory(array, 기본 [] — W13 챗봇 메모리 [{ id, text, created_at }], 최대 50개),
 --   chat_write_enabled(bool, 기본 true — 비서/펫 노트 쓰기 게이트),

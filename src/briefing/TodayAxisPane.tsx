@@ -27,7 +27,6 @@ import { AxisConfirmDialog } from "../components/home/calendar/AxisConfirmDialog
 import type { ChipChecklist } from "../components/home/calendar/TimeChip";
 import { IconCaret, IconPlus } from "../components/icons";
 import type { BriefingBlockCreateOutput } from "../lib/commands.gen";
-import { weatherCodeToVisual } from "../lib/weather";
 import { dayAfter, useBriefingWeather, useDayItems } from "./hooks/useBriefingData";
 import { useRegionReady } from "./hooks/useRegionReady";
 import { bumpScheduleVersion } from "./scheduleVersion";
@@ -61,28 +60,6 @@ function insideHorizontalScroller(target: EventTarget | null, root: HTMLElement)
     el = el.parentElement;
   }
   return false;
-}
-
-/** 시간별 날씨 띠(오늘만, 3시간 간격). ponytail: §3.1 은 축의 시각 라벨 옆 열을 원했지만 그 열은 DayAxis 의
- *  스크롤러·확대 배율 안에 있다 — 슬롯 prop 이 생기기 전까지는 축 위 한 줄로 둔다. */
-function HourlyStrip({ nowHour }: { nowHour: number }) {
-  const { data } = useBriefingWeather();
-  const cells = hourlyCells(data?.hourly ?? null, nowHour);
-  if (cells.length < 2) return null;
-  return (
-    <div className="brf-hourly" data-testid="brf-hourly" aria-label={t("briefing.hourly_aria")}>
-      {cells.map((c) => {
-        const v = weatherCodeToVisual(c.code, c.tempC);
-        return (
-          <span key={c.hour} className="brf-hourly-cell">
-            <span className="brf-hourly-h">{String(c.hour).padStart(2, "0")}</span>
-            <v.Icon size={14} strokeWidth={1.8} style={{ color: v.colorVar }} aria-hidden />
-            <span>{c.tempC}°</span>
-          </span>
-        );
-      })}
-    </div>
-  );
 }
 
 /** 새 일정 제목칸 — 임시 일정(축의 점선 미리보기)과 짝. Enter = 만들기, ↑/↓ = 시작 15분, Shift+↑/↓ = 끝 15분. */
@@ -161,6 +138,22 @@ export function TodayAxisPane({
   const regionReady = useRegionReady();
   const { status, data, reload } = useDayItems(day);
   const plan = useMemo(() => planTimedDay(data?.items ?? [], day), [data, day]);
+  // 시간축 익일 구간 — 설정은 달력과 같은 값(calendar_axis_tail_hours), 데이터는 useDayItems 가 이미 읽은 다음 날의 달이다.
+  const tailHours = useSettingsStore((s) => s.calendarAxisTailHours);
+  const tailPlan = useMemo(
+    () => (tailHours > 0 && data ? planTimedDay(data.nextItems, dayAfter(day, 1)) : null),
+    [data, day, tailHours],
+  );
+  // 시간별 날씨(오늘만, 지금부터 3시간 간격) — 축의 시 눈금 라벨 아래에 얹는다. 시(時)가 바뀔 때만 새 Map 이라 HourRuler memo 가 산다.
+  const { data: weather } = useBriefingWeather();
+  const nowHour = Math.floor(nowMin / 60);
+  const hourWeather = useMemo(
+    () =>
+      regionReady && day === todayIso
+        ? new Map(hourlyCells(weather?.hourly ?? null, nowHour).map((c) => [c.hour, { code: c.code, tempC: c.tempC }]))
+        : undefined,
+    [regionReady, day, todayIso, weather, nowHour],
+  );
   const axisHandle = useRef<AxisHandle>(null);
   const rootRef = useRef<HTMLElement>(null);
   const [focusedNoteId, setFocusedNoteId] = useState<string | null>(null);
@@ -168,7 +161,7 @@ export function TodayAxisPane({
   // 종일 칩 → 축 드롭의 미리보기(DayDetailBody 와 같은 상태). 새 데이터가 오면 버린다 — 그때부터 plan 이 진실이다.
   const [dropPreview, setDropPreview] = useState<DropPreviewState | null>(null);
   useEffect(() => setDropPreview(null), [plan]);
-  const confirmFlow = useAxisConfirmFlow({ selectedDay: day, plan, setDropPreview });
+  const confirmFlow = useAxisConfirmFlow({ selectedDay: day, plan, tailHours, tailPlan, setDropPreview });
 
   // ── 새 일정 초안 ──────────────────────────────────────────────────────────────
   const [draft, setDraft] = useState<BlockDraft | null>(null);
@@ -307,7 +300,6 @@ export function TodayAxisPane({
           {t("briefing.add")}
         </button>
       </div>
-      {regionReady && day === todayIso && <HourlyStrip nowHour={Math.floor(nowMin / 60)} />}
       {draft && (
         <DraftRow
           draft={draft}
@@ -346,6 +338,9 @@ export function TodayAxisPane({
         focusedNoteId={focusedNoteId}
         searchHits={null}
         onRequestConfirm={confirmFlow.setConfirm}
+        tailHours={tailHours}
+        tailPlan={tailPlan}
+        hourWeather={hourWeather}
         routines={data?.routines ?? []}
         toolbarHint={
           <span data-testid="brf-axis-hint">

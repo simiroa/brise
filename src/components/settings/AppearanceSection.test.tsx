@@ -36,8 +36,13 @@ describe("AppearanceSection (W11 / W23-d)", () => {
     render(<AppearanceSection />);
 
     expect(screen.getAllByText("Theme").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("Font")).toBeTruthy();
+    // PLAN-2026-10-27-fonts W5 — 앱 화면 · 노트 본문 · 코드 세 줄.
+    expect(screen.getByText("App font")).toBeTruthy();
+    expect(screen.getByText("Note body font")).toBeTruthy();
+    expect(screen.getByText("Code font")).toBeTruthy();
     expect(screen.getByTestId("settings-font-family")).toBeTruthy();
+    expect(screen.getByTestId("settings-font-editor")).toBeTruthy();
+    expect(screen.getByTestId("settings-font-mono")).toBeTruthy();
     expect(screen.getByText("Font scale")).toBeTruthy();
     expect(screen.getByText("Background brightness")).toBeTruthy();
     expect(screen.getByText("Surface style")).toBeTruthy();
@@ -470,6 +475,8 @@ describe("AppearanceSection — theme presets & acrylic guard", () => {
         theme: "dark",
         accent: "#9cc5a4",
         font_family: "serif",
+        font_editor: "",
+        font_mono: "source-code-pro",
         font_scale: 1.2,
         bg_dim: 0,
         bg_tone: 0,

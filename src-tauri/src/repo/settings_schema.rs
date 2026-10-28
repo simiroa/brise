@@ -15,6 +15,9 @@ pub fn default_settings(active_workspace_id: &str) -> Vec<(&'static str, String)
         // 2026-09-09: 기본 글꼴 serif → 번들 Pretendard(오너). 시드는 키가 없을 때만 쓰이므로
         // 기존 설치는 migrations.rs::V78_SQL 이 한 번 옮긴다.
         ("font_family", "\"pretendard\"".to_string()),
+        // PLAN-2026-10-27-fonts Q2/Q3 — 노트 본문 글꼴(빈 값 = font_family 를 따름)과 코드체.
+        ("font_editor", "\"\"".to_string()),
+        ("font_mono", "\"source-code-pro\"".to_string()),
         ("bg_dim", "0".to_string()),
         ("bg_tone", "0".to_string()),
         // PLAN-2026-09-12 §3/E3: 배경 채도 슬라이더. 0 = 채도 없음 = 지금까지의 화면과 픽셀
@@ -64,6 +67,23 @@ pub fn default_settings(active_workspace_id: &str) -> Vec<(&'static str, String)
         // 진입점이 숨고 stores/taxonomy.ts::addStatus 가 IPC 를 쏘지 않는다 — 내장 3종
         // (lib/status.ts::BUILT_IN_STATUSES)과 기존 커스텀 상태의 개명·삭제는 영향받지 않는다.
         ("status_add_locked", "false".to_string()),
+        // 대시보드 탭별 설정(PLAN-2026-10-27 W3b, 2026-10-28) — 전부 앱 전역(status_add_locked 와 같은 부류).
+        // 타임라인 첫 화면 범위: fit(노트에 맞춤, 지금까지의 동작) | around_now(올해 ±1) | recent_3m | recent_1y.
+        ("timeline_default_range", "\"fit\"".to_string()),
+        // 칸반 완료 카드 자동 숨김: off | 7d | 30d (완료 열에서 updated_at 이 이보다 오래된 카드).
+        ("board_done_autohide", "\"off\"".to_string()),
+        // 칸반 카드 표시 요소 — 기본 모두 보임(지금까지의 동작).
+        ("board_card_thumb", "true".to_string()),
+        ("board_card_date", "true".to_string()),
+        // 관계 탭: 연결 없는 노트 숨기기, 노드 수 상한(0 = 서버 기본 500).
+        ("graph_hide_isolated", "false".to_string()),
+        ("graph_node_cap", "0".to_string()),
+        // 내보내기 저장 대화상자가 처음 여는 폴더(2026-10-28). 빈 문자열 = 지정 안 함(대화상자 기본).
+        ("export_default_dir", "\"\"".to_string()),
+        // 사이드패널 갤러리(설정 › 첨부파일, 2026-10-28): 타일 크기 / 정렬 / 파일 이름 상시 표시. 앱 전역.
+        ("gallery_tile_size", "\"medium\"".to_string()),
+        ("gallery_sort", "\"newest\"".to_string()),
+        ("gallery_show_names", "false".to_string()),
         ("ai_api_key", "\"\"".to_string()),
         // 프로바이더별 크리덴셜 보관함(오너: "키를 비우면 안 된다"). 활성 프로바이더의 값은 여전히
         // ai_api_key/ai_endpoint 하나뿐이고, 여기는 **비활성** 프로바이더의 키·엔드포인트를 바꿔 끼울
@@ -124,6 +144,8 @@ pub fn default_settings(active_workspace_id: &str) -> Vec<(&'static str, String)
         // 안전망이라 그대로 둔다.
         ("backup_auto_interval", "\"weekly\"".to_string()),
         ("backup_auto_keep", "3".to_string()),
+        // 앱 데이터(DB+첨부) 용량 알림 한도, GB. 0 = 끔. 프런트가 시작 시 db_stats 와 비교해 넘으면 한 번 알린다.
+        ("storage_alert_gb", "0".to_string()),
         // 동기화(beta, docs/SYNC.md 전송 준비): sync_token은 하드코딩 기본값이 아니라 첫 활성화 시
         // sync_set_enabled 커맨드가 new_id()로 생성해 이 빈 문자열 위에 덮어쓴다(빈 토큰은
         // sync_server::handlers::authorized 에서 fail-closed — 아무 요청도 통과 못함).
@@ -136,6 +158,9 @@ pub fn default_settings(active_workspace_id: &str) -> Vec<(&'static str, String)
         // CloseRequested 핸들러가 매 이벤트마다 이 값을 다시 읽는다).
         ("close_to_tray", "true".to_string()),
         ("week_start", "\"sunday\"".to_string()),
+        // 시간축 표현 범위 — 24시 아래에 이어 붙이는 익일 시간(0 = 당일만). 기본 3 = 익일 03시까지(새벽 일정이 잦은 오너 요청,
+        // 2026-10-27). 대시보드·사이드바·브리핑의 TimeAxis 가 같은 값을 읽는다.
+        ("calendar_axis_tail_hours", "3".to_string()),
         // PLAN-2026-09-15 R2 — "기준 지역 활용" 마스터 토글. 기본 ON("1"): 지금까지의 동작
         // (지도 기본 위치 → 날씨·현지시간·장소명·AI 컨텍스트)이 그대로 유지된다. 끄면 프런트의
         // 한 지점(useWeatherLocation / lib/weather.ts::savedWeatherLocation)이 위치를 안 돌려
@@ -271,7 +296,7 @@ pub fn default_settings(active_workspace_id: &str) -> Vec<(&'static str, String)
         // 브리핑 창(PLAN-2026-09-30-briefing §3). 전부 기기 전역(NOTEBOOK_KEYS 아님) — 하루 1회 자동 표시는
         // 앱 단위다. 화면 구성 키 5종(briefing_view/presets/layout/cards/options)은 브리핑 재작성으로
         // 은퇴했다(PLAN-2026-10-19-briefing-rewrite §9.1) — 아래 RETIRED_KEYS 참고.
-        ("briefing_enabled", "true".to_string()),
+        ("briefing_enabled", "false".to_string()),
         ("briefing_when", "\"time\"".to_string()),
         ("briefing_time", "\"08:00\"".to_string()),
         ("briefing_last_shown", "\"\"".to_string()),
@@ -309,10 +334,12 @@ pub fn default_settings(active_workspace_id: &str) -> Vec<(&'static str, String)
 /// "모양"(테마) 키 — 설정 › 모양 페이지가 소유하는 키 전부, 그리고 그뿐이다.
 /// 초기화·내보내기·불러오기(repo/theme.rs)가 모두 이 목록 하나를 탄다
 /// (docs/PLAN-2026-09-19-theme-presets.md §1). 모양 페이지에 새 손잡이를 달면 여기에도 넣는다.
-pub const APPEARANCE_KEYS: [&str; 10] = [
+pub const APPEARANCE_KEYS: [&str; 12] = [
     "theme",
     "accent",
     "font_family",
+    "font_editor",
+    "font_mono",
     "font_scale",
     "bg_dim",
     "bg_tone",
@@ -335,11 +362,13 @@ pub fn is_appearance_setting_key(key: &str) -> bool {
 ///
 /// ⚠️ 마이그레이션 V86 이 이 목록의 **그 시점 사본**으로 전역 값을 옮겼다. 목록에 키를 **더할** 때는
 /// 기존 전역 값이 노트북으로 넘어가지 않는다(새 마이그레이션이 필요하다) — 새로 만드는 키면 무관.
-pub const NOTEBOOK_KEYS: [&str; 47] = [
+pub const NOTEBOOK_KEYS: [&str; 50] = [
     // 모양 (= APPEARANCE_KEYS)
     "theme",
     "accent",
     "font_family",
+    "font_editor",
+    "font_mono",
     "font_scale",
     "bg_dim",
     "bg_tone",
@@ -355,6 +384,7 @@ pub const NOTEBOOK_KEYS: [&str; 47] = [
     "phrase_pack_id",
     // 달력·지역
     "week_start",
+    "calendar_axis_tail_hours",
     "holiday_region",
     "region_enabled",
     "region_nudge_enabled",
@@ -417,6 +447,17 @@ const RETIRED_KEYS: &[&str] = &[
 
 pub fn is_retired_setting_key(key: &str) -> bool {
     RETIRED_KEYS.contains(&key)
+}
+
+/// 절대 경로 판정 — OS 와 무관하게 윈도 드라이브("D:\x", "D:/x")·UNC("\\srv\share")·POSIX("/x") 형태를 모두 받는다.
+/// `Path::is_absolute` 는 현재 OS 의 문법만 봐서(리눅스 CI 에선 "D:\exports" 가 상대 경로다) 설정 값 검증에 그대로 쓰면 플랫폼마다
+/// 결과가 갈린다. 드라이브 상대("C:x")·상대 경로는 거부한다.
+fn is_absolute_path_any_os(s: &str) -> bool {
+    let b = s.as_bytes();
+    s.starts_with('/')
+        || s.starts_with("\\\\")
+        || (b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && (b[2] == b'\\' || b[2] == b'/'))
+        || std::path::Path::new(s).is_absolute()
 }
 
 /// 설정 키 검증 (settings_set). 알 수 없는 키/타입·범위 위반 시 VALIDATION.
@@ -509,6 +550,19 @@ pub fn validate_setting(key: &str, value: &serde_json::Value) -> AppResult<()> {
         "collect_chat_register" => value.is_boolean(),
         // PLAN-2026-09-01 W0 — 상태 추가 진입점 잠금(기본 OFF, default_settings 에 시드).
         "status_add_locked" => value.is_boolean(),
+        "timeline_default_range" => matches!(value.as_str(), Some("fit") | Some("around_now") | Some("recent_3m") | Some("recent_1y")),
+        "board_done_autohide" => matches!(value.as_str(), Some("off") | Some("7d") | Some("30d")),
+        "board_card_thumb" | "board_card_date" | "graph_hide_isolated" => value.is_boolean(),
+        "graph_node_cap" => value.as_i64().map(|n| (0..=500).contains(&n)).unwrap_or(false),
+        "gallery_tile_size" => matches!(value.as_str(), Some("small") | Some("medium") | Some("large")),
+        "gallery_sort" => matches!(value.as_str(), Some("newest") | Some("oldest") | Some("name")),
+        "gallery_show_names" => value.is_boolean(),
+        // 내보내기 기본 폴더 — "" 이거나 절대 경로(상대 경로는 저장 대화상자가 시작하는 자리가 실행 위치에 따라 흔들린다).
+        // 이 기기 전용 키라 번들·원격에서 빠진다(export.rs::is_device_local_setting_key, remote_policy.rs).
+        "export_default_dir" => value
+            .as_str()
+            .map(|s| s.is_empty() || (s.len() <= 1024 && !s.contains('\0') && is_absolute_path_any_os(s)))
+            .unwrap_or(false),
         // PLAN-2026-09-04-local-import §3b — 첫 부팅 자동 감지 후보 개수(설정 > 수집 탭 레일
         // 뱃지). 시드하지 않음(부재 = 0, 프런트 coerce가 fallback) — pet_pos_x 류 "기기 로컬,
         // 저장된 적 없음이 정상"과 같은 부류. collect_detect_local 후보 중 source_id 없는 것의
@@ -584,6 +638,7 @@ pub fn validate_setting(key: &str, value: &serde_json::Value) -> AppResult<()> {
         // 자동 전체 백업 스케줄 — default_settings() 주석 참고.
         "backup_auto_interval" => matches!(value.as_str(), Some("off") | Some("daily") | Some("weekly")),
         "backup_auto_keep" => value.as_i64().map(|n| (1..=5).contains(&n)).unwrap_or(false),
+        "storage_alert_gb" => value.as_i64().map(|n| (0..=500).contains(&n)).unwrap_or(false),
         // 자동 백업 마지막 실패 기록(리스크 감사 A) — "타임스탬프: 메시지" 문자열, 성공 시 빈
         // 문자열로 되돌린다(repo/transfer/backup.rs::record_auto_backup_error). default_settings
         // 에 시드하지 않는다 — 없는 게 정상 상태(아직 실패한 적 없음/성공).
@@ -604,10 +659,11 @@ pub fn validate_setting(key: &str, value: &serde_json::Value) -> AppResult<()> {
         "backup_nudge_pending" => value.is_boolean(),
         "ui_lang" => matches!(value.as_str(), Some("en") | Some("fr") | Some("ko")),
         "week_start" => matches!(value.as_str(), Some("sunday") | Some("monday")),
+        "calendar_axis_tail_hours" => value.as_i64().map(|n| (0..=12).contains(&n)).unwrap_or(false),
         // 기준 지역 활용 마스터(PLAN-2026-09-15 R2). pet_enabled 와 같은
         // "0"/"1" 문자열 — boolean 이 아니다. default_settings 가 "1" 로 시드한다.
         "region_enabled" => matches!(value.as_str(), Some("0") | Some("1")),
-        "holiday_region" => matches!(value.as_str(), Some("none") | Some("kr")),
+        "holiday_region" => matches!(value.as_str(), Some("none") | Some("kr") | Some("fr")),
         // `header_weather_visible` 은 2026-09-12 오너 결정 D11 로 없어졌다(날씨는 항상 표시).
         // 기존 설치의 DB 행은 그대로 남아 있어도 무해하다 — validate_setting 은 **쓰기 전용**이고
         // (repo::settings::set 만 부른다) get_all 은 검증 없이 행을 돌려주므로, 마지막 쓰는 쪽이
@@ -1092,6 +1148,10 @@ pub fn validate_setting(key: &str, value: &serde_json::Value) -> AppResult<()> {
         "user_name" => value.as_str().map(|s| s.chars().count() <= 64).unwrap_or(false),
         // W11: 글꼴 패밀리 ("serif" | "sans" | 자유 문자열, 최대 128자).
         "font_family" => value.as_str().map(|s| !s.trim().is_empty() && s.chars().count() <= 128).unwrap_or(false),
+        // PLAN-2026-10-27-fonts — 값 형식은 font_family 와 같다(번들 id · `catalog:<id>` · 시스템 글꼴명).
+        // font_editor 만 빈 값 허용: "앱 화면 글꼴을 따름".
+        "font_editor" => value.as_str().map(|s| s.chars().count() <= 128).unwrap_or(false),
+        "font_mono" => value.as_str().map(|s| !s.trim().is_empty() && s.chars().count() <= 128).unwrap_or(false),
         // W18: pet_click_action 삭제 (클릭=채팅 고정). pet_dblclick_action 허용값 chat|new_note|off.
         "pet_dblclick_action" => matches!(
             value.as_str(),
@@ -2203,9 +2263,148 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_setting_calendar_axis_tail_hours() {
+        assert!(validate_setting("calendar_axis_tail_hours", &json!(0)).is_ok());
+        assert!(validate_setting("calendar_axis_tail_hours", &json!(3)).is_ok());
+        assert!(validate_setting("calendar_axis_tail_hours", &json!(12)).is_ok());
+        assert!(validate_setting("calendar_axis_tail_hours", &json!(13)).is_err());
+        assert!(validate_setting("calendar_axis_tail_hours", &json!(-1)).is_err());
+        assert!(validate_setting("calendar_axis_tail_hours", &json!("3")).is_err());
+        assert!(validate_setting("calendar_axis_tail_hours", &json!(true)).is_err());
+    }
+
+    #[test]
+    fn test_calendar_axis_tail_hours_persists_through_repo_settings_round_trip() {
+        use std::collections::BTreeMap;
+        let dir = tempfile::tempdir().unwrap();
+        let mut conn = crate::db::bootstrap(dir.path()).unwrap();
+
+        let before = crate::repo::settings::get_all(&conn).unwrap();
+        assert_eq!(before.get("calendar_axis_tail_hours"), Some(&json!(3)));
+
+        let mut entries = BTreeMap::new();
+        entries.insert("calendar_axis_tail_hours".to_string(), json!(0));
+        crate::repo::settings::set(&mut conn, &entries).unwrap();
+
+        let after = crate::repo::settings::get_all(&conn).unwrap();
+        assert_eq!(after.get("calendar_axis_tail_hours"), Some(&json!(0)));
+    }
+
+    #[test]
+    fn test_dashboard_tab_settings_validate_and_round_trip() {
+        use std::collections::BTreeMap;
+        assert!(validate_setting("timeline_default_range", &json!("recent_3m")).is_ok());
+        assert!(validate_setting("timeline_default_range", &json!("all")).is_err());
+        assert!(validate_setting("board_done_autohide", &json!("30d")).is_ok());
+        assert!(validate_setting("board_done_autohide", &json!("1d")).is_err());
+        assert!(validate_setting("board_card_thumb", &json!(false)).is_ok());
+        assert!(validate_setting("board_card_date", &json!("no")).is_err());
+        assert!(validate_setting("graph_hide_isolated", &json!(true)).is_ok());
+        assert!(validate_setting("graph_node_cap", &json!(200)).is_ok());
+        assert!(validate_setting("graph_node_cap", &json!(501)).is_err());
+        assert!(validate_setting("graph_node_cap", &json!("100")).is_err());
+
+        let dir = tempfile::tempdir().unwrap();
+        let mut conn = crate::db::bootstrap(dir.path()).unwrap();
+        let before = crate::repo::settings::get_all(&conn).unwrap();
+        assert_eq!(before.get("timeline_default_range"), Some(&json!("fit")));
+        assert_eq!(before.get("board_done_autohide"), Some(&json!("off")));
+        assert_eq!(before.get("board_card_thumb"), Some(&json!(true)));
+        assert_eq!(before.get("board_card_date"), Some(&json!(true)));
+        assert_eq!(before.get("graph_hide_isolated"), Some(&json!(false)));
+        assert_eq!(before.get("graph_node_cap"), Some(&json!(0)));
+        let mut entries = BTreeMap::new();
+        entries.insert("timeline_default_range".to_string(), json!("recent_1y"));
+        entries.insert("board_done_autohide".to_string(), json!("7d"));
+        entries.insert("board_card_thumb".to_string(), json!(false));
+        entries.insert("graph_hide_isolated".to_string(), json!(true));
+        entries.insert("graph_node_cap".to_string(), json!(200));
+        crate::repo::settings::set(&mut conn, &entries).unwrap();
+        let after = crate::repo::settings::get_all(&conn).unwrap();
+        assert_eq!(after.get("timeline_default_range"), Some(&json!("recent_1y")));
+        assert_eq!(after.get("board_done_autohide"), Some(&json!("7d")));
+        assert_eq!(after.get("board_card_thumb"), Some(&json!(false)));
+        assert_eq!(after.get("graph_hide_isolated"), Some(&json!(true)));
+        assert_eq!(after.get("graph_node_cap"), Some(&json!(200)));
+    }
+
+    #[test]
+    fn test_gallery_settings_validate_and_round_trip() {
+        use std::collections::BTreeMap;
+        assert!(validate_setting("gallery_tile_size", &json!("large")).is_ok());
+        assert!(validate_setting("gallery_tile_size", &json!("huge")).is_err());
+        assert!(validate_setting("gallery_sort", &json!("name")).is_ok());
+        assert!(validate_setting("gallery_sort", &json!("size")).is_err());
+        assert!(validate_setting("gallery_show_names", &json!(true)).is_ok());
+        assert!(validate_setting("gallery_show_names", &json!("1")).is_err());
+        let dir = tempfile::tempdir().unwrap();
+        let mut conn = crate::db::bootstrap(dir.path()).unwrap();
+        let before = crate::repo::settings::get_all(&conn).unwrap();
+        assert_eq!(before.get("gallery_tile_size"), Some(&json!("medium")));
+        assert_eq!(before.get("gallery_sort"), Some(&json!("newest")));
+        assert_eq!(before.get("gallery_show_names"), Some(&json!(false)));
+        let mut entries = BTreeMap::new();
+        entries.insert("gallery_tile_size".to_string(), json!("small"));
+        entries.insert("gallery_sort".to_string(), json!("oldest"));
+        entries.insert("gallery_show_names".to_string(), json!(true));
+        crate::repo::settings::set(&mut conn, &entries).unwrap();
+        let after = crate::repo::settings::get_all(&conn).unwrap();
+        assert_eq!(after.get("gallery_tile_size"), Some(&json!("small")));
+        assert_eq!(after.get("gallery_sort"), Some(&json!("oldest")));
+        assert_eq!(after.get("gallery_show_names"), Some(&json!(true)));
+    }
+
+    #[test]
+    fn test_export_default_dir_validates_and_round_trips() {
+        use std::collections::BTreeMap;
+        assert!(validate_setting("export_default_dir", &json!("")).is_ok());
+        assert!(validate_setting("export_default_dir", &json!("D:\\exports")).is_ok());
+        assert!(validate_setting("export_default_dir", &json!("a\u{0}b")).is_err());
+        // 상대 경로·드라이브 상대("C:x")는 거부 — 절대 경로만.
+        for rel in ["relative/dir", "exports", "..\\x", "C:exports", "./x"] {
+            assert!(validate_setting("export_default_dir", &json!(rel)).is_err(), "{rel} must be rejected");
+        }
+        for abs in ["D:/exports", "\\\\server\\share\\exports", "/home/me/exports"] {
+            assert!(validate_setting("export_default_dir", &json!(abs)).is_ok(), "{abs} must be accepted");
+        }
+        assert!(validate_setting("export_default_dir", &json!("D:\\a\u{0}b")).is_err());
+        assert!(validate_setting("export_default_dir", &json!("x".repeat(1025))).is_err());
+        assert!(validate_setting("export_default_dir", &json!(5)).is_err());
+        let dir = tempfile::tempdir().unwrap();
+        let mut conn = crate::db::bootstrap(dir.path()).unwrap();
+        let before = crate::repo::settings::get_all(&conn).unwrap();
+        assert_eq!(before.get("export_default_dir"), Some(&json!("")));
+        let mut entries = BTreeMap::new();
+        entries.insert("export_default_dir".to_string(), json!("D:\\exports"));
+        crate::repo::settings::set(&mut conn, &entries).unwrap();
+        let after = crate::repo::settings::get_all(&conn).unwrap();
+        assert_eq!(after.get("export_default_dir"), Some(&json!("D:\\exports")));
+    }
+
+    #[test]
+    fn test_storage_alert_gb_validates_and_round_trips() {
+        use std::collections::BTreeMap;
+        assert!(validate_setting("storage_alert_gb", &json!(0)).is_ok());
+        assert!(validate_setting("storage_alert_gb", &json!(500)).is_ok());
+        assert!(validate_setting("storage_alert_gb", &json!(501)).is_err());
+        assert!(validate_setting("storage_alert_gb", &json!(-1)).is_err());
+        assert!(validate_setting("storage_alert_gb", &json!("5")).is_err());
+        let dir = tempfile::tempdir().unwrap();
+        let mut conn = crate::db::bootstrap(dir.path()).unwrap();
+        let before = crate::repo::settings::get_all(&conn).unwrap();
+        assert_eq!(before.get("storage_alert_gb"), Some(&json!(0)));
+        let mut entries = BTreeMap::new();
+        entries.insert("storage_alert_gb".to_string(), json!(5));
+        crate::repo::settings::set(&mut conn, &entries).unwrap();
+        let after = crate::repo::settings::get_all(&conn).unwrap();
+        assert_eq!(after.get("storage_alert_gb"), Some(&json!(5)));
+    }
+
+    #[test]
     fn test_validate_setting_holiday_region() {
         assert!(validate_setting("holiday_region", &json!("none")).is_ok());
         assert!(validate_setting("holiday_region", &json!("kr")).is_ok());
+        assert!(validate_setting("holiday_region", &json!("fr")).is_ok());
         assert!(validate_setting("holiday_region", &json!("jp")).is_err());
         assert!(validate_setting("holiday_region", &json!(true)).is_err());
     }
@@ -3109,6 +3308,31 @@ mod tests {
 
         let after = crate::repo::settings::get_all(&conn).unwrap();
         assert_eq!(after.get("font_family"), Some(&json!("sans")));
+    }
+
+    #[test]
+    fn test_font_editor_and_mono_validate_and_roundtrip() {
+        use std::collections::BTreeMap;
+        assert!(validate_setting("font_editor", &json!("")).is_ok());
+        assert!(validate_setting("font_editor", &json!("catalog:gaegu")).is_ok());
+        assert!(validate_setting("font_editor", &json!("a".repeat(129))).is_err());
+        assert!(validate_setting("font_mono", &json!("")).is_err());
+        assert!(validate_setting("font_mono", &json!("paper-mono")).is_ok());
+        assert!(validate_setting("font_mono", &json!(1)).is_err());
+
+        let dir = tempfile::tempdir().unwrap();
+        let mut conn = crate::db::bootstrap(dir.path()).unwrap();
+        let initial = crate::repo::settings::get_all(&conn).unwrap();
+        assert_eq!(initial.get("font_editor"), Some(&json!("")));
+        assert_eq!(initial.get("font_mono"), Some(&json!("source-code-pro")));
+
+        let mut entries = BTreeMap::new();
+        entries.insert("font_editor".to_string(), json!("catalog:gaegu"));
+        entries.insert("font_mono".to_string(), json!("paper-mono"));
+        crate::repo::settings::set(&mut conn, &entries).unwrap();
+        let after = crate::repo::settings::get_all(&conn).unwrap();
+        assert_eq!(after.get("font_editor"), Some(&json!("catalog:gaegu")));
+        assert_eq!(after.get("font_mono"), Some(&json!("paper-mono")));
     }
 
     #[test]

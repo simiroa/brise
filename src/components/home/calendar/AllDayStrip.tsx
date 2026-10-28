@@ -26,7 +26,7 @@ import {
 } from "../calendarLayout";
 import { RemindBadge } from "./RemindBadge";
 import { NoteDatesList } from "../../attachments/NoteDatesList";
-import { fetchDateRow, commitDateRow } from "./dateWrite";
+import { fetchDateRow, commitDateRow, timeChangeLabel } from "./dateWrite";
 import { useAxisDragSession, type DragHandlers } from "./useAxisDragSession";
 
 /** 시간축이 부모에게 올려 주는 손잡이 — **축의 좌표계를 아는 것은 축뿐**이다(W8 ②).
@@ -99,10 +99,6 @@ export function SectionLabel({ text }: { text: string }) {
       {text}
     </div>
   );
-}
-
-function timeChangeLabel(from: string | null, to: string | null): string {
-  return from && to ? t("home.cal_time_changed_at", { from, to }) : t("home.cal_time_changed");
 }
 
 /**

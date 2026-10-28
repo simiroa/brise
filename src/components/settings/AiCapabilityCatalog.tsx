@@ -13,13 +13,15 @@ import {
   type AiPolicyLevel,
 } from "../../lib/aiCapabilities";
 import { useFeatureBriefTrigger } from "../../lib/useFeatureBrief";
-import { groupCardStyle, isExternalProvider } from "./shared";
+import { groupCardStyle, isExternalProvider, linkBtn } from "./shared";
 import { Toggle } from "./Toggle";
 import { SegGroup } from "./SegGroup";
 import { Badge } from "./Badge";
 import { HintBadge } from "./HintBadge";
 import { SettingsRow } from "./SettingsRow";
-import { AiOffLink } from "./AiOffLink";
+import { PageLead } from "./PageLead";
+import { SectionHeader } from "./SectionHeader";
+import { SegmentedControl } from "../common/SegmentedControl";
 import { useAiConnectionSettings } from "./useAiConnectionSettings";
 import { IconChip } from "./IconChip";
 import {
@@ -49,6 +51,9 @@ import PenLine from "lucide-react/dist/esm/icons/pen-line.mjs";
  */
 
 const TIER_ORDER: AiCapabilityTier[] = ["refine", "organize", "gather"];
+
+/** 기능 표의 열(2026-10-28, PLAN-2026-10-27 W4) — 머리줄과 모든 행이 같은 격자라 열이 세로로 정렬된다: 기능 | 대상·실행 | 사용. */
+const TABLE_GRID = "minmax(0, 1fr) 13rem 4rem";
 
 const TIER_TITLE_KEY: Record<AiCapabilityTier, string> = {
   refine: "aiCapabilities.tier_refine_title",
@@ -95,11 +100,11 @@ interface AiCapabilityCatalogProps {
 function getTierIcon(tier: AiCapabilityTier): ReactNode {
   switch (tier) {
     case "refine":
-      return <PenLine size={16} strokeWidth={2} />;
+      return <PenLine size={14} strokeWidth={2} />;
     case "organize":
-      return <IconGraph size={16} strokeWidth={2} />;
+      return <IconGraph size={14} strokeWidth={2} />;
     case "gather":
-      return <IconFolder size={16} strokeWidth={2} />;
+      return <IconFolder size={14} strokeWidth={2} />;
   }
 }
 
@@ -232,7 +237,17 @@ export function AiCapabilityCatalog({ provider: providerOverride, onNavigate }: 
 
   // AI 기능 레벨은 페이지 맨 위 카드의 첫 줄 설정 행(PLAN-2026-10-24 D4, 옛 히어로 우측 동작).
   const policyCard = (
-    <div className="card" style={groupCardStyle} data-testid="ai-capability-policy-card">
+    <PageLead testId="ai-capability-policy-card">
+      {/* 제공자 한 줄 요약(2026-10-28) — 어떤 모델에 연결돼 있고 데이터가 밖으로 나가는지(꺼져 있으면 "AI 꺼짐"). 바꾸는 곳은 연결 페이지다.
+          AI 꺼짐 안내는 이 줄 하나다 — 같은 "AI 제공자 페이지로" 링크를 AiOffLink 가 한 번 더 그려 연달아 두 줄이 나오던 것을 걷어냈다. */}
+      <p data-testid="ai-provider-summary" style={{ margin: "0 0 var(--space-2)", fontSize: "var(--text-sm)", color: "var(--muted)" }}>
+        {aiEnabled
+          ? t(providerExternal ? "settings.ai_provider_summary_external" : "settings.ai_provider_summary_local", { provider })
+          : t("settings.ai_provider_summary_off")}{" "}
+        <button type="button" style={linkBtn} data-testid="ai-provider-summary-go" onClick={() => onNavigate("ai")}>
+          {t("settings.ai_provider_summary_go")}
+        </button>
+      </p>
       <SettingsRow
         anchor="ai_policy_level"
         label={t("settings.ai_policy_level_title")}
@@ -249,7 +264,7 @@ export function AiCapabilityCatalog({ provider: providerOverride, onNavigate }: 
           />
         }
       />
-    </div>
+    </PageLead>
   );
 
   return (
@@ -257,9 +272,6 @@ export function AiCapabilityCatalog({ provider: providerOverride, onNavigate }: 
       {/* 오너 R1(2026-09-15): 정책 카드·검색·티어 아코디언은 전부 페이지 최상위 형제다 —
           티어 아코디언만 카드다. */}
       {policyCard}
-
-      {/* 꺼짐 링크는 다른 AI 페이지처럼 정책 카드 바로 아래. */}
-      <AiOffLink onNavigate={onNavigate} />
 
       {/* 검색칸은 표준 .field 다 — 돋보기는 칸 안 왼쪽에 겹쳐 두고, 글자가 그 뒤에서 시작하도록 왼쪽 안쪽
           여백만 아이콘 폭만큼 더 준다. */}
@@ -304,41 +316,15 @@ export function AiCapabilityCatalog({ provider: providerOverride, onNavigate }: 
           />
         </div>
 
-        {/* Filter Chips Bar */}
+        {/* 대상 필터 — 단일 선택 띠. 칸이 많아(10) 좁은 자리에선 SegmentedControl 이 가로로 구른다. */}
         {showFilters && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "var(--space-2)",
-              flexWrap: "wrap",
-              marginTop: "var(--space-3)",
-              padding: "var(--space-3) var(--space-4)",
-              background: "var(--surface-sunken)",
-              border: "1px solid var(--divider)",
-              borderRadius: "var(--radius-sm)",
-            }}
-          >
-            {targetOptions.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                aria-pressed={filterTarget === opt.value}
-                onClick={() => setFilterTarget(opt.value)}
-                style={{
-                  padding: "var(--space-1) var(--space-4)",
-                  borderRadius: "var(--radius-pill)",
-                  border: "1px solid var(--divider)",
-                  background: filterTarget === opt.value ? "var(--accent)" : "transparent",
-                  color: filterTarget === opt.value ? "var(--on-accent)" : "var(--muted)",
-                  fontSize: "var(--text-xs)",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                {opt.label}
-              </button>
-            ))}
+          <div style={{ marginTop: "var(--space-3)" }}>
+            <SegmentedControl
+              value={filterTarget}
+              onChange={setFilterTarget}
+              options={targetOptions}
+              ariaLabel={t("settings.ai_filter_button")}
+            />
           </div>
         )}
       </div>
@@ -360,59 +346,61 @@ export function AiCapabilityCatalog({ provider: providerOverride, onNavigate }: 
         const isExpanded = expandedTiers[tier];
 
         return (
+          // 2026-10-28(PLAN-2026-10-27 W4): 그룹 제목은 박스 밖, 기능 행만 카드 안. 접으면 카드째 사라진다.
           <div
             key={tier}
-            className="card"
-            style={groupCardStyle}
+            style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}
             data-testid={`ai-capability-tier-${tier}`}
           >
-            {/* Accordion Header */}
+            {/* 등급 머리줄 — 제목 규칙은 SectionHeader(박스 밖 muted 제목·아이콘 칩·개수 뱃지) 한 벌. 단추 전체가 접기/펼치기다. */}
             <button
               type="button"
+              className="ai-tier-head"
               onClick={() => toggleTier(tier)}
               data-testid={`ai-capability-tier-header-${tier}`}
               aria-expanded={isExpanded}
               title={isExpanded ? t("aiCapabilities.detail_collapse") : t("aiCapabilities.detail_expand")}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                width: "100%",
-                background: "transparent",
-                border: "none",
-                padding: 0,
-                cursor: "pointer",
-                textAlign: "left",
-              }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)", minWidth: 0 }}>
-                <IconChip size={32}>{getTierIcon(tier)}</IconChip>
-                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2xs)", minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
-                    <span style={{ fontSize: "var(--text-lg)", fontWeight: 600, color: "var(--text)" }}>
-                      {t(TIER_ACCORDION_TITLE_KEY[tier])}
-                    </span>
-                    <Badge tone="accent">{t("settings.ai_tier_count", { n: tierCaps.length })}</Badge>
-                  </div>
-                  <p style={{ margin: 0, fontSize: "var(--text-xs)", color: "var(--muted)", fontWeight: 400 }}>
-                    {t(TIER_HINT_KEY[tier])}
-                  </p>
-                </div>
-              </div>
-              <div style={{ color: "var(--muted)", display: "flex", alignItems: "center", flexShrink: 0 }}>
-                {isExpanded ? <ChevronUp size={18} /> : <IconChevron size={18} />}
-              </div>
+              <SectionHeader
+                title={t(TIER_ACCORDION_TITLE_KEY[tier])}
+                icon={getTierIcon(tier)}
+                badge={<Badge tone="accent">{t("settings.ai_tier_count", { n: tierCaps.length })}</Badge>}
+                actions={
+                  <span style={{ color: "var(--muted)", display: "flex", alignItems: "center" }}>
+                    {isExpanded ? <ChevronUp size={18} /> : <IconChevron size={18} />}
+                  </span>
+                }
+              />
+              <p className="ai-tier-head__hint">{t(TIER_HINT_KEY[tier])}</p>
             </button>
 
-            {/* Subcard Feature Rows List */}
+            {/* Feature rows card */}
             <div
+              className="card"
               style={{
+                ...groupCardStyle,
                 display: isExpanded ? "flex" : "none",
                 flexDirection: "column",
-                gap: "var(--space-3)",
-                paddingTop: "var(--space-5)",
+                gap: "var(--space-2)",
               }}
             >
+              <div
+                aria-hidden="true"
+                data-testid={`ai-capability-head-${tier}`}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: TABLE_GRID,
+                  gap: "var(--space-4)",
+                  fontSize: "var(--text-xs)",
+                  color: "var(--faint)",
+                  paddingBottom: "var(--space-2)",
+                  borderBottom: "1px solid var(--divider)",
+                }}
+              >
+                <span>{t("settings.ai_col_feature")}</span>
+                <span>{t("settings.ai_col_kind")}</span>
+                <span style={{ textAlign: "right" }}>{t("settings.ai_col_use")}</span>
+              </div>
               {tierCaps.map((cap) => (
                 <CapabilityRow
                   key={cap.id}
@@ -474,13 +462,11 @@ function CapabilityRow({
       data-policy-blocked={!policyAllowed ? "true" : undefined}
       title={!policyAllowed ? t("aiCapabilities.disabled_reason_policy") : undefined}
       style={{
-        background: "var(--surface-sunken)",
-        border: "1px solid var(--divider)",
-        borderRadius: "var(--radius-sm)",
-        padding: "var(--space-5) var(--space-6)",
-        display: "flex",
+        // 카드 없이 가볍게 — 큰 그룹(tier) 카드 안에서 행은 테두리·배경 없이 간격만 둔다.
+        padding: "var(--space-2) 0",
+        display: "grid",
+        gridTemplateColumns: TABLE_GRID,
         alignItems: "center",
-        justifyContent: "space-between",
         gap: "var(--space-4)",
         opacity: (!aiEnabled || !policyAllowed) ? "var(--dim-disabled)" : undefined,
         boxSizing: "border-box",
@@ -502,16 +488,15 @@ function CapabilityRow({
             }}
           >
             <span>{name}</span>
-            <HintBadge hint={t(cap.detailKey)} />
-          </div>
-          <div style={{ fontSize: "var(--text-xs)", color: "var(--muted)", fontWeight: 400, lineHeight: "var(--lh-ui)" }}>
-            {reads}
+            {/* 한 줄 설명(reads)은 화면에서 내리고 ⓘ 툴팁으로 — 자세한 설명 앞에 붙인다. */}
+            <HintBadge hint={`${reads}
+${t(cap.detailKey)}`} />
           </div>
         </div>
       </div>
 
       {/* Center metadata badges cluster: Target, Execution, Policy, Metadata */}
-      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", flexShrink: 0, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", minWidth: 0, flexWrap: "wrap" }}>
         <Badge tone="accent">{t(TARGET_LABEL_KEY[cap.target])}</Badge>
         <span
           style={{
@@ -536,7 +521,7 @@ function CapabilityRow({
       </div>
 
       {/* Right controls: Toggle switch and Action link [ 설정 > ] */}
-      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)", flexShrink: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "var(--space-4)" }}>
         {control.kind === "setting" && (
           <Toggle
             checked={getSettingValue(control.key)}

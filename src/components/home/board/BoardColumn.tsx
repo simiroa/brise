@@ -11,6 +11,7 @@ import { noteDropTargetProps } from "../../../lib/noteDrag";
 import { IconPlus, IconSearch, IconSort } from "../../icons";
 import { useNotesStore } from "../../../stores/notes";
 import { StatusDot } from "../../titlebar/StatusControl";
+import { NumberTicker } from "../../common/NumberTicker";
 import { BoardCard } from "./BoardCard";
 import { BOARD_DROP_PREFIX, columnLabel, isPinned, statusTargetId } from "./status";
 
@@ -154,7 +155,7 @@ export function BoardColumn({
               flex: "none",
             }}
           >
-            {col.notes.length}
+            <NumberTicker value={col.notes.length} />
           </span>
           {matchCount !== null && (
             <span

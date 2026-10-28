@@ -3,7 +3,7 @@ import { t } from "../../i18n/t";
 import { linkBtn } from "./shared";
 
 /**
- * AI 가 꺼져 있을 때 AI 페이지(권한·기능·AI 프리셋·채팅) 맨 위에 서는 한 줄 — PLAN-2026-10-24 D7.
+ * AI 가 꺼져 있을 때 AI 페이지(권한·채팅) 맨 위에 서는 한 줄 — PLAN-2026-10-24 D7. 기능 페이지는 제공자 한 줄 요약이 같은 안내를 맡는다(AiCapabilityCatalog).
  *
  * **AI 마스터 스위치(`ai_enabled`)가 그려지는 곳은 정확히 하나다: AI 제공자(`ai`) 페이지 첫 줄**
  * (`AiProviderSection` 의 `settings-ai-master-card`). 예전에는 일반 페이지의 토글과 각 AI 페이지의 켜기 버튼

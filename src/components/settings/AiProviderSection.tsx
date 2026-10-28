@@ -10,16 +10,16 @@ import { switchAiProvider } from "../../lib/aiProviderSwitch";
 import { t } from "../../i18n/t";
 import { Select } from "../Select";
 import { Badge } from "./Badge";
-import { SectionHeader } from "./SectionHeader";
 import { SettingsRow } from "./SettingsRow";
 import { SubGroup } from "./SubGroup";
 import { SegGroup } from "./SegGroup";
 import { MetricTileGroup, type MetricTileItem } from "./MetricTileGroup";
-import { groupCardStyle, linkBtn, PROVIDERS, SETTINGS_CTRL_WIDTH } from "./shared";
+import { linkBtn, PROVIDERS, SETTINGS_CTRL_WIDTH } from "./shared";
 import { Toggle } from "./Toggle";
 import { canonicalProvider, useAiConnectionSettings, type AiConnectionFields } from "./useAiConnectionSettings";
 import { IconActivity, IconExternalLink, IconLayoutGrid, IconSparkles } from "../icons";
 import { IconAction } from "./IconAction";
+import { SettingsCard } from "./SettingsCard";
 
 // Convenience presets shown via <datalist> for cloud providers — the field stays a free-text
 // input (backend just forwards whatever string is set as `ai_model`), these are just common
@@ -281,34 +281,35 @@ export function AiProviderSection() {
 
   return (
     <>
-      {/* 마스터 스위치는 페이지 첫 줄(PLAN-2026-10-24 D7) — `aiEnabled` 가 거짓이면 아래 본문이 통째로
-          접히지만 이 카드는 그 밖이라 꺼진 상태에서도 항상 보인다. */}
-      <div className="card" style={groupCardStyle} data-testid="settings-ai-master-card">
-        <SettingsRow
-          anchor="ai_master"
-          label={t("settings.enable_ai_features")}
-          control={
-            <Toggle
-              checked={aiEnabled}
-              onChange={(next) => handleToggleAi(next)}
-              aria-label={t("settings.enable_ai_features")}
-              data-testid="settings-ai-enabled-toggle"
-            />
-          }
-          data-testid="settings-ai-master"
-        />
-      </div>
-
-      {/* 오너 R1(2026-09-15): 통계 타일은 카드 밖, 페이지 최상위 형제. */}
+      {/* 정보 스트립(통계 타일)이 페이지 맨 위다(2026-10-27 설정 디자인 개편) — 마스터 스위치는 아래 연결 카드의 첫 줄로
+          흡수됐다. 꺼진 상태에서도 카드는 늘 보이고 본문(SubGroup)만 접힌다. */}
       {aiEnabled && <MetricTileGroup tiles={tiles} columns={tiles.length} />}
 
-      <div className="card" style={groupCardStyle} data-testid="settings-ai-provider-card">
-        <SectionHeader
-          title={t("settings.ai_provider")}
-          badge={!isOllama ? <Badge tone="accent">{t("settings.external_badge")}</Badge> : undefined}
-          actions={<span data-testid="ai-reach-badge">{reachBadge}</span>}
-          icon={<IconSparkles size={14} strokeWidth={2} />}
-        />
+      <SettingsCard
+        title={t("settings.ai_provider")}
+        badge={!isOllama ? <Badge tone="accent">{t("settings.external_badge")}</Badge> : undefined}
+        actions={<span data-testid="ai-reach-badge">{reachBadge}</span>}
+        icon={<IconSparkles size={14} strokeWidth={2} />}
+        testId="settings-ai-provider-card"
+      >
+
+        {/* 마스터 스위치(PLAN-2026-10-24 D7) — 이 카드의 첫 줄. `aiEnabled` 가 거짓이면 아래 본문이 통째로 접히지만 이 줄은 그 밖이라
+            꺼진 상태에서도 항상 보인다. */}
+        <div data-testid="settings-ai-master-card">
+          <SettingsRow
+            anchor="ai_master"
+            label={t("settings.enable_ai_features")}
+            control={
+              <Toggle
+                checked={aiEnabled}
+                onChange={(next) => handleToggleAi(next)}
+                aria-label={t("settings.enable_ai_features")}
+                data-testid="settings-ai-enabled-toggle"
+              />
+            }
+            data-testid="settings-ai-master"
+          />
+        </div>
 
         {aiEnabled && (
           <>
@@ -318,8 +319,10 @@ export function AiProviderSection() {
                 style={{ "--settings-ctrl-w": "100%", marginBottom: "var(--space-3)" } as CSSProperties}
                 aria-busy={switching || undefined}
               >
+                {/* 읽기 전엔 아무 칸도 고르지 않는다 — 초기값(Ollama)을 고른 채 두면 읽기가 끝난 뒤 표시가
+                    Ollama → 저장값(예: Gemini) 으로 미끄러지는 애니메이션이 열 때마다 생겼다(2026-10-28). */}
                 <SegGroup
-                  value={providerValue}
+                  value={loaded ? providerValue : ""}
                   onChange={(name) => void selectProvider(name)}
                   options={PROVIDER_OPTIONS}
                   ariaLabel={t("settings.ai_provider")}
@@ -543,7 +546,7 @@ export function AiProviderSection() {
             </SubGroup>
           </>
         )}
-      </div>
+      </SettingsCard>
     </>
   );
 }

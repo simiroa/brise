@@ -76,7 +76,7 @@ describe("SettingsNav", () => {
   it("레일은 168px 이고 칠도 우측 선도 없다 — 메인 사이드바처럼 맨 시트 위 (GRILL-2026-10-19 R1-D, D10 ② 대체)", async () => {
     await renderNav(ITEMS, "general");
     const nav = screen.getByTestId("settings-nav");
-    expect(nav.style.width).toBe("168px");
+    expect(nav.style.width).toBe("var(--settings-rail-w)"); // 168px 은 settingsLayout.css 한 곳
     expect(nav.style.background).toBe("");
     expect(nav.style.borderRight).toBe("");
   });

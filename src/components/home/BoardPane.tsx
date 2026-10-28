@@ -47,6 +47,7 @@ export function BoardPane() {
   // not a nav-row button — it's a board concern. Hidden by the status_add_locked setting.
   const addStatus = useTaxonomyStore((s) => s.addStatus);
   const statusAddLocked = useSettingsStore((s) => s.statusAddLocked);
+  const doneAutohide = useSettingsStore((s) => s.boardDoneAutohide);
   const [addingStatus, setAddingStatus] = useState(false);
   const [statusDraft, setStatusDraft] = useState("");
   const cancelAddStatus = useCallback(() => {
@@ -211,12 +212,24 @@ export function BoardPane() {
   // search never removes cards, so nothing to conflict with; a card must simply belong to the
   // active folder to render at all).
   const displayColumns = useMemo(() => {
-    if (!columns || !dashboardFolderFilter) return columns;
+    if (!columns) return columns;
+    // 완료 카드 자동 숨김(설정 › 대시보드 › 칸반): 완료 열에서 updated_at 이 기준일보다 오래된 카드는 안 그린다.
+    // totalNotes(빈 노트북 판정)는 columns 원본을 읽으므로 숨겨도 "노트가 없다" 안내가 뜨지 않는다.
+    const days = doneAutohide === "7d" ? 7 : doneAutohide === "30d" ? 30 : 0;
+    const cutoff = days > 0 ? Date.now() - days * 86_400_000 : 0;
+    if (!dashboardFolderFilter && cutoff === 0) return columns;
     return columns.map((col) => ({
       ...col,
-      notes: col.notes.filter((n) => noteIndex.get(n.id)?.folder_id === dashboardFolderFilter),
+      notes: col.notes.filter((n) => {
+        if (dashboardFolderFilter && noteIndex.get(n.id)?.folder_id !== dashboardFolderFilter) return false;
+        if (cutoff > 0 && col.status === "done") {
+          const at = Date.parse(n.updated_at);
+          if (Number.isFinite(at) && at < cutoff) return false;
+        }
+        return true;
+      }),
     }));
-  }, [columns, dashboardFolderFilter, noteIndex]);
+  }, [columns, dashboardFolderFilter, noteIndex, doneAutohide]);
 
   // Horizontal scroll overflow tracking & edge fade (Wave KANBAN, docs/HANDOFF-2026-10-18-board-easy.md)
   const columnsRef = useRef<HTMLDivElement>(null);

@@ -95,7 +95,6 @@ export function FolderBadge({
             }
           }
         }}
-        title={tooltip}
         aria-label={tooltip}
         aria-haspopup="listbox"
         aria-controls={listboxId}

@@ -18,6 +18,8 @@
   "unhandled_error": "Une erreur inattendue s'est produite : {{message}}",
   "diag_notice_db_restored_from_backup": "Votre base de données était endommagée et a été restaurée à partir de la sauvegarde la plus récente ({{backup}}). Le fichier endommagé a été conservé sous le nom {{quarantine}}. Les fichiers des notes créées après cette sauvegarde ont été conservés dans le dossier « orphaned » de votre dossier de données.",
   "diag_notice_worker_stopped": "{{worker}} s'est arrêté de manière inattendue. Essayez de redémarrer l'application.",
+  "diag_notice_db_connection_lost": "La restauration/réinitialisation a échoué et la base de données n'a pas pu être rouverte. L'application tourne sur une base temporaire en mémoire : les modifications ne sont PAS enregistrées. Redémarrez l'application maintenant. Instantané de l'état précédent : {{snapshot}} (dossier backups de votre dossier de données).",
+  "diag_notice_swap_recovery_failed": "La restauration/réinitialisation a échoué et l'état précédent n'a pas pu être rétabli automatiquement. Redémarrez l'application et, si quelque chose semble anormal, restaurez l'instantané de l'état précédent ({{snapshot}}, dossier backups de votre dossier de données).",
   "diag_worker_schedule": "Rappels/agenda",
   "diag_worker_collect": "Collecte automatique",
   "diag_notice_generic": "Un problème est survenu ({{feature}}/{{code}}).",

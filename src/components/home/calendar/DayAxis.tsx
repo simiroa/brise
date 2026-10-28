@@ -10,7 +10,6 @@ import {
   memo,
   useEffect,
   useImperativeHandle,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -20,7 +19,6 @@ import {
 } from "react";
 import type { TimelineRoutine } from "../../../lib/commands.gen";
 import { t } from "../../../i18n/t";
-import { folderColorCss } from "../../../lib/ui";
 import { type RepeatDraft } from "../../titlebar/scheduleRrule";
 import { showUndoToast } from "../../../lib/undo";
 import { todayLocal } from "../dateFmt";
@@ -28,7 +26,6 @@ import {
   layoutTimedEvents,
   keepDurationMin,
   formatHhmm,
-  parseHhmm,
   planLinkedMove,
   planLinkedResize,
   dragTimes,
@@ -38,11 +35,16 @@ import {
   nowLineTop,
   tickIntervalMinFor,
   MIN_SLOT_MIN,
+  SNAP_MIN,
+  DAY_MIN,
+  axisEndMinFor,
   HOUR_ROW_H,
-  MIN_HOUR_ROW_H,
-  MAX_HOUR_ROW_H,
+  axisContentPx,
+  HANDLE_HIT_PAD,
+  handlePadPx,
+  mergeTailTimed,
+  splitAxisMin,
   TIME_LABEL_W,
-  DEFAULT_SCROLL_HOUR,
   type ChipDragMode,
   type LinkableEvent,
   type TimedDayPlan,
@@ -53,27 +55,17 @@ import {
   type DragSession,
   type DragHandlers,
 } from "./useAxisDragSession";
-import {
-  commitDateRow,
-  planRowTimes,
-  shiftRowTimes,
-  resizeRowBoundary,
-} from "./dateWrite";
-import { type ConfirmState } from "./useAxisConfirmFlow";
-import { useDismissOnOutside, type AxisHandle } from "./AllDayStrip";
-import { TimeChip, type ChipChecklist } from "./TimeChip";
+import { commitDateRow, planGestureWrites } from "./dateWrite";
+import { confirmForDelete, type ConfirmState } from "./useAxisConfirmFlow";
+import { type AxisHandle } from "./AllDayStrip";
+import { TimeChip, chipLinePx, laneLeft, type ChipChecklist } from "./TimeChip";
 import { useAxisAutoScroll } from "./useAxisAutoScroll";
-
-/**
- * W15 ③ — 되돌리기 토스트 문구. 연속 드래그는 토스트가 **쌓이도록** 이미 정책이 돼 있는데
- * (그릴 D4) 문구가 고정 한 줄이라 서로 구분되지 않았다 — 어느 토스트가 어느 변경인지 알 수 없으면
- * 쌓아 둔 의미가 없다. 이제 실제 이전 → 이후 시각이 들어간다.
- * 한쪽이라도 없으면(시각을 처음 얹거나 해제하는 경우) 예전 고정 문구로 폴백한다 — "→ 10:00" 처럼
- * 반쪽만 든 문구는 무엇에서 바뀐 것인지 더 헷갈린다.
- */
-function timeChangeLabel(from: string | null, to: string | null): string {
-  return from && to ? t("home.cal_time_changed_at", { from, to }) : t("home.cal_time_changed");
-}
+import { useAxisZoom } from "./useAxisZoom";
+import { AxisToolbar, NowLine, RoutineBands, TailZone } from "./AxisParts";
+import { addDaysIso } from "../dateFmt";
+import { ChipEventModal } from "./ChipEventModal";
+import { weatherCodeToVisual } from "../../../lib/weather";
+import { reconcilePreviews, samePreview, tagPreviews, type MovePreview } from "./pendingMove";
 
 /** 24시간 눈금 — **props 도 상태도 없다.** 드래그 중에는 스냅 칸이 바뀔 때마다 TimeAxis 가
  *  다시 그려지는데, 그때마다 이 24행을 `Array.from` 으로 새로 만들고 있었다(한 번 끄는 동안
@@ -95,19 +87,36 @@ function timeChangeLabel(from: string | null, to: string | null): string {
  * 화면도 100% 그대로다), 그 사이에 낀 눈금만 `cal-tick-label-${min}` 으로 새로 생긴다 — "HH:MM"
  * 라벨(formatHhmm)이라 30/15/5분 중 어느 것을 봐도 몇 시 몇 분인지 바로 읽힌다.
  */
-export const HourRuler = memo(function HourRuler({ hourRowH }: { hourRowH: number }) {
+export const HourRuler = memo(function HourRuler({
+  hourRowH,
+  endMin = DAY_MIN,
+  hourWeather,
+}: {
+  hourRowH: number;
+  /** 눈금이 끝나는 분 — 익일 구간이 있으면 24:00 보다 크다(24시 이후는 "00".."03" 로 이어진다). */
+  endMin?: number;
+  /** 시 눈금 라벨 **아래**에 얹는 시간별 날씨(키 = 축 위의 시, 24 이상은 익일 구간). 브리핑 창만 준다 — 대시보드·사이드바는
+   *  시간별 날씨 출처가 없다. 부모가 useMemo 로 안정화해 넘겨야 드래그 중 이 memo 가 깨지지 않는다. */
+  hourWeather?: ReadonlyMap<number, { code: number; tempC: number }>;
+}) {
   const pxPerMin = hourRowH / 60;
   const level = tickIntervalMinFor(hourRowH);
   const minutes = useMemo(() => {
     const out: number[] = [];
-    for (let m = 0; m < 24 * 60; m += level) out.push(m);
+    for (let m = 0; m < endMin; m += level) out.push(m);
     return out;
-  }, [level]);
+  }, [level, endMin]);
+  // 날씨는 라벨 열(24px) 안, 라벨 **바로 아래** 칸에 앉는다 — 다음 시 라벨까지 한 줄 높이가 남아 아이콘은 들어가고, 온도 글자는
+  // 한 시간 높이가 충분히 커진(확대) 뒤에만 아이콘 밑에 붙는다(안 그러면 다음 시 라벨과 겹친다). 온도는 항상 title 로도 닿는다.
+  const showWeather = hourWeather !== undefined;
+  const showTemp = hourRowH >= WEATHER_TEMP_MIN_ROW_H;
   return (
     <>
       {minutes.map((min) => {
         const hour = Math.floor(min / 60);
         const onHour = min % 60 === 0;
+        const wx = showWeather && onHour ? hourWeather.get(hour) : undefined;
+        const visual = wx ? weatherCodeToVisual(wx.code, wx.tempC) : null;
         return (
           <div
             key={min}
@@ -122,21 +131,35 @@ export const HourRuler = memo(function HourRuler({ hourRowH }: { hourRowH: numbe
               pointerEvents: "none",
             }}
           >
-            <span
-              className="cal-tick-label"
-              data-testid={onHour ? `cal-hour-label-${hour}` : `cal-tick-label-${min}`}
-              style={{
-                width: TIME_LABEL_W,
-                flex: "none",
-                fontSize: "var(--text-xs)",
-                color: "var(--faint)",
-                ...(min === 0
-                  ? {}
-                  : { marginTop: "calc(var(--text-xs) * var(--lh-tight) * -0.5)" }),
-              }}
-            >
-              {onHour ? String(hour).padStart(2, "0") : formatHhmm(min)}
-            </span>
+            {/* 숫자는 **시(時)만** 쓴다(오너 2026-10-27) — 확대해서 30/15/5분 눈금이 생겨도 선만 그리고 라벨은 없다. */}
+            {onHour && (
+              <span
+                className="cal-tick-label"
+                data-testid={`cal-hour-label-${hour}`}
+                style={{
+                  width: TIME_LABEL_W,
+                  flex: "none",
+                  fontSize: "var(--text-xs)",
+                  color: "var(--faint)",
+                  ...(min === 0
+                    ? {}
+                    : { marginTop: "calc(var(--text-xs) * var(--lh-tight) * -0.5)" }),
+                }}
+              >
+                {String(hour % 24).padStart(2, "0")}
+              </span>
+            )}
+            {wx && visual && (
+              <span
+                className="cal-hour-wx"
+                data-testid={`cal-hour-wx-${hour}`}
+                title={`${wx.tempC}°`}
+                style={{ top: `calc(var(--text-xs) * var(--lh-tight) * ${min === 0 ? 1 : 0.5} + 1px)` }}
+              >
+                <visual.Icon size={12} strokeWidth={1.8} style={{ color: visual.colorVar }} aria-hidden />
+                {showTemp && <span>{wx.tempC}°</span>}
+              </span>
+            )}
           </div>
         );
       })}
@@ -144,47 +167,18 @@ export const HourRuler = memo(function HourRuler({ hourRowH }: { hourRowH: numbe
   );
 });
 
-/** 미리보기 한 칩의 새 자리(W15) — 드래그 중이든 드롭 직후의 낙관적 자리든 같은 모양이다. */
-type MovePreview = { key: string; startMin: number; endMin: number };
-
-/** 미리보기 목록이 실제로 달라졌나 — 같은 값이면 예전 배열을 그대로 돌려줘 재렌더를 막는다
- *  (단일 키 시절 `cur.key === … && cur.startMin === …` 로 하던 것과 같은 목적). */
-function samePreview(a: readonly MovePreview[], b: readonly MovePreview[]): boolean {
-  return (
-    a.length === b.length &&
-    a.every((p, i) => p.key === b[i].key && p.startMin === b[i].startMin && p.endMin === b[i].endMin)
-  );
-}
-
-
-
-/** "하루 전체 보기"(오너 요청 2026-09-16)의 하한 — MIN_HOUR_ROW_H(휠 확대의 하한, 28)보다
- *  훨씬 낮다. 그 값은 탐색적 축소로 읽기 힘들어지는 지점이고, 이 버튼은 "좁은 창에 24시간을
- *  다 넣어라"는 명시적 요청이라 다른 목적이다. 0 은 막는다(컨테이너 높이를 아직 못 잰 경우의
- *  방어) — 그 외엔 tickIntervalMinFor 가 알아서 시간 단위 눈금으로 굵어질 뿐 깨지지 않는다. */
-const FIT_DAY_MIN_HOUR_ROW_H = 8;
+/** 시간별 날씨의 온도 글자를 아이콘 밑에 붙이는 최소 한 시간 높이(px) — 라벨 한 줄 + 아이콘 + 온도가 다음 시 라벨 전에 들어가는 크기. */
+const WEATHER_TEMP_MIN_ROW_H = 56;
 
 /**
- * 오너 요청(2026-09-16) — 리사이즈 손잡이 히트 타겟을 칩 자신의 (부풀려질 수 있는) DOM 박스에서
- * 뗀 **별도 요소**로 둔다.
+ * 리사이즈 손잡이 — 칩 몸통과 **떨어진 별도 요소**(오너 요청 2026-09-16, NSSplitView 처방: 보이는 선은 얇게,
+ * 히트 영역만 그 선의 좌표에 맞춰 키운다). 칩 몸통은 어디를 잡아도 "이동"이고 리사이즈는 이 손잡이가 전담한다.
  *
- * 문제: 옛 판정(`chipDragMode`, `ev.currentTarget.getBoundingClientRect()`)은 칩의 실제 렌더
- * 박스를 봤는데, 그 박스는 두 가지 이유로 "보이는 눈금선"과 어긋날 수 있다 —
- *  ⓐ 짧은 일정은 3줄이 다 보이도록 `CHIP_MIN_H`(TimeChip.tsx)로 바닥 높이가 부풀려진다.
- *    바닥 손잡이가 이 부풀린 박스의 **아래쪽**을 보므로, 진짜 끝 시각보다 한참 아래에서만
- *    반응했다(30분짜리 일정이면 실제 14px, 부풀린 뒤 65px — 51px 차이).
- *  ⓑ 겹치는 일정은 `layoutTimedEvents` 가 아래로 밀어 쌓는다(스태킹). 밀린 칩은 `top` 자체가
- *    진짜 시작 시각의 픽셀 위치가 아니다 — 그러면 **위쪽** 손잡이도 어긋난다.
- *
- * 해법(리서치 2026-09-17: macOS `NSSplitView`·Zed/Bezel 에디터의 분할창 처방과 같은 방향 —
- * "보이는 선은 얇게 두고 히트 영역만 그 선의 진짜 좌표에 맞춰 키운다") — 손잡이를 칩의 DOM
- * 박스가 아니라 **`e.startMin`/`e.endMin` 의 캔버스 절대좌표**에 직접 앉힌다. 칩 몸통은 이제
- * 어디를 잡아도 항상 "이동"이고(onChipPointerDown), 리사이즈는 이 손잡이가 전담한다
- * (onHandlePointerDown). zIndex 를 칩보다 높여 두므로, 스태킹으로 다른 칩이 이 좌표를 시각적
- * 으로 덮어도 포인터는 항상 이 손잡이가 먼저 받는다 — 어느 칩의 손잡이를 "본다고 느꼈는지"와
- * 무관하게 실제로 잡히는 지점은 항상 정확한 시각이다.
+ * 2026-10-27 기하 통일 이후 칩의 위·아래 가장자리가 곧 시작·끝 시각이라 손잡이도 칩 가장자리에 정확히 앉는다.
+ * 높이가 실제 길이라 짧은 칩(30분 = 14px)이 흔해져서, 히트 폭을 칩 높이에 맞춰 줄인다(`handlePadPx`) — 고정
+ * ±6px 이면 두 손잡이(24px)가 14px 칩을 통째로 덮어 짧은 칩을 옮길 수 없게 된다. 가로는 칩의 들여쓰기 칸을
+ * 따른다 — 겹친 칩끼리 같은 높이의 손잡이를 서로 빼앗지 않게.
  */
-const HANDLE_HIT_PAD = 6;
 
 /** 위 손잡이 하나 — 보이는 선은 없다(칩 테두리·시간 눈금이 이미 경계를 말한다, 새 시각 요소를
  *  더하지 않는다). 얇은 선 대신 **투명한 히트 스트립**만 그 자리에 겹쳐 커서와 클릭만 바꾼다. */
@@ -193,31 +187,85 @@ export function AxisResizeHandle({
   boundaryPx,
   onPointerDown,
   dragHandlers,
+  active = false,
+  activeLabel,
+  pad = HANDLE_HIT_PAD,
+  lane = 0,
 }: {
+  /** 히트 반폭(px) — handlePadPx(칩 높이). */
+  pad?: number;
+  /** 칩의 겹침 칸 — 손잡이 가로 자리를 칩과 맞춘다. */
+  lane?: number;
+  /** 이 손잡이를 지금 끌고 있다 — 그립을 켜 둔다. */
+  active?: boolean;
+  /** 끄는 동안 스냅된 경계 시각("09:45") — 선 옆에 띄운다. */
+  activeLabel?: string;
   testId: string;
-  /** 캔버스 기준 절대 픽셀 — 이 일정의 진짜 시작 또는 끝 시각 자리(e.startMin/endMin * pxPerMin). */
+  /** 캔버스 기준 절대 픽셀 — 이 일정의 시작 또는 끝 시각 자리(= 칩의 위·아래 가장자리). */
   boundaryPx: number;
   onPointerDown: (ev: ReactPointerEvent<HTMLDivElement>) => void;
   /** chipDrag.handlers — 포인터 캡처가 이 요소로 오므로 down 을 받은 바로 그 요소가 나머지도
    *  받아야 한다(useAxisDragSession 의 setPointerCapture, TimeChip 과 같은 이유). */
   dragHandlers: DragHandlers;
 }) {
+  const [hover, setHover] = useState(false);
+  const show = hover || active;
   return (
     <div
       data-testid={testId}
       onPointerDown={onPointerDown}
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => setHover(false)}
       {...dragHandlers}
       style={{
         position: "absolute",
-        top: boundaryPx - HANDLE_HIT_PAD,
-        height: HANDLE_HIT_PAD * 2,
-        left: TIME_LABEL_W,
+        top: boundaryPx - pad,
+        height: pad * 2,
+        left: laneLeft(lane),
         right: 0,
         zIndex: 2,
         cursor: "ns-resize",
         background: "transparent",
       }}
-    />
+    >
+      {/* 보이는 그립 — hover·드래그 때만 경계(boundaryPx = 칩 가장자리)에 얇은 알약을 그린다. */}
+      <div
+        aria-hidden
+        data-testid={`${testId}-grip`}
+        style={{
+          position: "absolute",
+          top: pad - 2,
+          left: "50%",
+          width: 28,
+          height: 4,
+          marginLeft: -14,
+          borderRadius: "var(--radius-pill)",
+          background: "var(--accent)",
+          opacity: show ? 1 : 0,
+          pointerEvents: "none",
+        }}
+      />
+      {active && activeLabel && (
+        <span
+          data-testid={`${testId}-label`}
+          style={{
+            position: "absolute",
+            top: pad,
+            right: 0,
+            transform: "translateY(-50%)",
+            padding: "0 var(--space-2)",
+            borderRadius: "var(--radius-sm)",
+            background: "var(--accent)",
+            color: "var(--on-solid)",
+            fontSize: "var(--text-xs)",
+            fontVariantNumeric: "tabular-nums",
+            pointerEvents: "none",
+          }}
+        >
+          {activeLabel}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -241,6 +289,9 @@ export function TimeAxis({
   routines,
   toolbarHint = null,
   compact = false,
+  tailHours = 0,
+  hourWeather,
+  tailPlan = null,
 }: {
   /** W8 ②: 부모의 카드 드롭이 "이 좌표는 몇 분인가"를 묻는 자리. 축이 자기 DOM 을 안 내보낸다. */
   handleRef?: RefObject<AxisHandle | null>;
@@ -250,7 +301,7 @@ export function TimeAxis({
   /** 보고 있는 날(ISO) — ② 의 생성 콜백과 ③ 의 "오늘인가" 판정에 쓴다. */
   day: string | null;
   /** W11 ③: note_id → 본문 발췌(부모가 이미 note_get 으로 읽어 둔 값). 칩의 3행째가 그 **첫
-   *  줄만** 쓴다 — 없으면 그 줄을 아예 그리지 않는다(바닥 높이는 그대로라 레이아웃은 안 흔들린다). */
+   *  줄만** 쓴다 — 없으면 그 줄을 아예 그리지 않는다(칩 높이는 실제 길이라 레이아웃은 안 흔들린다). */
   excerpts: Record<string, string>;
   /** note_id → 그 노트 첫 text 섹션의 체크리스트 줄들 — 발췌와 같은 note_get 왕복의 부산물
    *  (추가 IPC 0). 없으면 칩에 sub-list 를 아예 그리지 않는다(체크박스 없는 칩은 높이 그대로). */
@@ -285,99 +336,28 @@ export function TimeAxis({
   /** 사이드바 변형 — 오늘이면 도구 줄에 "다음 HH:MM"을 더하고, 축 아래에 여백을 둬 지금 시각이
    *  바닥에 눌려 잘리지 않게 한다. */
   compact?: boolean;
+  /** 익일 구간 — 24시 아래에 다음 날 00시부터 이 시각까지를 이어 붙인다(0 = 당일만). 설정 `calendar_axis_tail_hours`
+   *  를 세 마운트(대시보드·사이드바·브리핑)가 같은 방식으로 넘긴다. 이 안에서 만들기·옮기기·늘리기가 된다. */
+  tailHours?: number;
+  /** 다음 날의 plan(`day` + 1 기준) — 구간 안에서 시작하는 일정만 쓴다. 없으면 구간은 비어 있다(만들기는 된다). */
+  tailPlan?: TimedDayPlan | null;
+  /** 시 눈금 라벨 아래에 얹는 시간별 날씨(키 = 0~23 시, 오늘만) — 브리핑 창이 준다. useMemo 로 안정화해 넘길 것(HourRuler memo). */
+  hourWeather?: ReadonlyMap<number, { code: number; tempC: number }>;
 }) {
   // 스크롤러(보이는 창)와 캔버스(672px 전체) — 둘 다 **축 안에서만** 산다(W8 ②).
   const axisRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
 
-  // ── 축 확대 (PLAN-2026-09-13 달력 확대) ────────────────────────────────────────────────────
-  // **로컬 state, 전역 싱글턴 아니다** — 이 축 인스턴스(대시보드 하나, 사이드바 하나)만의 배율.
-  // 같은 세션에서 날짜를 옮겨도 이 컴포넌트가 안 사라지는 한(D4 껍데기 분리 참고 — 대시보드는
-  // TimeAxis 를 다시 마운트하지 않는다) 유지되고, 언마운트/새로고침이면 기본값(HOUR_ROW_H)으로
-  // 돌아간다 — 설정 키도 localStorage 도 만들지 않는다(요구사항 ③).
-  const [hourRowH, setHourRowH] = useState(HOUR_ROW_H);
-  /** wheel 핸들러는 아래에서 `useEffect(…, [])`로 한 번만 등록한다 — 그 클로저가 매 렌더 새로
-   *  만들어지지 않으므로 최신 배율은 ref 로 읽는다(이 파일의 다른 "얼린 손잡이"와 같은 처방,
-   *  useImperativeHandle 의 startMinAt 주석 참고). */
-  const hourRowHRef = useRef(hourRowH);
-  hourRowHRef.current = hourRowH;
-  const dayAxisH = hourRowH * 24;
-  const pxPerMin = hourRowH / 60;
-  // 사이드바(compact) — 캔버스 아래 3행 여백. 늦은 밤엔 스크롤 끝이 24:00 이라 지금 시각이 항상
-  // 창 바닥에 붙었고(보이는 창이 실측보다 낮으면 화면 밖), 여백이 있으면 지금을 위쪽에 둘 수 있다.
+  // ── 축 확대 · 기본 스크롤 · 하루 전체 보기 ── useAxisZoom.ts (배율은 이 축 인스턴스만의 로컬 state 다)
+  /** 축의 끝 분 — **하루 끝에 기대던 모든 clamp 의 단일 출처**. 당일만이면 24:00, 익일 구간이 있으면 그만큼 늘어난다. */
+  const axisEndMin = day ? axisEndMinFor(tailHours) : DAY_MIN;
+  const tailMinutes = axisEndMin - DAY_MIN;
+  // 사이드바(compact) — 당일만 보일 때 캔버스 아래 3행 여백. 늦은 밤엔 스크롤 끝이 24:00 이라 지금 시각이 항상
+  // 창 바닥에 붙었고(보이는 창이 실측보다 낮으면 화면 밖), 여백이 있으면 지금을 위쪽에 둘 수 있다. 익일 구간이
+  // 있으면 그 구간이 여백을 대신한다(아래에 빈 공간이 남지 않는다).
   // ponytail: 여백은 배율을 따라간다. 창 높이를 ResizeObserver 로 따라 재정렬하지는 않는다.
-  const tailRows = compact ? 3 : 0;
-
-  /** 휠 확대 직후, 커서가 가리키던 **그 시각**을 같은 화면 자리에 다시 놓기 위한 값 — 캔버스
-   *  높이(dayAxisH)가 새 배율로 실제로 커진 "뒤"에 scrollTop 을 세팅해야 한다(먼저 세팅하면
-   *  아직 옛 scrollHeight 라 브라우저가 그 자리에서 clamp 해 버린다). 그래서 wheel 핸들러는
-   *  이 ref 에 "고정할 시각(분) · 그때의 커서 Y"만 적어 두고, 실제 scrollTop 은 hourRowH 가
-   *  반영된 다음 렌더의 useLayoutEffect 가 계산한다 — 지도의 `nextX = cursorX - ((cursorX-x)/prevK)*nextK`
-   *  재조정과 같은 사상이고, 여기는 x/pan 대신 scrollTop 하나뿐이다. */
-  const pendingZoomFix = useRef<{ pinnedMin: number; cursorY: number } | null>(null);
-  useLayoutEffect(() => {
-    const fix = pendingZoomFix.current;
-    const el = axisRef.current;
-    if (!fix || !el) return;
-    pendingZoomFix.current = null;
-    const viewH = el.getBoundingClientRect().height;
-    const raw = fix.pinnedMin * pxPerMin - fix.cursorY;
-    el.scrollTop = Math.max(0, Math.min(dayAxisH + tailRows * hourRowH - viewH, raw));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- pxPerMin/dayAxisH 는 hourRowH 의
-    // 파생값이라 hourRowH 하나만으로 이 값들이 바뀐 렌더를 잡는다(둘 다 deps 에 넣으면 같은
-    // 렌더에 두 번 잡히는 게 아니라 그냥 중복 표기다 — 굳이 늘리지 않는다).
-  }, [hourRowH]);
-
-  // 축의 스크롤 컨테이너에 **네이티브** addEventListener 로 건다(useMapPanZoom·useTimelineDrag 와
-  // 같은 이유 — React 의 합성 onWheel 은 델리게이션 루트에 passive 로 등록돼 preventDefault 가
-  // 안 먹는다). 평소 휠은 이 리스너가 손대지 않는다(막지 않으면 컨테이너의 기존 세로 스크롤이
-  // 그대로 산다) — Ctrl/Cmd+wheel 만 확대/축소로 가로챈다(지도·연도 타임라인과 통일된 관용구,
-  // 2026-09-08). deps 는 []: 클로저는 ref(hourRowHRef · axisRef)만 만지므로 재등록이 필요 없다.
-  useEffect(() => {
-    const el = axisRef.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey && !e.metaKey) return; // 평소 휠 = 그대로 세로 스크롤(막지 않는다).
-      e.preventDefault();
-      const cur = hourRowHRef.current;
-      const factor = e.deltaY < 0 ? 1.15 : 0.85;
-      const next = Math.min(MAX_HOUR_ROW_H, Math.max(MIN_HOUR_ROW_H, cur * factor));
-      if (next === cur) return; // 이미 하한/상한 — 아무것도 안 바뀐다.
-      const rect = el.getBoundingClientRect();
-      const cursorY = e.clientY - rect.top;
-      // 확대 중심 = 커서가 가리키는 "그 시각"(지금 스케일 기준으로 역산). 위 useLayoutEffect 가
-      // 새 스케일 반영 뒤 이 시각을 같은 커서 자리로 되돌린다.
-      const pinnedMin = (el.scrollTop + cursorY) / (cur / 60);
-      pendingZoomFix.current = { pinnedMin, cursorY };
-      setHourRowH(next);
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, []);
-
-  /** 그릴 때만 쓰는 값 — 드래그 중 미리보기이자 드롭 직후의 낙관적 위치.
-   *
-   *  W15 — **칩 하나가 아니라 목록이다.** 맞닿은 이웃이 같이 움직이므로(연동 이동) 한 제스처가
-   *  여러 칩의 자리를 바꾼다. 빈 배열 = 미리보기 없음(예전의 null). 보통의 경우는 길이 1 이다. */
-  const [pendingMove, setPendingMove] = useState<MovePreview[]>([]);
-  const [newRange, setNewRange] = useState<{ startMin: number; endMin: number } | null>(null);
-
-  /** W11 ④ — 설정이 펼쳐진 칩과 그 안에서 열린 줄. **축 전체에 하나뿐**이다(NoteDatesList §A 의
-   *  "모달/팝오버 중첩 금지"와 같은 규율: 칩 하나를 펼치면 다른 칩은 접힌다). 새 데이터가 와도
-   *  닫지 않는다 — 시각을 고치면 재조회가 도니, 닫아 버리면 연달아 고칠 수가 없다. */
-  const [openChip, setOpenChip] = useState<{ key: string; field: "time" | "repeat" | null } | null>(
-    null,
-  );
-  /** 열려 있는 칩 하나의 메뉴와 그 토글 버튼 — 바깥 클릭 판정에만 쓴다(축 전체에 하나뿐이므로
-   *  칩마다 만들지 않는다). */
-  const chipMenuRef = useRef<HTMLDivElement>(null);
-  const chipSettingsRef = useRef<HTMLButtonElement>(null);
-
-  // W12 ③ — 플로팅 메뉴는 바깥 클릭·Escape 로 닫힌다. W14 에서 종일 필의 펼침 패널이 **두 번째
-  // 사용처**가 되면서 이 스무 줄이 useDismissOnOutside 로 나갔다(그 함수의 주석에 왜 공용
-  // useDismiss 가 아닌지까지 있다) — 두 패널이 한 가지를 쓴다.
-  useDismissOnOutside(openChip !== null, [chipMenuRef, chipSettingsRef], () => setOpenChip(null));
-
+  const tailRows = compact && tailMinutes === 0 ? 3 : 0;
+  const firstMin = plan.timed[0]?.startMin ?? null; // 익일 구간이 아니라 당일 첫 일정
   // ③ 현재 시각 눈금 — 1분 틱. 공용 훅을 새로 만들지 않는다(HomeHeader.tsx 가 같은 일을 지역
   // setInterval 로 한다). uiStore.todayIso 는 **날짜**만 있어 분 위치를 못 주므로 여기서 읽는다.
   // 자정을 넘어가면 todayLocal().day 가 바뀌어 눈금이 알아서 사라진다 — 분기 코드가 따로 없다.
@@ -386,102 +366,67 @@ export function TimeAxis({
     const id = setInterval(() => setNowTick(readNowTick()), 60_000);
     return () => clearInterval(id);
   }, []);
+  const { hourRowH, hourRowHRef, wholeDayView, toggleWholeDayView } = useAxisZoom({
+    axisRef,
+    day,
+    axisEndMin,
+    tailRows,
+    compact,
+    firstMin,
+    nowTick,
+  });
+  const dayAxisH = (hourRowH * axisEndMin) / 60;
+  const pxPerMin = hourRowH / 60;
+  /** 이 축에 그려지는 모든 일정 — 당일 + 익일 구간 안에서 시작하는 것(좌표는 당일 00:00 기준, 익일 것은 +24:00). 키는
+   *  그대로다(date_id|시작 — 두 날에 같은 키가 나오지 않는다). 아래의 plan.timed 쓰임은 전부 이것으로 바뀌었다. */
+  const timed = useMemo<TimedEvent[]>(
+    () => mergeTailTimed(plan.timed, tailPlan, tailMinutes),
+    [plan.timed, tailPlan, tailMinutes],
+  );
+  const tailDay = day && tailMinutes > 0 ? addDaysIso(day, 1) : null;
+
+  /** 그릴 때만 쓰는 값 — 드래그 중 미리보기이자 드롭 직후의 낙관적 위치.
+   *
+   *  W15 — **칩 하나가 아니라 목록이다.** 맞닿은 이웃이 같이 움직이므로(연동 이동) 한 제스처가
+   *  여러 칩의 자리를 바꾼다. 빈 배열 = 미리보기 없음(예전의 null). 보통의 경우는 길이 1 이다. */
+  const [pendingMove, setPendingMove] = useState<MovePreview[]>([]);
+  const [newRange, setNewRange] = useState<{ startMin: number; endMin: number } | null>(null);
+  /** 칩 드래그가 열려 있는 동안만 — 어느 칩을 어느 모드로 끄는가(손잡이 라벨·15분 격자 표시용). 시작·끝에만
+   *  바뀐다. 칩 자체는 pendingMove(스냅 값)로 그려진다 — 2026-10-27 기하 통일: 손 따라가는 칩 + 고스트 두 벌이
+   *  서로 다른 자리에 서던 것을, **칩 하나가 곧 놓을 자리**로 합쳤다. */
+  const [dragInfo, setDragInfo] = useState<{ key: string; mode: ChipDragMode } | null>(null);
+  /** 직전에 보인 스냅 결과 — 칸 경계 히스테리시스(SNAP_HYSTERESIS)와, 놓을 때 화면과 같은 값을 저장하기 위한 기준. */
+  const lastSnapRef = useRef<{ startMin: number; endMin: number } | null>(null);
+
+  /** 일정 수정 모달이 열려 있는 칩(⚙ 버튼 또는 롱프레스). **축 전체에 하나뿐**이다. 새 데이터가 와도 닫지 않는다 —
+   *  저장하면 모달이 스스로 닫는다. 칩 객체는 열 때의 스냅샷이다(모달이 떠 있는 동안 재조회가 와도 입력 초깃값은 안 바뀐다). */
+  const [editing, setEditing] = useState<TimedEvent | null>(null);
+
   const nowTop = day === null ? null : nowLineTop(day, nowTick.todayIso, nowTick.minutes, hourRowH);
   // 사이드바: 오늘의 다음 시각 일정(지금 이후 시작) — "시간 표현" 한 조각. plan.timed 는 시작순이다.
   const nextEvent =
     compact && day === nowTick.todayIso ? (plan.timed.find((e) => e.startMin >= nowTick.minutes) ?? null) : null;
 
-  // 새 데이터가 오면(저장 → bump → 재조회) 낙관적 위치를 버린다 — 그때부터 plan 이 진실이다.
+  // 새 데이터가 오면(저장 → bump → 재조회) 낙관적 위치를 **행 단위로** 판정한다 — 당일 plan 과 익일 plan 은 서로 다른 조회에서 따로 도착해,
+  // 먼저 온 쪽의 옛 자리가 방금 끌어 놓은 칩을 튀게 했다(pendingMove.ts::reconcilePreviews 머리 주석).
+  // timedRef/pendingRef 는 렌더마다 갱신하는 최신값 — 콜백(commitTimes·onMove)이 낡은 목록을 쥐지 않게 한다.
+  const timedRef = useRef(timed);
+  timedRef.current = timed;
+  const pendingRef = useRef(pendingMove);
+  pendingRef.current = pendingMove;
+  useEffect(() => {
+    setPendingMove((cur) => reconcilePreviews(cur, timed) as MovePreview[]);
+  }, [timed]);
+  // 다른 날로 가면 남은 미리보기는 그 날의 것이 아니다.
   useEffect(() => {
     setPendingMove([]);
-  }, [plan]);
-
-  // 오늘은 **항상** 지금 시각(뷰포트 가운데)에 맞춘다(오너 실기 2026-09-16) — 일정이 있어도
-  // 없어도. 옛 규칙은 첫 일정이 있으면 무조건 그리로 맞췄는데, 새벽(수면 등) 일정이 있는 날은
-  // 지금이 오후여도 축이 00시부터 열려 "맨날 하루의 처음"으로 보이는 사고였다. 다른 날은 그대로
-  // 첫 일정, 없으면 08:00(§6.2). **부모가 아니라 여기** — 자기 스크롤러를 아는 것은 축뿐이고
-  // (W8 ②), 목록 펼침으로 축이 다시 마운트될 때도 맞는다(부모의 effect 는 deps 가 그대로여서
-  // 재마운트된 축을 0 으로 남겨 뒀다).
-  //
-  // **한 번만 맞춘다** — `pinnedTodayRef` 가 이 날짜로 이미 맞췄는지를 기억한다. 없으면 이
-  // effect 는 `firstMin`(재조회로 첫 일정이 바뀔 때마다) 에도 다시 돈다 — 시간축 빈 곳에
-  // 새 일정을 만들면(바로 위 onCreateTimedNote 리프레시로 재조회가 오고 firstMin 이 바뀐다)
-  // 방금 만든 그 일정 쪽으로 축이 다시 튀어, 사용자가 방금 본 자리에서 자기가 만든 일정이
-  // 화면 밖으로 사라지는 사고가 났다. 오늘이 아닌 날은 그대로 매 firstMin 변화에 다시 맞춘다
-  // (detailNotes 가 비동기로 나중에 도착해 null → 값으로 바뀌는 정상 경로 — 그 갈래는 손대지
-  // 않았다). 날짜를 바꾸면 ref 를 지워 다음에 그 날로(또는 다시 오늘로) 돌아오면 재적용된다.
-  // `nowTick.minutes` 는 deps 에 안 둔다 — 매 분 재렌더된다고 스크롤을 다시 뺏으면 사용자가
-  // 손으로 옮긴 위치가 흐른다.
-  const firstMin = plan.timed[0]?.startMin ?? null;
-  const pinnedTodayRef = useRef<string | null>(null);
-  /** 위 세 갈래(오늘=지금 시각·다른 날=첫 일정·둘 다 없으면 08:00)를 **한 곳에** 둔다 — 아래
-   *  effect 와, "하루 전체 보기"를 끌 때(되돌리기)가 같은 규칙을 쓴다(오너 요청 2026-09-16).
-   *  `forHourRowH` 를 받는 이유: 되돌리기는 `setHourRowH` 로 배율을 바꾼 **바로 그 틱**에 새
-   *  배율 기준으로 다시 맞춰야 하는데, state 는 다음 렌더에야 반영되니 방금 정한 값을 직접
-   *  넘긴다(effect 쪽은 그냥 지금 hourRowH 를 넘긴다). */
-  const applyDefaultScroll = (el: HTMLDivElement, forHourRowH: number) => {
-    const axisH = forHourRowH * 24;
-    if (day === nowTick.todayIso) {
-      const nowPx = (nowTick.minutes / (24 * 60)) * axisH;
-      // compact: 지금을 창 위쪽 40% 에(아래 여백 덕에 밤에도 가능), 아니면 가운데.
-      const anchor = el.clientHeight * (compact ? 0.4 : 0.5);
-      const maxTop = axisH + tailRows * forHourRowH - el.clientHeight;
-      el.scrollTop = Math.max(0, Math.min(maxTop, nowPx - anchor));
-      return;
-    }
-    if (firstMin !== null) {
-      el.scrollTop = (firstMin / (24 * 60)) * axisH;
-      return;
-    }
-    el.scrollTop = ((DEFAULT_SCROLL_HOUR * 60) / (24 * 60)) * axisH;
-  };
-  useEffect(() => {
-    const el = axisRef.current;
-    if (!el) return;
-    if (day === nowTick.todayIso) {
-      if (pinnedTodayRef.current === day) return;
-      pinnedTodayRef.current = day;
-      applyDefaultScroll(el, hourRowH);
-      return;
-    }
-    pinnedTodayRef.current = null;
-    applyDefaultScroll(el, hourRowH);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- hourRowH 는 일부러 뺐다: 축소/확대
-    // 만으로 이 "첫 일정에 맞추기"를 다시 돌리면 안 된다 — 그건 아래 wheel 핸들러의
-    // useLayoutEffect 가 이미 자기 몫(커서 중심 재조정)으로 처리한다. 이 effect 는 날짜가
-    // 바뀌거나 축이 다시 마운트될 때만 돈다. "하루 전체 보기" 버튼이 배율을 바꾸는 경우도
-    // 마찬가지로 이 effect 가 아니라 그 버튼의 핸들러가 직접 applyDefaultScroll 을 부른다.
-  }, [firstMin, day, nowTick.todayIso]);
-
-  // ── 하루 전체 보기 (오너 요청 2026-09-16) ──────────────────────────────────────────────────
-  // 사이드바 축은 보이는 창이 ~168px(≈6시간)뿐이라 하루를 보려면 계속 스크롤해야 한다는 피드백
-  // — 한 번에 24시간을 다 넣는 배율로 맞추는 토글. 휠 확대(Ctrl+wheel)와 **같은 변수**
-  // (hourRowH) 를 쓰므로 두 조작이 서로 다투지 않는다 — 이 버튼도 그 배율을 한 번 바꿀 뿐이고,
-  // 다시 눌러 원래 배율로 돌아가면 지금 시각(또는 첫 일정)으로 다시 맞춘다.
-  const [wholeDayView, setWholeDayView] = useState(false);
-  const toggleWholeDayView = () => {
-    const el = axisRef.current;
-    if (!el) return;
-    if (wholeDayView) {
-      setWholeDayView(false);
-      setHourRowH(HOUR_ROW_H);
-      applyDefaultScroll(el, HOUR_ROW_H);
-      return;
-    }
-    const viewH = el.getBoundingClientRect().height;
-    // MIN_HOUR_ROW_H(28, 24h=672px) 가 아니라 훨씬 낮은 바닥을 쓴다 — 그건 "탐색적 축소로는
-    // 이 밑으로 못 읽는다"는 휠 확대의 하한이고, 이 버튼은 "좁은 창에 24시간을 다 욱여넣어라"는
-    // 명시적 요청이라 다른 목적이다. 사이드바 실측 높이(~168px)로 그 바닥을 지키면 버튼이
-    // 사실상 아무 것도 안 하는 것과 같다(672px 이상 있어야 28 을 지킬 수 있다). 더 내려가도
-    // tickIntervalMinFor 가 알아서 시간 단위 눈금으로 굵어질 뿐 깨지지 않는다.
-    const fit = Math.min(MAX_HOUR_ROW_H, Math.max(FIT_DAY_MIN_HOUR_ROW_H, viewH / 24));
-    setWholeDayView(true);
-    setHourRowH(fit);
-    el.scrollTop = 0;
-  };
+  }, [day]);
 
   // ── W17: 가장자리 자동 스크롤 ── useAxisAutoScroll.ts (세 드래그가 같은 규칙을 쓴다)
-  const { trackAutoScroll, stopAutoScroll, dragDeltaPx } = useAxisAutoScroll(axisRef, dayAxisH);
+  const { trackAutoScroll, stopAutoScroll, dragDeltaPx } = useAxisAutoScroll(
+    axisRef,
+    axisContentPx(hourRowH, axisEndMin, tailRows),
+  );
 
   /** 포인터가 축의 **보이는 영역** 안이면 그 자리의 시작 분, 밖이면 null(= 아무 일도 없다).
    *  히트 판정은 스크롤러 rect(보이는 창), 분 계산은 캔버스 rect(672px 전체) 로 나뉜다 —
@@ -501,7 +446,8 @@ export function TimeAxis({
         // (hourRowHRef, 위 축 확대 블록에서 매 렌더 갱신).
         return snapStartMin(0, clientY - canvas.top, MIN_SLOT_MIN, hourRowHRef.current);
       },
-      // 나머지 둘은 ref 만 만지므로 deps [] 로 얼려도 낡지 않는다(위 startMinAt 과 같은 이유).
+      // 나머지 둘이 건네는 자동 스크롤 함수는 첫 렌더의 것이지만, 렌더마다 바뀌는 값(스크롤 영역 높이)을 훅이 ref 로 읽으므로 낡지 않는다
+      // (useAxisAutoScroll 머리 주석).
       trackDragAt: (clientY, resync) => trackAutoScroll(clientY, resync),
       stopAutoScroll: () => stopAutoScroll(),
     }),
@@ -518,47 +464,48 @@ export function TimeAxis({
     mode: ChipDragMode,
     next: { startMin: number; endMin: number },
     /** W15 — 같이 움직이는 이웃들의 새 자리. move 는 맞닿은 체인 전부(연동 이동), 손잡이 리사이즈
-     *  는 맞닿은 이음새 하나뿐(오너 요청 2026-09-16, planLinkedResize)이다. `deltaMin` 은
-     *  move 에서만 뜻이 있다 — **이 동작이 실제로 민 양**, 이웃의 DB 행에 그대로 얹는다.
-     *  리사이즈 이웃은 `linked[].startMin/endMin` 이 이미 그 이웃의 새 절대 시각이라 델타가
-     *  필요 없다(아래 분기 참고). */
+     *  는 맞닿은 이음새 하나뿐(오너 요청 2026-09-16, planLinkedResize)이다. 무엇을 어디에 쓰는지는
+     *  dateWrite::planGestureWrites(순수)가 계산하고, 이 함수는 그 목록대로 쓰고 화면·롤백·토스트만 맡는다. */
     linked: MovePreview[] = [],
-    deltaMin = 0,
   ) => {
-    setPendingMove([{ key: e.key, ...next }, ...linked]);
+    setPendingMove(tagPreviews([{ key: e.key, ...next }, ...linked], pendingRef.current, timedRef.current));
+    // 이웃의 행 id·현재 자리 — 키로 찾는다.
+    const neighbors = new Map(
+      timed.map((x) => [x.key, { noteId: x.item.note_id, dateId: x.item.date_id, startMin: x.startMin }]),
+    );
+    const [primary, ...rest] = planGestureWrites({
+      chip: { noteId: e.item.note_id, dateId: e.item.date_id, startMin: e.startMin },
+      mode,
+      next,
+      linked,
+      neighbors,
+      day,
+      hourRowH,
+    });
     // 되돌리기는 **한 토스트로 묶는다** — 연동된 항목 전부가 한 사용자 동작이다(commitDateRow 의
     // collectUndo 주석). 단일 칩도 같은 길을 지난다: 갈래를 둘로 두면 하나가 조용히 썩는다.
     const reverts: (() => void)[] = [];
     const collect = (revert: () => void) => reverts.push(revert);
     let label = t("home.cal_time_changed");
     const ok = await commitDateRow(
-      e.item.note_id,
-      e.item.date_id,
+      primary.noteId,
+      primary.dateId,
       (row) => {
-        // 무엇이 고정인지는 mode 가 정한다(순수 계산은 dateWrite::planRowTimes — 이웃 둘과 같은
-        // 자리다). 여기 남는 것은 그 결과를 화면·토스트에 잇는 비순수 두 줄뿐이다.
-        const { start_time, end_time, startMin } = planRowTimes(row, mode, next, hourRowH);
-        // move 가 행에서 얻은 길이로 다시 죈 시작이 미리보기와 다르면 미리보기를 그 값으로 고친다.
-        if (startMin !== null && startMin !== next.startMin) {
+        const r = primary.patch(row);
+        if (!r) return null;
+        // move 가 행에서 얻은 길이로 다시 죈 시작이 미리보기와 다르면 미리보기를 그 값으로 고친다(비순수라 계획 밖).
+        if (r.settledStartMin != null) {
+          const settled = r.settledStartMin;
           setPendingMove((cur) =>
             cur.map((p) =>
               p.key === e.key
-                ? {
-                    key: e.key,
-                    startMin,
-                    endMin: startMin + (next.endMin - next.startMin),
-                  }
+                ? { ...p, startMin: settled, endMin: settled + (next.endMin - next.startMin) } // row/from 꼬리표를 잃지 않는다
                 : p,
             ),
           );
         }
-        // W15 ③ — 토스트 문구의 이전→이후는 **이 행이 실제로 바꾼 쪽**이다: 끝 손잡이는 끝 시각,
-        // 나머지(이동·시작 손잡이)는 시작 시각. 행을 읽은 이 자리에서만 "이전"을 알 수 있다.
-        label =
-          mode === "end"
-            ? timeChangeLabel(row.end_time, end_time)
-            : timeChangeLabel(row.start_time, start_time);
-        return { start_time, end_time };
+        if (r.label) label = r.label;
+        return r.fields;
       },
       undefined,
       collect,
@@ -567,33 +514,9 @@ export function TimeAxis({
       setPendingMove([]); // 롤백 — call() 이 이미 토스트했다. 이웃도 아직 쓰지 않았다.
       return;
     }
-    // 이웃은 각자 자기 DB 행을 읽어 쓴다(함정 ⓑ 그대로) — move 는 델타만큼 통째로 밀고
-    // (shiftRowTimes), 리사이즈는 이음새로 맞닿은 한쪽 경계만 옮긴다(resizeRowBoundary). 이음새
-    // 쪽은 `mode` 가 가리키는 손잡이의 **반대편**이 이웃의 닿은 면이다 — 내가 끝(end)을 늘리면
-    // 이웃의 시작(start)이 그 자리로, 내가 시작을 당기면 이웃의 끝이 그 자리로.
-    const byKey = new Map(plan.timed.map((x) => [x.key, x]));
-    for (const l of linked) {
-      const target = byKey.get(l.key);
-      if (!target) continue;
-      if (mode === "move") {
-        await commitDateRow(
-          target.item.note_id,
-          target.item.date_id,
-          (row) => shiftRowTimes(row, deltaMin),
-          undefined,
-          collect,
-        );
-        continue;
-      }
-      const side = mode === "end" ? "start" : "end";
-      const boundaryMin = side === "start" ? l.startMin : l.endMin;
-      await commitDateRow(
-        target.item.note_id,
-        target.item.date_id,
-        (row) => resizeRowBoundary(row, side, boundaryMin),
-        undefined,
-        collect,
-      );
+    // 이웃은 각자 자기 DB 행을 읽어 쓴다(함정 ⓑ 그대로).
+    for (const w of rest) {
+      await commitDateRow(w.noteId, w.dateId, (row) => w.patch(row)?.fields ?? null, undefined, collect);
     }
     if (reverts.length > 0) {
       showUndoToast(label, () => {
@@ -602,61 +525,32 @@ export function TimeAxis({
     }
   };
 
-  /** 그 날 안에서 끝나는 행만 손잡이를 갖는다 — 이유는 calendarLayout::chipDragMode 참고.
+  /** 그 날 안에서 끝나는 행만 손잡이를 갖는다 — 이유는 calendarLayout::handlePadPx 참고.
    *  판정은 행 모양(rowIsSameDay)이다 — 월 경계로 잘린 span_start/span_end 는 여러 날 행을
    *  하루처럼 보이게 한다. TimeChip 의 `resizable` 과 같은 규칙이어야 한다. */
   const isResizable = (e: TimedEvent) => rowIsSameDay(e.item);
 
-  /**
-   * W11 ④ — 펼친 설정에서 시각 한쪽을 고친다. **새 쓰기 경로를 만들지 않는다**: 드래그·키보드와
-   * 같은 commitDateRow 를 지나므로 함정 ⓑ(전량 교체 페이로드는 DB 행 기준)와 되돌리기가 그대로
-   * 붙는다. `null` 은 해제다 — 빈 입력과 파싱 실패를 가르는 일은 ChipTimeEditor 가 한다.
-   *
-   * 끝 시각은 **하루짜리 행에만** 쓴다. 여러 날 span 의 `end_time` 은 마지막 날의 시각이라
-   * (§1.3 I3) 여기서 쓰면 남의 날짜를 조용히 바꾼다 — 끝 손잡이를 안 주는 것과 같은 이유이고,
-   * 판정은 화면 항목이 아니라 DB 행(rowIsSameDay)이 한다. 입력 자체도 안 보이지만, 화면 값으로
-   * 판정하면 월 경계로 클리핑된 span 이 하루처럼 보이는 경우를 놓친다.
-   */
-  const commitChipTime = (e: TimedEvent, part: "start" | "end", value: string | null) => {
-    // W15 ③ — 이전 시각은 이 칩이 이미 알고 있다(화면 항목의 값). 해제(value === null)나 원래
-    // 비어 있던 경우는 채울 짝이 없어 고정 문구로 폴백한다 — timeChangeLabel 한 지점의 규칙.
-    const label = timeChangeLabel(
-      part === "start" ? e.item.start_time : e.item.end_time,
-      value,
-    );
-    return commitDateRow(
-      e.item.note_id,
-      e.item.date_id,
-      (row) => {
-        if (part === "start") return { start_time: value };
-        if (!rowIsSameDay(row)) return null; // 아무것도 쓰지 않는다.
-        return { end_time: value };
-      },
-      label,
-    );
-  };
-
-  /** D4(그릴 2026-09-11) — 반복 편집은 더 이상 여기서 즉시 커밋하지 않는다. ChipRepeatEditor 의
-   *  "적용"이 이 콜백을 부르면 메뉴부터 닫고(포포버 위 모달 금지) 확인을 DayDetailPanel 에
+  /** D4(그릴 2026-09-11) — 반복 편집은 더 이상 여기서 즉시 커밋하지 않는다. 일정 수정 모달(ChipEventModal)이
+   *  반복이 바뀐 채 저장되면 스스로 닫은 뒤(모달 위 모달 금지) 이 콜백으로 확인을 DayDetailPanel 에
    *  요청한다 — 실제 저장(commitDateRow)과 사후 판정은 그 확인이 끝난 뒤 부모의
    *  resolveRepeatApply 가 한다(같은 파일, 위 참고). */
   const onRepeatApply = (e: TimedEvent, draft: RepeatDraft) => {
-    setOpenChip(null);
     onRequestConfirm({
       kind: "repeatApply",
       key: e.key,
       noteId: e.item.note_id,
       dateId: e.item.date_id,
-      // day prop 이 곧 이 축이 보여주는 selectedDay 다(축에 있는 timed 항목은 전부
-      // 그 날 시작하는 것만 — planTimedDay 의 startsOnDay). e.item.span_start 는 매달 1일에
-      // 잘린 값일 수 있어 폴백으로만 남긴다.
+      // day prop 이 곧 이 축이 보여주는 selectedDay 다 — 익일 구간의 칩도 같은 값이다(사후 판정이 "아직 그 날을 보고 있나"를 이 값으로 가르고,
+      // 칩 찾기는 합친 목록에서 한다 — useAxisConfirmFlow). e.item.span_start 는 매달 1일에 잘린 값일 수 있어 폴백으로만 남긴다.
       day: day ?? e.item.span_start,
+      inTail: e.startMin >= DAY_MIN,
       draft,
     });
   };
 
   /** 점선 미리보기 블록 하나 — W7 의 드롭이 있으면 그것, 없으면 ② 의 새 범위. 둘이 동시에 뜨는
-   *  일은 없다(하나는 카드에서, 하나는 축의 빈 곳에서 시작하는 제스처다). */
+   *  일은 없다(하나는 카드에서, 하나는 축의 빈 곳에서 시작하는 제스처다). 칩 끌기에는 고스트가 없다 — 칩
+   *  자신이 스냅된 자리에 선다. */
   const ghost = dropPreview
     ? {
         testid: "cal-time-drop",
@@ -680,13 +574,15 @@ export function TimeAxis({
    * 첫 이동에서 곧바로 끊긴다.
    */
   const chipPositions = (): LinkableEvent[] =>
-    plan.timed.map((ev) => {
+    timed.map((ev) => {
       const p = pendingMove.find((x) => x.key === ev.key);
       return {
         key: ev.key,
         startMin: p?.startMin ?? ev.startMin,
         endMin: p?.endMin ?? ev.endMin,
         linkable: isResizable(ev),
+        // 날짜를 못 바꾸는 일정(여러 날 span · 반복 행)은 익일 구간이 있어도 자기 날 안에서만 움직인다.
+        locked: !isResizable(ev) || !!ev.item.rrule,
         // planLinkedResize 만 본다(위 LinkableEvent 주석) — 이 칩의 end_time 이 실제로 있는지.
         hasEnd: ev.item.end_time != null,
       };
@@ -694,7 +590,7 @@ export function TimeAxis({
 
   /**
    * 드래그(또는 키보드 한 번)의 결과 — 주 칩의 새 시각(dragTimes)과, 같이 따라오는 이웃들.
-   * move 는 맞닿은 체인 전부(planLinkedMove), 리사이즈 손잡이는 맞닿은 이음새 하나뿐
+   * move 는 밀려난 이웃 전부(planLinkedMove — 겹친 만큼만 밀고 연쇄), 리사이즈 손잡이는 겹치거나 맞닿은 이웃 하나(줄어듦)
    * (planLinkedResize, 오너 요청 2026-09-16 — "이음새를 끌면 양쪽이 같이 반응해야 한다").
    * 리사이즈는 이웃이 있으면 `next` 도 그 이웃의 최소 길이만큼 다시 죈다(planLinkedResize 가
    * 함께 돌려준다) — 그래서 `next` 를 그 함수의 반환으로 덮어쓴다.
@@ -709,15 +605,23 @@ export function TimeAxis({
       positions: LinkableEvent[];
     },
     deltaPx: number,
+    prev?: { startMin: number; endMin: number } | null,
   ) => {
-    const rawNext = dragTimes(base.mode, base, deltaPx, hourRowH);
+    const locked = base.positions.find((p) => p.key === base.key)?.locked;
+    const rawNext = dragTimes(base.mode, base, deltaPx, hourRowH, prev ?? undefined, { axisEndMin, locked });
     if (base.mode === "move") {
-      const deltaMin = rawNext.startMin - base.startMin;
-      const linked = planLinkedMove(base.positions, base.key, deltaMin);
-      return { next: rawNext, linked, deltaMin };
+      // 이웃을 밀어내며 가므로 벽(밀 수 없는 이웃·축의 끝·자정 너머) 앞에서 델타가 줄 수 있다 — 칩의 자리도 그 델타로 다시 구한다.
+      const { deltaMin, linked } = planLinkedMove(
+        base.positions,
+        base.key,
+        rawNext.startMin - base.startMin,
+        axisEndMin,
+      );
+      const startMin = base.startMin + deltaMin;
+      return { next: { startMin, endMin: startMin + (base.endMin - base.startMin) }, linked };
     }
     const { next, linked } = planLinkedResize(base.positions, base.key, base.mode, rawNext);
-    return { next, linked, deltaMin: 0 };
+    return { next, linked };
   };
 
   // ── ① 칩을 위아래로 끌어 시각 바꾸기 (W3, 손잡이는 W5 ①) ─────────────────────────────────
@@ -742,43 +646,61 @@ export function TimeAxis({
       // 자동 스크롤의 틱도 **이 함수를 그대로** 다시 부른다 — 세션 값(clientY)은 그대로고
       // dragDeltaPx 가 새 scrollTop 을 읽으므로, 축이 흐른 만큼 미리보기가 따라온다.
       const apply = () => {
-        const { next, linked } = plannedMove(s.data, dragDeltaPx(s.dy, s.data.scrollTop0));
+        const deltaPx = dragDeltaPx(s.dy, s.data.scrollTop0);
+        // 칩 자체가 15분 스냅(+히스테리시스) 자리에 선다 — 이징 없이 칸을 넘을 때만 옮겨 간다. 화면 = 저장 값.
+        const { next, linked } = plannedMove(s.data, deltaPx, lastSnapRef.current);
+        lastSnapRef.current = next;
         setPendingMove((cur) => {
-          const nextPreview = [{ key: s.data.key, ...next }, ...linked];
+          const nextPreview = tagPreviews([{ key: s.data.key, ...next }, ...linked], pendingRef.current, timedRef.current);
           return samePreview(cur, nextPreview) ? cur : nextPreview;
         });
       };
+      setDragInfo((cur) =>
+        cur && cur.key === s.data.key && cur.mode === s.data.mode ? cur : { key: s.data.key, mode: s.data.mode },
+      );
       trackAutoScroll(s.clientY, apply);
       apply();
     },
     onDrop: (s) => {
       stopAutoScroll();
-      const { next, linked, deltaMin } = plannedMove(s.data, dragDeltaPx(s.dy, s.data.scrollTop0));
+      // 마지막으로 보인 칸을 기준으로 다시 계산한다 — 놓은 자리가 화면의 칩과 다르면 안 된다.
+      const { next, linked } = plannedMove(
+        s.data,
+        dragDeltaPx(s.dy, s.data.scrollTop0),
+        lastSnapRef.current,
+      );
+      endDrag();
       if (next.startMin === s.data.startMin && next.endMin === s.data.endMin) {
         setPendingMove([]);
         return;
       }
-      void commitTimes(s.data.event, s.data.mode, next, linked, deltaMin);
+      void commitTimes(s.data.event, s.data.mode, next, linked);
     },
     onCancel: () => {
       stopAutoScroll();
+      endDrag();
       setPendingMove([]);
     },
+    // 칩 몸통을 움직이지 않고 길게 눌렀다 뗐다 = 일정 수정 모달(오너 2026-10-27). 리사이즈 손잡이의 긴 누름은 무시한다.
+    onLongPress: (d) => {
+      if (d.mode === "move") setEditing(d.event);
+    },
   });
+
+  /** 드래그가 끝났다(놓음·취소·Esc). */
+  const endDrag = () => {
+    lastSnapRef.current = null;
+    setDragInfo(null);
+  };
 
   const onChipPointerDown = (e: TimedEvent, ev: ReactPointerEvent<HTMLDivElement>) => {
     if (ev.button !== 0) return;
     // 칩 위에서 시작한 드래그는 ①(시각 조정)이지 ②(빈 곳에 추가)가 아니다 — 축 컨테이너로
     // 새면 노트가 생긴다.
     ev.stopPropagation();
-    // W11 ④ — **설정이 펼쳐진 칩은 끌리지 않는다**(이동도 리사이즈도). 그 안에는 캐럿을 놓을
-    // 텍스트 입력과 누를 버튼들이 있어서, 같은 상하 손짓이 "값을 고치는 중"과 "칩을 옮기는 중"
-    // 둘로 갈린다 — 게다가 드래그는 포인터를 캡처해 입력이 포커스를 못 받는다. 접으면 손잡이도
-    // 그대로 돌아온다(요소는 없어지지 않는다). 메뉴 안에서 시작한 포인터는 ChipSchedule 이
-    // 한 번 더 막아 준다(그쪽 stopPropagation — 설정 토글 버튼도 같다).
-    if (openChip?.key === e.key) return;
     // 오너 실기 2026-09-16 — 칩 몸통은 이제 어디를 잡아도 항상 "이동"이다(위 HANDLE_HIT_PAD
     // 주석). 리사이즈는 AxisResizeHandle(아래 onHandlePointerDown)이 전담한다.
+    lastSnapRef.current = null;
     chipDrag.begin(
       {
         event: e,
@@ -795,7 +717,7 @@ export function TimeAxis({
   };
 
   /** 리사이즈 손잡이(AxisResizeHandle)의 pointerdown — 어느 손잡이인지가 곧 mode 라 칩 몸통처럼
-   *  `chipDragMode` 로 되짚을 필요가 없다. 나머지(포지션 얼리기·스크롤 기준점)는 몸통과 같다. */
+   *  좌표로 되짚을 필요가 없다. 나머지(포지션 얼리기·스크롤 기준점)는 몸통과 같다. */
   const onHandlePointerDown = (
     e: TimedEvent,
     mode: "start" | "end",
@@ -803,7 +725,7 @@ export function TimeAxis({
   ) => {
     if (ev.button !== 0) return;
     ev.stopPropagation();
-    if (openChip?.key === e.key) return;
+    lastSnapRef.current = null;
     chipDrag.begin(
       {
         event: e,
@@ -828,7 +750,7 @@ export function TimeAxis({
     s.y0 - s.data.topPx + dragDeltaPx(s.dy, s.data.scrollTop0);
   const createDrag = useAxisDragSession<{ topPx: number; scrollTop0: number }>({
     onMove: (s) => {
-      const apply = () => setNewRange(planNewRange(s.y0 - s.data.topPx, createEndPx(s), hourRowH));
+      const apply = () => setNewRange(planNewRange(s.y0 - s.data.topPx, createEndPx(s), hourRowH, axisEndMin));
       trackAutoScroll(s.clientY, apply);
       apply();
     },
@@ -836,7 +758,7 @@ export function TimeAxis({
       stopAutoScroll();
       setNewRange(null);
       if (!day) return;
-      const range = planNewRange(s.y0 - s.data.topPx, createEndPx(s), hourRowH);
+      const range = planNewRange(s.y0 - s.data.topPx, createEndPx(s), hourRowH, axisEndMin);
       if (!range) return; // 임계 미만 = 그냥 클릭. 아무것도 만들지 않는다.
       // 놓는 **그 순간** 만든다(PLAN-2026-09-10 D3) — 그리고 effect 가 아니라 이 핸들러에서:
       // effect 로 옮기면 StrictMode 이중 발화로 노트가 둘 생긴다(useCalendarDrag 의 같은 결정).
@@ -844,7 +766,10 @@ export function TimeAxis({
       // 되돌리기가 옛 시각으로 다시 쓰는 일이지만, 여기는 **노트를 만드는** 것이라 되돌리기가
       // "방금 만든 노트를 지우기"가 된다 — 성격이 다르고(삭제는 휴지통·복원 규율을 탄다) 만든
       // 노트는 CalendarTab 이 소유한다. 필요해지면 그 소유자 쪽에서 붙인다.
-      onCreateTimedNote?.(day, range.startMin, range.endMin);
+      // 익일 구간에서 만들면 날짜가 다음 날이고 시각은 그 날의 분이다 — 부모(세 마운트)는 이 변환을 모른다.
+      const at = splitAxisMin(range.startMin, day, tailDay);
+      const shift = range.startMin - at.min; // 익일 구간이면 DAY_MIN, 아니면 0
+      onCreateTimedNote?.(at.day ?? day, at.min, range.endMin - shift);
     },
     onCancel: () => {
       stopAutoScroll();
@@ -864,14 +789,20 @@ export function TimeAxis({
   };
 
   /** 축 확대 — `plan.timed` 는 부모(DayDetailBody)가 **기본** 스케일(HOUR_ROW_H)로 계산해 내려준
-   *  것이라, 그 안의 `top`/`height` 는 이 축이 지금 보여줄 배율과 다를 수 있다. 시작~끝 분·정렬
-   *  순서는 스케일과 무관한 사실이므로 다시 구하지 않고, 픽셀 배치(스태킹 스윕)만 지금 hourRowH
-   *  로 다시 돌린다 — layoutTimedEvents 는 그 스윕만 뽑아낸 순수 함수라 정렬을 다시 하지 않는다
-   *  (plan.timed 는 이미 planTimedDay 가 정렬해 뒀다). 인덱스로 plan.timed 와 짝지어 쓴다. */
+   *  것이라, 그 안의 `top`/`height` 는 이 축이 지금 보여줄 배율과 다를 수 있다. 시작~끝 분은 스케일과
+   *  무관하므로 픽셀만 지금 hourRowH 로 다시 구한다(인덱스로 plan.timed 와 짝지어 쓴다). 들여쓰기 칸은
+   *  **확정된 시각**으로만 정한다 — 끄는 동안 미리보기로 다시 정하면 이웃들의 칸이 손짓마다 뒤바뀐다. */
+  /** 칩마다 `pendingMove.find` 를 돌리던 O(칩×미리보기)를 렌더당 한 번 만드는 Map 으로. */
+  const pendingByKey = new Map(pendingMove.map((p) => [p.key, p]));
   const timedLayout = useMemo(
-    () => layoutTimedEvents(plan.timed, hourRowH),
-    [plan.timed, hourRowH],
+    () => layoutTimedEvents(timed, hourRowH),
+    [timed, hourRowH],
   );
+  /** 칩 한 줄의 픽셀 높이 — 칩이 몇 줄을 보일지(TimeChip 의 표시 단계) 가르는 기준. 글꼴 배율(--fs)을 따른다. */
+  const linePx = chipLinePx();
+  /** 끄는 동안만 보이는 스냅 격자 간격(분) — 15분이 너무 촘촘하면(6px 미만) 30·60분으로 굵힌다. */
+  const gridMin = [SNAP_MIN, 30, 60].find((m) => m * pxPerMin >= 6) ?? null;
+  const showGrid = (dragInfo !== null || newRange !== null) && gridMin !== null;
 
   return (
     <div
@@ -889,60 +820,12 @@ export function TimeAxis({
           하루를 보려면 계속 스크롤해야 한다는 피드백. **실제 레이아웃 행**(flex:"none")으로 두어
           스크롤 영역 위에 떠서 칩(특히 스크롤 맨 위에 걸린 칩의 설정 아이콘)을 가리지 않는다 —
           absolute 오버레이는 스크롤 위치에 따라 매번 다른 칩과 겹치므로 쓰지 않았다. */}
-      <div
-        style={{
-          flex: "none",
-          display: "flex",
-          alignItems: "baseline",
-          justifyContent: "flex-end",
-          gap: "var(--space-2)",
-          minWidth: 0,
-        }}
-      >
-        {(toolbarHint || nextEvent) && (
-          <div
-            title={nextEvent ? t("home.cal_next_event", { time: formatHhmm(nextEvent.startMin) }) : undefined}
-            style={{
-              flex: 1,
-              minWidth: 0,
-              color: "var(--faint)",
-              fontSize: "var(--text-2xs)",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {toolbarHint}
-            {nextEvent && (
-              <span data-testid="cal-axis-next">
-                {toolbarHint ? " · " : ""}
-                {t("home.cal_next_event", { time: formatHhmm(nextEvent.startMin) })}
-              </span>
-            )}
-          </div>
-        )}
-        <button
-          type="button"
-          data-testid="cal-axis-fit-day"
-          aria-pressed={wholeDayView}
-          title={t("home.cal_axis_fit_day")}
-          onClick={toggleWholeDayView}
-          style={{
-            border: "none",
-            background: "transparent",
-            padding: 0,
-            font: "inherit",
-            fontSize: "var(--text-2xs)",
-            fontWeight: 600,
-            color: wholeDayView ? "var(--accent)" : "var(--faint)",
-            cursor: "pointer",
-            textDecoration: "underline",
-            textUnderlineOffset: 2,
-          }}
-        >
-          {t("home.cal_axis_fit_day")}
-        </button>
-      </div>
+      <AxisToolbar
+        toolbarHint={toolbarHint}
+        nextStartMin={nextEvent ? nextEvent.startMin : null}
+        wholeDayView={wholeDayView}
+        onToggleWholeDayView={toggleWholeDayView}
+      />
       {/* The time section carries no label of its own — §7.8 defines no key for one, the hour
           column already says what this is. Vertical stacking means nothing is ever hidden here
           (unlike the month cell's "+n"), so there's no overflow count to show. */}
@@ -963,7 +846,10 @@ export function TimeAxis({
           // W9 ③: 터치는 길게 눌러야 드래그가 열리고, **그 순간** 훅이 touch-action 을 막는다.
           style={{ position: "relative", height: dayAxisH }}
         >
-          <HourRuler hourRowH={hourRowH} />
+          <HourRuler hourRowH={hourRowH} endMin={axisEndMin} hourWeather={hourWeather} />
+          {/* 익일 구간 — 자정에 눈에 띄는 구분선(일반 눈금선보다 굵게) + 다음 날 날짜 라벨, 구간 전체는 옅은 면으로 구분한다.
+              칩보다 뒤(DOM 순서)·포인터 없음이라 만들기 드래그가 이 위에서 그대로 시작된다. */}
+          {tailMinutes > 0 && tailDay && <TailZone tailMinutes={tailMinutes} tailDay={tailDay} pxPerMin={pxPerMin} />}
           {/* 그릴 2026-09-13 W3 — 시간축 배경 루틴("출퇴근" 등, 노트에 안 묶임). 칩(테두리 있는
               카드)보다 뒤(zIndex 0, DOM 순서도 먼저라 칩이 자연히 위에 그려진다)에 테두리 없는
               옅은 배경 면으로 얹는다 — 노트 일정과 시각적으로 명확히 구분된다. v1 범위: 클릭해도
@@ -973,97 +859,31 @@ export function TimeAxis({
               --bg) 는 쓰지 않는다.
               오너 실기 2026-09-16 — 제목을 띠 상단 중앙에 그린다(전에는 툴팁으로만 있어 호버
               전엔 어느 루틴인지 안 보였다). 배경 없는 텍스트라 표면 계약과 무관하다. */}
-          {routines.map((r) => {
-            const startMin = parseHhmm(r.start_time);
-            const endMin = parseHhmm(r.end_time);
-            if (startMin === null || endMin === null || endMin <= startMin) return null;
-            const bandColor =
-              r.color_hue != null ? folderColorCss(r.color_hue) : "var(--accent)";
-            return (
-              <div
-                key={r.id}
-                data-testid={`cal-timeline-routine-${r.id}`}
-                title={`${r.title} ${r.start_time}–${r.end_time}`}
-                style={{
-                  position: "absolute",
-                  top: startMin * pxPerMin,
-                  height: (endMin - startMin) * pxPerMin,
-                  left: TIME_LABEL_W,
-                  right: 0,
-                  zIndex: 0,
-                  background: `color-mix(in srgb, ${bandColor} 12%, transparent)`,
-                  pointerEvents: "none",
-                }}
-              >
-                <div
-                  data-testid={`cal-timeline-routine-title-${r.id}`}
-                  style={{
-                    position: "absolute",
-                    top: 1,
-                    left: "50%",
-                    transform: "translateX(-50%)",
-                    maxWidth: "calc(100% - var(--space-2))",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                    fontSize: "var(--text-2xs)",
-                    fontWeight: 600,
-                    color: bandColor,
-                  }}
-                >
-                  {r.title}
-                </div>
-              </div>
-            );
-          })}
+          <RoutineBands routines={routines} pxPerMin={pxPerMin} />
           {/* ③ 오늘의 현재 시각 — accent 선. 칩보다 **위**(zIndex 1)라 겹쳐도 가려지지
               않지만, 같은 zIndex 를 쓰는 드래그 중인 칩은 DOM 순서상 뒤라 그 아래에 남는다.
               W10 ①(오너 실기 2026-09-11): 1px 실선은 안 보였다 — 2px + 맥동 발광(.cal-now-line,
               tokens.css)에 현재 시각 라벨 하나. 라벨은 눈금 열(TIME_LABEL_W)이 아니라 **선의
               오른쪽 끝**에 붙는다: 그 열엔 이미 시(`02`)가 있어 같은 자리에서 두 숫자가 싸운다.
               pointerEvents 는 그대로 none — 라벨도 상속받아 드래그를 가로막지 않는다. */}
-          {nowTop !== null && (
+          {nowTop !== null && <NowLine nowTop={nowTop} minutes={nowTick.minutes} />}
+          {/* 끄는 동안만 — 칩이 붙을 수 있는 스냅 칸을 옅은 가로줄로 보인다(평소 눈금은 1시간 단위라 15분 칸이
+              안 보여, 어디에 붙을지 미리 알 수 없었다). 칩보다 뒤, 포인터 이벤트 없음. */}
+          {showGrid && gridMin !== null && (
             <div
-              data-testid="cal-time-now"
-              className="cal-now-line"
+              aria-hidden
+              data-testid="cal-time-snap-grid"
               style={{
                 position: "absolute",
-                top: nowTop,
+                top: 0,
+                height: dayAxisH,
                 left: TIME_LABEL_W,
                 right: 0,
-                height: 0,
-                zIndex: 1,
-                borderTop: "2px solid var(--accent)",
+                zIndex: 0,
                 pointerEvents: "none",
+                backgroundImage: `repeating-linear-gradient(to bottom, var(--line) 0 1px, transparent 1px ${gridMin * pxPerMin}px)`,
               }}
-            >
-              {/* W11 ②: accent 알약 + 흰 글자(--on-solid)를 버렸다 — 밝은 세이지 위의 흰 글자는
-                  대비가 2:1 남짓이고, 바로 이 선의 발광이 같은 색으로 번져 글자가 묻혔다(오너
-                  실기의 "흰색 폰트 + 밝은 배경"이 정확히 이것이다). 이제 눈금 라벨과 **같은**
-                  `.cal-tick-label` 로 선을 끊고, 글자는 그 배경 위에서 가장 또렷한 --text 다.
-                  --accent 는 고르지 않았다: 라이트 테마에서 accent(#7da98c) 대 한지 배경
-                  (#f4efe3)이 2.4:1 로 11px 글자에는 모자라고, "지금"이라는 신호는 2px accent 선과
-                  맥동 발광이 이미 충분히 말한다. 대신 굵기 한 단(600)으로 --faint 400 인 눈금
-                  라벨과 구분된다.
-                  선 중앙에 걸터앉는다(눈금 라벨과 같은 처방) — 이 컨테이너가 height 0 + 2px
-                  테두리라 translateY(-50%) 가 곧 선 중앙이다. */}
-              <span
-                data-testid="cal-time-now-label"
-                className="cal-tick-label cal-tick-label--solid"
-                style={{
-                  position: "absolute",
-                  right: 0,
-                  top: 0,
-                  transform: "translateY(-50%)",
-                  borderRadius: "var(--radius-sm)",
-                  color: "var(--text)",
-                  fontWeight: 600,
-                  fontSize: "var(--text-xs)",
-                }}
-              >
-                {formatHhmm(nowTick.minutes)}
-              </span>
-            </div>
+            />
           )}
           {/* "놓으면 여기 생긴다"는 점선 블록 하나 — ② 의 새 범위와 W7 의 종일 카드 드롭은 같은
               것이라 요소를 둘로 만들지 않는다. 라벨만 다르다(새 범위는 시각 구간, 드롭은 제목). */}
@@ -1088,28 +908,27 @@ export function TimeAxis({
                 overflow: "hidden",
                 whiteSpace: "nowrap",
                 pointerEvents: "none",
+                zIndex: 2,
               }}
             >
               {ghost.label}
             </div>
           )}
-          {plan.timed.map((e, i) => (
+          {timed.map((e, i) => (
             <TimeChip
               key={e.key}
               e={e}
               layout={timedLayout[i]}
               pxPerMin={pxPerMin}
-              pending={pendingMove.find((p) => p.key === e.key) ?? null}
+              pending={pendingByKey.get(e.key) ?? null}
+              linePx={linePx}
               searchHits={searchHits}
               folderFilter={folderFilter}
               focusedNoteId={focusedNoteId}
               folderById={folderById}
               excerpts={excerpts}
               checklists={checklists}
-              openChip={openChip}
               uiLang={uiLang}
-              chipSettingsRef={chipSettingsRef}
-              chipMenuRef={chipMenuRef}
               chipDrag={chipDrag}
               onChipPointerDown={onChipPointerDown}
               onFocus={onFocus}
@@ -1118,40 +937,60 @@ export function TimeAxis({
               chipPositions={chipPositions}
               commitTimes={commitTimes}
               onRequestConfirm={onRequestConfirm}
-              setOpenChip={setOpenChip}
+              onEdit={setEditing}
               onToggleChecklistItem={onToggleChecklistItem}
-              commitChipTime={commitChipTime}
-              onRepeatApply={onRepeatApply}
             />
           ))}
           {/* 오너 요청(2026-09-16) — 리사이즈 손잡이. 칩보다 **뒤에** 그려 DOM/키보드 포커스
-              순서에서 칩 본문이 먼저 오게 하고, zIndex 로만 위에 앉는다(위 HANDLE_HIT_PAD
-              주석). 여러 날 span(끝 손잡이를 주지 않는 이유는 calendarLayout::chipDragMode
+              순서에서 칩 본문이 먼저 오게 하고, zIndex 로만 위에 앉는다(AxisResizeHandle
+              주석). 여러 날 span(끝 손잡이를 주지 않는 이유는 calendarLayout::handlePadPx
               참고)은 isResizable 이 걸러 아예 렌더하지 않는다 — 손잡이가 없으면 몸통의 "항상
               이동"이 유일한 조작이다(기존과 동일). */}
-          {plan.timed.map((e) =>
-            isResizable(e)
-              ? [
+          {timed.map((e, i) => {
+            if (!isResizable(e)) return null;
+            const p = pendingByKey.get(e.key);
+            const startMin = p?.startMin ?? e.startMin;
+            const endMin = p?.endMin ?? e.endMin;
+            const pad = handlePadPx((endMin - startMin) * pxPerMin);
+            const lane = timedLayout[i]?.lane ?? 0;
+            return [
                   <AxisResizeHandle
                     key={`${e.key}-start`}
                     testId={`cal-time-handle-start-${e.item.note_id}`}
-                    boundaryPx={e.startMin * pxPerMin}
+                    boundaryPx={startMin * pxPerMin}
+                    pad={pad}
+                    lane={lane}
+                    active={dragInfo?.key === e.key && dragInfo.mode === "start"}
+                    activeLabel={formatHhmm(startMin)}
                     onPointerDown={(ev) => onHandlePointerDown(e, "start", ev)}
                     dragHandlers={chipDrag.handlers}
                   />,
                   <AxisResizeHandle
                     key={`${e.key}-end`}
                     testId={`cal-time-handle-end-${e.item.note_id}`}
-                    boundaryPx={e.endMin * pxPerMin}
+                    boundaryPx={endMin * pxPerMin}
+                    pad={pad}
+                    lane={lane}
+                    active={dragInfo?.key === e.key && dragInfo.mode === "end"}
+                    activeLabel={formatHhmm(endMin)}
                     onPointerDown={(ev) => onHandlePointerDown(e, "end", ev)}
                     dragHandlers={chipDrag.handlers}
                   />,
-                ]
-              : null,
-          )}
+            ];
+          })}
         </div>
         {tailRows > 0 && <div aria-hidden style={{ height: tailRows * hourRowH }} />}
       </div>
+      {editing && (
+        <ChipEventModal
+          item={editing.item}
+          uiLang={uiLang}
+          onClose={() => setEditing(null)}
+          onRepeatApply={(draft) => onRepeatApply(editing, draft)}
+          // 축의 Delete 키와 같은 확인 흐름 — 같은 요청 빌더(confirmForDelete)다.
+          onDelete={() => onRequestConfirm(confirmForDelete(editing))}
+        />
+      )}
     </div>
   );
 }

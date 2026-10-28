@@ -7,6 +7,8 @@ export interface StorageGaugeProps {
   breakdownText: string;
   ratioText?: string;
   testId?: string;
+  /** 사용자가 정한 한도를 넘었다 — 막대를 경고색으로. */
+  over?: boolean;
 }
 
 /**
@@ -19,6 +21,7 @@ export function StorageGauge({
   breakdownText,
   ratioText,
   testId,
+  over,
 }: StorageGaugeProps) {
   const ratio = totalBytes > 0 ? usedBytes / totalBytes : 0;
   const percentage = Math.min(100, Math.max(0, ratio * 100));
@@ -39,7 +42,7 @@ export function StorageGauge({
   const fillStyle: CSSProperties = {
     width: `${percentage}%`,
     height: "100%",
-    background: "var(--accent)",
+    background: over ? "var(--danger)" : "var(--accent)",
     borderRadius: "var(--radius-pill)",
     transition: "width var(--dur-slow) ease",
   };

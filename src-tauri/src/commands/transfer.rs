@@ -17,6 +17,7 @@ use tauri_plugin_opener::OpenerExt;
 #[tauri::command(rename_all = "snake_case")]
 pub async fn export_note(
     state: State<'_, AppState>,
+    webview: tauri::Webview,
     id: String,
     dest_path: String,
 ) -> Result<ExportResult, AppError> {
@@ -28,7 +29,8 @@ pub async fn export_note(
     })
     .await
     .map_err(|e| AppError::Io(format!("export worker failed: {e}")))??;
-    crate::events::publish(Some(&id), false); // exported_at 을 찍는다 = 노트 행 변경.
+    // exported_at 을 찍는다 = 노트 행 변경. async 커맨드 — 창 라벨을 직접 싣는다(events::publish_as).
+    crate::events::publish_as(Some(webview.label()), Some(&id), false);
     Ok(out)
 }
 
@@ -248,11 +250,16 @@ fn publish_data_replaced() {
     crate::events::publish_event("data-replaced", serde_json::json!({}));
 }
 
+/// async 인 이유(backup_restore 와 같다, L-9): 전체 DB 스냅샷 + 빈 DB 마이그레이션 + 스왑 + 재마이그레이션이 초 단위라
+/// 동기 커맨드(Tauri 는 메인 스레드에서 돌린다)면 그동안 창 전체가 멈췄다. `block_in_place` 로 이 워커 스레드에서 본체를 그대로
+/// 돌린다 — 잠금 순서(db → read)와 `with_db_file_swap` 은 그대로다.
 #[tauri::command(rename_all = "snake_case")]
-pub fn db_reset(state: State<AppState>, confirm: String) -> Result<ResetResult, AppError> {
-    let mut conn = state.db.lock();
-    // 초기화도 복원처럼 DB 파일을 통째로 바꾼다 — 채팅 검색의 읽기 연결을 닫았다가 다시 연다(잠금 순서 db → read).
-    let out = state.with_db_file_swap(|| transfer::db_reset(&mut conn, &state.data_dir, &confirm))?;
+pub async fn db_reset(state: State<'_, AppState>, confirm: String) -> Result<ResetResult, AppError> {
+    let out = tokio::task::block_in_place(|| {
+        let mut conn = state.db.lock();
+        // 초기화도 복원처럼 DB 파일을 통째로 바꾼다 — 채팅 검색의 읽기 연결을 닫았다가 다시 연다(잠금 순서 db → read).
+        state.with_db_file_swap(|| transfer::db_reset(&mut conn, &state.data_dir, &confirm))
+    })?;
     crate::events::publish(None, false);
     publish_data_replaced();
     Ok(out)
@@ -326,6 +333,21 @@ pub fn backup_auto_status(state: State<AppState>) -> Result<BackupAutoStatus, Ap
     };
     let last_backup_at = transfer::backup::auto_backup_last(&state.data_dir);
     Ok(BackupAutoStatus { last_backup_at, interval, keep, last_error })
+}
+
+/// 설정 "저장 및 백업" 카드의 복구 목록 — 자동 백업 zip 을 최신순 `limit`개(UI 가 보관 개수를 넘긴다).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn backup_auto_list(
+    state: State<'_, AppState>,
+    limit: i64,
+) -> Result<Vec<transfer::backup::AutoBackupEntry>, AppError> {
+    // 폴더 나열 + 파일마다 stat — 동기 커맨드로 두면 IPC 직렬 큐를 막는다(backup_auto_run 과 같은 이유).
+    let data_dir = state.data_dir.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        transfer::backup::auto_backup_list(&data_dir, limit.clamp(1, 20) as usize)
+    })
+    .await
+    .map_err(|e| AppError::Io(format!("backup list worker failed: {e}")))
 }
 
 /// 설정 "지금 백업" 버튼 — 스케줄과 무관하게 즉시 전체 zip 백업 + 회전(keep 개수는 현재 설정값).
@@ -587,7 +609,9 @@ mod tests {
         let count = || state.with_read(|c| c.query_row("SELECT COUNT(*) FROM notes", [], |r| r.get::<_, i64>(0)).unwrap());
         assert_eq!(count(), 1, "읽기 연결로 한 번 읽어 -wal·-shm 까지 열어 둔다");
 
-        db_reset(app.state::<AppState>(), "RESET".to_string()).expect("읽기 연결이 열려 있어도 초기화가 돼야 한다");
+        // db_reset 도 backup_restore 처럼 async(block_in_place) 커맨드다 — 같은 방식으로 돌린다.
+        tauri::async_runtime::block_on(db_reset(app.state::<AppState>(), "RESET".to_string()))
+            .expect("읽기 연결이 열려 있어도 초기화가 돼야 한다");
 
         assert!(state.has_read_handle(), "초기화 뒤 읽기 연결을 다시 연다");
         assert_eq!(count(), 0, "읽기 연결이 새 빈 DB 를 봐야 한다");

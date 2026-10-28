@@ -1,4 +1,3 @@
-import { anchorId } from "./settingsAnchor";
 import { useEffect, useState } from "react";
 import { emit } from "@tauri-apps/api/event";
 import { useSettingsStore } from "../../stores/settings";
@@ -7,20 +6,22 @@ import { isBrowser } from "../../lib/env";
 import { call, callSilent, emitNotice } from "../../lib/invoke";
 import { formatSize } from "../../lib/ui";
 import type {
+  AutoBackupEntry,
   BackupAutoRunOutput,
   BackupAutoStatusOutput,
+  BackupRestoreOutput,
   DataLocationInspectOutput,
   DbStatsOutput,
 } from "../../lib/commands.gen";
-import { groupCardStyle } from "./shared";
 import { IconAction } from "./IconAction";
 import { SettingsRow } from "./SettingsRow";
-import { SectionHeader } from "./SectionHeader";
 import { Select } from "../Select";
 import { ModalShell } from "../ModalShell";
 import { IconArchive, IconFolderOpen, IconEdit } from "../icons";
 import { StorageGauge } from "./StorageGauge";
+import { runExclusive, useSettingsBusy } from "./settingsBusy";
 import { useDataLocation, DataSpaceBar } from "../onboarding/OnboardingDataStep";
+import { SettingsCard } from "./SettingsCard";
 
 const BACKUP_KEEP_OPTIONS = [1, 2, 3, 4, 5];
 
@@ -43,11 +44,15 @@ export function StorageGaugeStrip() {
   const imageSize = stats?.image_size_bytes ?? 0;
   const totalUsed = dbSize + attachmentSize;
   const diskFree = stats?.disk_free_bytes ?? null;
+  // 사용자 한도(설정 › 저장 및 백업의 "용량 알림")가 있으면 막대의 분모는 드라이브가 아니라 그 한도다.
+  const limitGb = useSettingsStore((s) => s.storageAlertGb);
+  const limitBytes = limitGb > 0 ? limitGb * 1024 ** 3 : 0;
 
   return (
     <StorageGauge
       usedBytes={totalUsed}
-      totalBytes={diskFree != null ? totalUsed + diskFree : 0}
+      totalBytes={limitBytes > 0 ? limitBytes : diskFree != null ? totalUsed + diskFree : 0}
+      over={limitBytes > 0 && totalUsed > limitBytes}
       breakdownText={
         stats
           ? t("settings.stats_storage", {
@@ -58,9 +63,11 @@ export function StorageGaugeStrip() {
           : t("settings.stats_info")
       }
       ratioText={
-        diskFree != null
-          ? `${formatSize(totalUsed)} · ${t("settings.storage_free_caption", { size: formatSize(diskFree) })}`
-          : formatSize(totalUsed)
+        limitBytes > 0
+          ? `${formatSize(totalUsed)} / ${formatSize(limitBytes)}${diskFree != null ? ` · ${t("settings.storage_free_caption", { size: formatSize(diskFree) })}` : ""}`
+          : diskFree != null
+            ? `${formatSize(totalUsed)} · ${t("settings.storage_free_caption", { size: formatSize(diskFree) })}`
+            : formatSize(totalUsed)
       }
     />
   );
@@ -72,11 +79,20 @@ export function StorageGaugeStrip() {
  * 하나뿐이다 — 데이터 관리의 위험 작업 배너에 있던 같은 캡션은 이사하며 뺐다. 일회성 "파일로 백업…"
  * (사용자가 고른 경로의 zip)은 자동 백업(데이터 폴더 안 backups/)과 다른 동작이라 위험 작업 카드에 남는다.
  */
-export function StorageBackupCard() {
+export function StorageBackupCard({ onRestored }: { onRestored: (snapshotPath: string) => void }) {
   const uiLang = useSettingsStore((s) => s.uiLang);
   const browser = isBrowser();
   const [backupStatus, setBackupStatus] = useState<BackupAutoStatusOutput | null>(null);
   const [backupRunning, setBackupRunning] = useState(false);
+  const storageAlertGb = useSettingsStore((s) => s.storageAlertGb);
+  const setStorageAlertGb = useSettingsStore((s) => s.setStorageAlertGb);
+  // 복구 목록 — 길이는 보관 개수(backup_auto_keep)를 따른다(하드코딩 아님, 오너 2026-10-28).
+  const [backupList, setBackupList] = useState<AutoBackupEntry[]>([]);
+  const [restoreTarget, setRestoreTarget] = useState<AutoBackupEntry | null>(null);
+  // 데이터 관리의 복원과 같은 배타 문(settingsBusy) — 복원이 도는 동안 창 닫기·노트북 칩·초기화·가져오기가 막히고,
+  // 다른 되돌릴 수 없는 작업이 돌고 있으면 이 복원은 시작하지 않는다.
+  const busy = useSettingsBusy((s) => s.busy);
+  const restoring = busy === "restore";
 
   // 저장 위치(PLAN-2026-09-28-onboarding-rebuild.md §6) — OnboardingDataStep 과 같은 조회 훅·
   // 같은 드라이브 공간 바를 재사용한다(재구현하지 않는다).
@@ -96,6 +112,31 @@ export function StorageBackupCard() {
     if (browser) return;
     void loadBackupStatus();
   }, [browser]);
+
+  const keepCount = backupStatus?.keep;
+  const lastBackupAt = backupStatus?.last_backup_at;
+  useEffect(() => {
+    if (browser || keepCount == null) return;
+    void callSilent<AutoBackupEntry[]>("backup_auto_list", { limit: keepCount })
+      .then((r) => setBackupList(Array.isArray(r) ? r : []))
+      .catch(() => setBackupList([]));
+  }, [browser, keepCount, lastBackupAt]);
+
+  const doRestoreFromList = () =>
+    runExclusive("restore", async () => {
+      if (!restoreTarget) return;
+      let res: BackupRestoreOutput;
+      try {
+        // 확인 리터럴은 백엔드 커맨드의 오호출 방어(데이터 관리의 복원과 같은 경로). 스왑 직전 안전 스냅샷이 자동으로 남는다.
+        res = await call<BackupRestoreOutput>("backup_restore", { zip_path: restoreTarget.path, confirm: "RESTORE" });
+      } catch {
+        return; // call() 이 이미 토스트를 띄웠다 — 확인창을 두고 재시도/취소를 맡긴다
+      }
+      setRestoreTarget(null);
+      // DB 가 통째로 바뀌었다 — 안전 스냅샷 경로를 안내하고, 안내를 닫으면 창을 닫고 다시 불러온다(데이터 관리의 복원과 같은 끝,
+      // 본 창은 data-replaced 이벤트로 스스로 다시 읽는다).
+      onRestored(res.backup_path);
+    });
 
   const setBackupInterval = async (interval: string) => {
     const rollback = backupStatus;
@@ -198,12 +239,13 @@ export function StorageBackupCard() {
   return (
     <>
       {/* 저장 및 백업 — 저장 위치(폴더 열기 · 위치 변경) · 자동 백업(주기 · 보관 개수 · 지금 백업) */}
-      <div className="card" style={groupCardStyle} id={anchorId("storage_backup")} data-testid="settings-storage-backup">
-        <SectionHeader
-          title={t("settings.storage_backup_group")}
-          hint={t("settings.general_storage_hint")}
-          icon={<IconArchive size={14} strokeWidth={2} />}
-        />
+      <SettingsCard
+        title={t("settings.storage_backup_group")}
+        hint={t("settings.general_storage_hint")}
+        icon={<IconArchive size={14} strokeWidth={2} />}
+        anchor="storage_backup"
+        testId="settings-storage-backup"
+      >
 
         {/* 폴더 열기는 이 행에만 둔다 — 같은 폴더 아이콘이 카드 머리에도 있으면 어느 쪽이 "열기"고
             어느 쪽이 "옮기기"인지 헷갈린다. 옮기기는 다른 아이콘을 쓴다. */}
@@ -268,9 +310,26 @@ export function StorageBackupCard() {
                 size="lg"
                 busy={backupRunning}
                 onClick={() => void runBackupNow()}
-                disabled={backupRunning || browser}
+                disabled={backupRunning || browser || busy !== null}
               />
             </div>
+          }
+        />
+        <SettingsRow
+          anchor="storage_alert_gb"
+          label={t("settings.storage_alert_label")}
+          hint={t("settings.storage_alert_hint")}
+          data-testid="settings-storage-alert"
+          control={
+            <Select
+              value={String(storageAlertGb)}
+              onChange={(v) => void setStorageAlertGb(Number(v))}
+              ariaLabel={t("settings.storage_alert_label")}
+              options={[
+                { value: "0", label: t("settings.storage_alert_off") },
+                ...[1, 2, 5, 10, 20, 50].map((n) => ({ value: String(n), label: t("settings.storage_alert_option", { n }) })),
+              ]}
+            />
           }
         />
         {/* 실패는 마지막 성공 시각과 다른 사실이라 같은 행 힌트에 섞지 않고 사유와 함께 따로 선다
@@ -284,7 +343,74 @@ export function StorageBackupCard() {
             {t("settings.data_last_backup_failed", { reason: backupStatus.last_error })}
           </div>
         )}
-      </div>
+
+        {!browser && (
+          <div data-testid="settings-backup-list" style={{ marginTop: "var(--space-4)" }}>
+            <div style={{ fontSize: "var(--text-xs)", color: "var(--muted)", marginBottom: "var(--space-2)" }}>
+              {t("settings.backup_list_title")}
+            </div>
+            {backupList.length === 0 ? (
+              <div data-testid="settings-backup-list-empty" style={{ fontSize: "var(--text-sm)", color: "var(--faint)" }}>
+                {t("settings.backup_list_empty")}
+              </div>
+            ) : (
+              backupList.map((entry) => (
+                <div
+                  key={entry.name}
+                  data-testid="settings-backup-list-row"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "var(--space-3)",
+                    padding: "var(--space-2) 0",
+                    borderTop: "1px solid var(--divider)",
+                    fontSize: "var(--text-sm)",
+                  }}
+                >
+                  <span>
+                    {formatWhen(entry.created_at, uiLang)}
+                    <span style={{ color: "var(--muted)" }}> · {formatSize(entry.size_bytes)}</span>
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn--sm"
+                    data-testid="settings-backup-restore"
+                    disabled={busy !== null}
+                    onClick={() => setRestoreTarget(entry)}
+                  >
+                    {t("settings.backup_restore_btn")}
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </SettingsCard>
+
+      {restoreTarget && (
+        <ModalShell title={t("settings.backup_restore_confirm_title")} onClose={() => !restoring && setRestoreTarget(null)} width={440}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+            <p style={{ margin: 0, fontSize: "var(--text-sm)", lineHeight: 1.5 }}>
+              {t("settings.backup_restore_confirm_body", { when: formatWhen(restoreTarget.created_at, uiLang) })}
+            </p>
+            <div style={{ display: "flex", gap: "var(--space-4)", justifyContent: "flex-end" }}>
+              <button type="button" className="btn" disabled={restoring} onClick={() => setRestoreTarget(null)}>
+                {t("common.cancel")}
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={busy !== null}
+                onClick={() => void doRestoreFromList()}
+                data-testid="settings-backup-restore-confirm"
+              >
+                {t("settings.backup_restore_btn")}
+              </button>
+            </div>
+          </div>
+        </ModalShell>
+      )}
 
       {locationPicker && (
         <ModalShell title={t("settings.data_location_change")} onClose={() => setLocationPicker(null)} width={440}>

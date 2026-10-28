@@ -58,6 +58,7 @@ export function kindsForTabs(
 export function useGalleryQuery(
   kindTab: GalleryKindTab | GalleryKindTab[] | Set<GalleryKindTab>,
   nameQuery: string,
+  sort: "newest" | "oldest" | "name" = "newest",
 ) {
   const query = nameQuery.trim();
   // 갤러리는 활성 워크스페이스 스코프다(백엔드가 workspace_id 생략 시 active 로 해석). 다른
@@ -84,6 +85,8 @@ export function useGalleryQuery(
   const queryRef = useRef(query);
   kindsRef.current = kinds;
   queryRef.current = query;
+  const sortRef = useRef(sort);
+  sortRef.current = sort;
 
   /* 썸네일 병합은 페이지 로딩과 분리해서 붙는다. 같은 try 안에 두면 loading 이 생성이 끝날
      때까지 켜져 있고, 그동안 loadMore 가 전부 막힌다 — 신선한 코퍼스에서 한 페이지 60장이면
@@ -132,6 +135,7 @@ export function useGalleryQuery(
           query: q || undefined,
           offset,
           limit: GALLERY_PAGE_SIZE,
+          sort: sortRef.current,
         });
         // Stale session: tab/filter changed while this page was in flight.
         if (gen !== genRef.current) return;
@@ -179,7 +183,7 @@ export function useGalleryQuery(
     return () => {
       genRef.current += 1;
     };
-  }, [kindsKey, query, workspaceId, attachmentRevision, fetchPage]);
+  }, [kindsKey, query, sort, workspaceId, attachmentRevision, fetchPage]);
 
   const loadMore = useCallback(() => {
     if (!hasMoreRef.current || loadingRef.current) return;

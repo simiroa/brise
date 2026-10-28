@@ -55,6 +55,7 @@ export function useAxisDragSession<T>({
   onMove,
   onDrop,
   onCancel,
+  onLongPress,
 }: {
   /** 임계를 어느 축으로 재나. 칩 드래그는 세로 이동만 뜻이 있어 "y" 다 — 가로로만 흔든 손짓은
    *  클릭으로 남는다(W3 때부터의 동작). 기본은 둘 다 보는 "xy". */
@@ -67,6 +68,9 @@ export function useAxisDragSession<T>({
    *  않는다(그때는 onMove 가 한 번도 안 돌아 지울 것이 없고, 앞선 드래그의 낙관적 표시를 지우면
    *  안 된다). */
   onCancel?: () => void;
+  /** 움직이지 않고 LONG_PRESS_MS 이상 누르고 있다 뗐다(마우스·터치 공통) — 드래그도 클릭도 아니다. 호출 뒤 따라오는 click 은
+   *  삼켜진다. 안 주면 그런 손짓은 예전처럼 클릭이다. (칩: 일정 수정 모달) */
+  onLongPress?: (data: T) => void;
 }) {
   const session = useRef<{
     data: T;
@@ -74,6 +78,8 @@ export function useAxisDragSession<T>({
     x0: number;
     y0: number;
     moved: boolean;
+    /** 누른 시각(ms) — 뗄 때 롱프레스인지 가른다. */
+    t0: number;
     /** 드래그가 실제로 열렸나. 터치의 롱프레스 대기 중에만 false 다. */
     armed: boolean;
     /** 세션을 연 요소 — React 는 핸들러가 끝나면 `currentTarget` 을 비우므로 붙잡아 둔다. */
@@ -169,6 +175,7 @@ export function useAxisDragSession<T>({
       x0: ev.clientX,
       y0: ev.clientY,
       moved: false,
+      t0: Date.now(),
       armed: !touch,
       el: ev.currentTarget,
       saved: null,
@@ -212,9 +219,9 @@ export function useAxisDragSession<T>({
 
   /** window 리스너는 한 번만 걸고 "지금 드래그 중인가"는 ref 로 본다 — 세션은 state 가 아니라
    *  ref 라(재렌더를 부르지 않는다) `active` 를 deps 로 쓰는 형태가 성립하지 않는다.
-   *  드래그가 열려 있지 않은 Escape 는 그대로 흘려보낸다: 이 파일 밖의 다른 소비자(플로팅 메뉴
-   *  둘 · useDismissOnOutside)가 자기 것을 받아야 한다. 드래그 중에는 그 메뉴들이 열려 있을 수
-   *  없어(펼친 칩/필은 애초에 끌리지 않는다) 실제로 겹치지 않는다 — 그래서 preventDefault 도
+   *  드래그가 열려 있지 않은 Escape 는 그대로 흘려보낸다: 이 파일 밖의 다른 소비자(열린 모달 ·
+   *  useDismissOnOutside 를 쓰는 메뉴)가 자기 것을 받아야 한다. 드래그 중에는 그것들이 열려 있을 수
+   *  없어(모달이 열린 칩은 끌리지 않는다) 실제로 겹치지 않는다 — 그래서 preventDefault 도
    *  하지 않는다(같은 window 의 다른 리스너는 어차피 막을 수 없다). */
   const cancelRef = useRef(cancelSession);
   cancelRef.current = cancelSession;
@@ -259,7 +266,16 @@ export function useAxisDragSession<T>({
         /* jsdom */
       }
       // 임계 미만 = 클릭(또는 롱프레스 전에 뗀 탭). 포커스/더블클릭이 그대로 산다.
-      if (!s.moved) return;
+      if (!s.moved) {
+        if (onLongPress && s.armed && Date.now() - s.t0 >= LONG_PRESS_MS) {
+          swallow.current = true;
+          setTimeout(() => {
+            swallow.current = false;
+          }, 0);
+          onLongPress(s.data);
+        }
+        return;
+      }
       swallow.current = true;
       // click 이 안 따라오면(캡처 없이 다른 곳에서 떼어진 경우) 다음 클릭까지 물고 있지 않게
       // 푼다 — useTimelineDrag 의 suppressNextClick 이 같은 이유로 setTimeout(0) 을 쓴다.

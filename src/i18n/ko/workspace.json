@@ -30,6 +30,8 @@
   "new_scope_pet_collect": "펫·수집",
   "new_scope_window": "창 배치",
   "scope_label": "노트북: {{name}}",
+  "scope_switch_label": "노트북 바꾸기",
+  "scope_switched": "노트북을 바꿨습니다: {{name}}",
   "scope_app_label": "앱 전체",
   "scope_app_hint": "이 페이지의 설정은 노트북과 상관없이 앱 전체에 적용됩니다.",
   "duplicate": "노트북 복제",

@@ -1,0 +1,26 @@
+name: Security audit
+
+# 주 1회 RustSec 어드바이저리 대조. 예외와 그 근거는 src-tauri/.cargo/audit.toml.
+# npm 쪽은 Dependabot 알림이 본다.
+on:
+  schedule:
+    - cron: "23 0 * * 1" # 매주 월 09:23 KST(cron 은 UTC)
+  push:
+    branches: [main]
+    paths: ["src-tauri/Cargo.lock", "src-tauri/.cargo/audit.toml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit@0.22.2
+      - name: cargo audit
+        working-directory: src-tauri # .cargo/audit.toml 은 실행 폴더 기준으로만 읽힌다
+        run: cargo audit

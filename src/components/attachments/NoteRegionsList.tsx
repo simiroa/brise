@@ -10,6 +10,7 @@ import { usePlaceSearch, PlaceSearchResults } from "./PlaceSearch";
 import { useSearchStore } from "../../stores/search";
 import { useNotesStore } from "../../stores/notes";
 import { useSettingsStore } from "../../stores/settings";
+import { Toggle } from "../settings/Toggle";
 import { t } from "../../i18n/t";
 import {
   IconClose,
@@ -183,7 +184,8 @@ export function NoteRegionsList({
   // 실패·네트워크+프라이버시) — 대신 이미 있는 설정값(지도 탭 기본 위치)을 한 번에 넣는다.
   // customized 플래그가 false 면 공장 서울 좌표뿐이라 버튼 자체를 숨긴다.
   const defaultMapLocation = useSettingsStore((s) => s.defaultMapLocation);
-  const hasDefaultLocation = useSettingsStore((s) => s.defaultMapLocationCustomized);
+  const regionNudgeEnabled = useSettingsStore((s) => s.regionNudgeEnabled);
+  const setRegionNudgeEnabled = useSettingsStore((s) => s.setRegionNudgeEnabled);
   const activeNoteId = useNotesStore((s) => s.activeNote?.note.id ?? null);
   // 대표 편집/해제/승격은 notes 스토어의 activeNote 를 통해서만 쓰인다(setRegion/setLocation) —
   // 이 컴포넌트의 props 계약은 "아무 노트나" 지만, 두 스토어 setter 는 activeNote 불일치를
@@ -548,26 +550,6 @@ export function NoteRegionsList({
     [cameraSeed, firstLat, firstLng, defaultMapLocation],
   );
 
-  // "기본 위치" 한 번에 넣기 — 설정(지도 탭 기본 위치)의 좌표를 역지오코딩해 이름을 붙인다.
-  // 실패해도(네트워크 없음 등) 좌표 문자열을 이름으로 남기고 추가는 성공시킨다(clickedPlaceName
-  // 과 같은 원칙 — 이름 없이 저장하는 것도, 추가 자체를 거부하는 것도 지도 클릭 추가보다 나쁘다).
-  const useDefaultLocation = async () => {
-    const { lat, lng } = defaultMapLocation;
-    setBusy(true);
-    let label: string | null = null;
-    try {
-      const res = await call<{ label: string | null }>("geocode_reverse", { lat, lng, lang: uiLang || "ko" });
-      label = res?.label ?? null;
-    } catch {
-      label = null;
-    }
-    setBusy(false);
-    void commitPlace(clickedPlaceName(label, lat, lng), lat, lng);
-    // 지도가 다른 곳을 보고 있었다면 방금 넣은 자리가 화면 밖이다 — 검색 픽과 같이 그리로 간다
-    // (새 객체 = fly-to 의도. 줌은 설정에 저장된 홈 줌 그대로).
-    setCameraSeed({ ...defaultMapLocation });
-  };
-
   // §P4 D3′ — 팝오버(!inline)에서 항상 그린다(addTarget 과 무관, 빈 상태 포함). inline 마운트
   // (RegionPreview)는 이미 그 카드 자체가 큰 지도를 갖고 있어(inline prop 헤더 주석) 호출부에서
   // 아예 렌더하지 않는다(아래 return). onMapClick 은 addTarget 이 있을 때만 넘긴다 — 없으면
@@ -618,6 +600,15 @@ export function NoteRegionsList({
         >
           <IconHome size={12} strokeWidth={2} />
         </button>
+        <label style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: "var(--space-2)", fontSize: "var(--text-xs)", color: "var(--faint)" }} title={t("region.auto_detect_hint")}>
+          {t("region.auto_detect")}
+          <Toggle
+            checked={regionNudgeEnabled}
+            onChange={(v) => void setRegionNudgeEnabled(v)}
+            aria-label={t("region.auto_detect")}
+            data-testid="note-region-auto-detect"
+          />
+        </label>
       </div>
     </div>
   );
@@ -636,9 +627,6 @@ export function NoteRegionsList({
           display: "flex",
           gap: "var(--space-1)",
           alignItems: "center",
-          border: "1px solid var(--divider)",
-          borderRadius: "var(--radius-sm)",
-          padding: "0 var(--space-1) 0 var(--space-2)",
         }}
       >
         <input
@@ -654,7 +642,7 @@ export function NoteRegionsList({
           placeholder={t("note.address_search_placeholder")}
           aria-label={t("note.address_search_placeholder")}
           {...placeSearch.inputProps}
-          style={{ flex: 1, minWidth: 0, ...chipScaleField, padding: 0 }}
+          style={{ flex: 1, minWidth: 0, ...chipScaleField }}
         />
         <button
           type="button"
@@ -676,32 +664,6 @@ export function NoteRegionsList({
           style={{ fontSize: "var(--text-xs)", color: "var(--muted)" }}
         >
           {dupNotice}
-        </div>
-      )}
-      {!inline && (
-        <div style={{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>{t("region.map_click_hint")}</div>
-      )}
-      {hasDefaultLocation && (
-        <div>
-          <button
-            type="button"
-            data-testid="note-region-use-default-location"
-            title={t("region.use_default_location_hint")}
-            disabled={busy}
-            onClick={() => void useDefaultLocation()}
-            style={{
-              fontSize: "var(--text-xs)",
-              fontWeight: 400,
-              color: "var(--muted)",
-              border: "none",
-              background: "transparent",
-              padding: 0,
-              textDecoration: "underline",
-              cursor: "pointer",
-            }}
-          >
-            {t("region.use_default_location")}
-          </button>
         </div>
       )}
     </div>

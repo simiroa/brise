@@ -1,3 +1,5 @@
+import { withExportDir } from "../../lib/exportDir";
+import { copyWithNotice } from "../../lib/clipboard";
 import { useState } from "react";
 import { emit } from "@tauri-apps/api/event";
 import { useWorkspacesStore } from "../../stores/workspaces";
@@ -25,19 +27,18 @@ import {
 } from "../icons";
 import { IconAction } from "./IconAction";
 import { t } from "../../i18n/t";
-import { groupCardStyle, type ImportDialog } from "./shared";
-import { SectionHeader } from "./SectionHeader";
+import { type ImportDialog } from "./shared";
 import { IconChip } from "./IconChip";
 import { SettingsRow } from "./SettingsRow";
 import { Banner } from "./Banner";
-import { AttachmentStorageSection } from "./AttachmentStorageSection";
 import { TestDataSection } from "./TestDataSection";
 import { anchorId } from "./settingsAnchor";
 import { StorageBackupCard, StorageGaugeStrip } from "./StorageBackupCard";
-import { useSettingsBusy } from "./settingsBusy";
+import { runExclusive, useSettingsBusy } from "./settingsBusy";
 import { isBrowser } from "../../lib/env";
 import { exportCalendarIcs, importIcsToDatabase, pickAndReadIcsFile } from "../../lib/ical";
 import { importThemeFromPicker } from "../../lib/themeTransfer";
+import { SettingsCard } from "./SettingsCard";
 
 interface DataManagementSectionProps {
   onClose: () => void;
@@ -144,7 +145,7 @@ export function DataManagementSection({ onClose }: DataManagementSectionProps) {
         const { save } = await import("@tauri-apps/plugin-dialog");
         const today = new Date().toISOString().slice(0, 10);
         const dest = await save({
-          defaultPath: `brise-backup-${today}.zip`,
+          defaultPath: withExportDir(`brise-backup-${today}.zip`),
           filters: [{ name: t("settings.backup_zip_filter"), extensions: ["zip"] }],
         });
         if (!dest) return;
@@ -289,16 +290,14 @@ export function DataManagementSection({ onClose }: DataManagementSectionProps) {
       {/* 저장 공간 게이지 → 첨부 저장 → 저장 및 백업(PLAN-2026-10-24 D6: 일반에서 이사) → 이동 → 위험 작업 */}
       <StorageGaugeStrip />
 
-      <AttachmentStorageSection />
-
-      <StorageBackupCard />
+      {/* 복구 목록의 복원도 같은 스냅샷 안내(→ 닫으면 창 닫기·다시 불러오기)로 끝난다 */}
+      <StorageBackupCard onRestored={setSnapshotPath} />
 
       {/* 1. 데이터 이동 */}
-      <div className="card" style={groupCardStyle}>
-        <SectionHeader
-          title={t("settings.transfer_tile")}
-          icon={<IconFileExport size={14} strokeWidth={2} />}
-        />
+      <SettingsCard
+        title={t("settings.transfer_tile")}
+        icon={<IconFileExport size={14} strokeWidth={2} />}
+      >
 
         <SettingsRow
           anchor="export_notebook"
@@ -342,12 +341,11 @@ export function DataManagementSection({ onClose }: DataManagementSectionProps) {
             ) : null
           }
         />
-      </div>
+      </SettingsCard>
 
       {/* 2. 위험 작업 — 다른 섹션과 같은 카드. 되돌릴 수 없는 동작이라 단추는 글자로 이름을 말한다. */}
       {!browser && (
-        <div className="card" style={groupCardStyle} id={anchorId("danger_zone")}>
-          <SectionHeader title={t("settings.danger_zone")} icon={<IconTrash size={14} strokeWidth={2} />} />
+        <SettingsCard title={t("settings.danger_zone")} icon={<IconTrash size={14} strokeWidth={2} />} anchor="danger_zone">
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
             <Banner
               tone="danger"
@@ -399,7 +397,7 @@ export function DataManagementSection({ onClose }: DataManagementSectionProps) {
               </button>
             </div>
           </div>
-        </div>
+        </SettingsCard>
       )}
 
       {process.env.NODE_ENV === "development" && <TestDataSection />}
@@ -548,7 +546,7 @@ export function DataManagementSection({ onClose }: DataManagementSectionProps) {
               label={t("settings.safety_snapshot_copy")}
               size="sm"
               data-testid="settings-safety-snapshot-copy"
-              onClick={() => void copySnapshotPath(snapshotPath)}
+              onClick={() => void copyWithNotice(snapshotPath, t("settings.safety_snapshot_copied"))}
             />
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
@@ -565,27 +563,6 @@ export function DataManagementSection({ onClose }: DataManagementSectionProps) {
       )}
     </>
   );
-}
-
-/** 되돌릴 수 없는 작업 하나를 설정 창 전체의 busy 슬롯에 걸고 돈다 — 이미 무언가 돌면 무시(중복 클릭). */
-async function runExclusive(name: string, fn: () => Promise<void>): Promise<void> {
-  const store = useSettingsBusy.getState();
-  if (store.busy !== null) return;
-  store.setBusy(name);
-  try {
-    await fn();
-  } finally {
-    useSettingsBusy.getState().setBusy(null);
-  }
-}
-
-async function copySnapshotPath(path: string) {
-  try {
-    await navigator.clipboard.writeText(path);
-    emitNotice(t("settings.safety_snapshot_copied"));
-  } catch {
-    emitNotice(t("settings.sync_copy_failed"));
-  }
 }
 
 /**

@@ -18,9 +18,10 @@
  *   created: 새로 만들어진 노트인지.
  *   origin:  "local"(데스크톱 IPC 쓰기) | "remote"(폰이 HTTP 로 한 쓰기). 없으면 "remote"로 본다
  *            (구버전 서버 호환 — 예전엔 원격 쓰기만 이 이벤트를 냈다).
- *   window:  쓰기를 낸 데스크톱 창의 라벨(동기 커맨드만). async 커맨드·백그라운드 작업·HTTP 경로는 null.
+ *   window:  쓰기를 낸 데스크톱 창의 라벨(동기 커맨드 + `publish_as` 로 라벨을 싣는 async 쓰기 커맨드 — attachment_add_file/bytes ·
+ *            doc_import_html · export_note · workspace_delete). 백그라운드 작업·라벨을 아직 안 싣는 async 커맨드·HTTP 경로는 null.
  *
- * 루프 방지 규칙(백엔드 규칙과 한 쌍, SSOT: src-tauri/src/events.rs 헤더):
+ * 루프 방지 규칙(백엔드 규칙과 한 쌍, SSOT: src-tauri/src/events.rs 헤더) — 판정은 전부 `classifyWrite` 한 곳이다:
  *   **데스크톱 웹뷰는 window===자기 라벨 인 이벤트를 무시한다** — 자기가 방금 낸 쓰기의 메아리이고,
  *   스토어는 이미 갱신돼 있다. 그대로 재로드하면 방금 친 글자를 되돌린다. 다른 창(설정·브리핑·섹션)의
  *   쓰기는 반영한다. window===null 인 local 쓰기는 누가 냈는지 모르므로 **coarse 로만**(트리+목록) 반영하고
@@ -32,6 +33,9 @@
  * (2) 포커스가 편집 영역(본문 contenteditable / 제목 input / textarea) 안에 있으면 건너뛴다.
  * 그래도 트리/목록 새로고침은 항상 한다 — "포커스된 편집 영역만 빼고 전부 새로고침"이 가장 안전하다(디바운스 저장이 아직 나가지 않은 구간엔
  * savedState 가 "saved" 라 그것만으로는 타이핑 중인 버퍼를 지킬 수 없다).
+ *
+ * 섹션 분리 창의 자동저장(window "section-*")은 `light` 다 — 질의 캐시 무효화만 하고 트리 전수 재조회는 조용해진 뒤(LIGHT_TREE_DEBOUNCE_MS,
+ * 최대 LIGHT_TREE_MAX_WAIT_MS)로 미룬다. 예전엔 타이핑 300ms 마다 loadTree 가 돌았다(565d8098 이후 데스크톱이 다른 창의 쓰기를 받으면서).
  *
  * 합치기(listenRemoteNoteWrite): 새로고침의 핵심인 loadTree() 는 데스크톱에서 LIMIT 없는 folder_list 전수
  * 조회 + settings_get_all 이다. 예전엔 알림 1건마다 그대로 불렀다 — 에이전트(brise mcp)가 20번 연달아 쓰면
@@ -50,6 +54,11 @@ import { listenMany } from "./tauriListen";
 
 /** 원격 쓰기 알림을 한 번의 새로고침으로 합치는 창(ms). 고정 창이라 연속 쓰기 중에도 이 이상 늦지 않는다. */
 export const REMOTE_WRITE_COALESCE_MS = 300;
+
+/** light 쓰기(섹션 분리 창 자동저장)가 미루는 트리 전수 재조회 — 마지막 쓰기 뒤 이만큼 조용하면 한 번(디바운스)... */
+export const LIGHT_TREE_DEBOUNCE_MS = 3000;
+/** ...단 첫 light 쓰기 기준 이 시간을 넘기지는 않는다(계속 쳐도 트리가 영영 안 갱신되지 않게). */
+export const LIGHT_TREE_MAX_WAIT_MS = 30_000;
 
 export interface RemoteNoteWriteMobileOpts {
   /** 열린 노트에 원격 쓰기가 도착했는데 포커스 보호로 reloadActive() 를 건너뛴 경우 호출된다 —
@@ -101,33 +110,45 @@ function ownWindowLabel(): string | null {
   return ownLabel;
 }
 
-/** 데스크톱 웹뷰가 받은 자기 쓰기의 메아리인가(위 루프 방지 규칙) — 합치기 전에 걸러야 창을 괜히 열지 않는다. */
-function isOwnEcho(payload: RemoteNoteWritePayload): boolean {
-  return !isBrowser() && !!payload.window && payload.window === ownWindowLabel();
+/** classifyWrite 가 읽는 이 클라이언트의 사정 — 순수 함수로 두려고 환경(브라우저인가·내 창 라벨·내 클라이언트 id)을 인자로 받는다. */
+export interface WriteContext {
+  browser: boolean;
+  ownLabel: string | null;
+  clientId: string | null;
 }
 
-/** 데스크톱의 local 쓰기인데 낸 창을 모른다(async 커맨드·백그라운드 작업) — coarse 로만 반영한다. */
-function isUnattributedLocal(payload: RemoteNoteWritePayload): boolean {
-  return !isBrowser() && (payload.origin ?? "remote") === "local" && !payload.window;
+/** 알림 한 건이 이 클라이언트에 요구하는 일.
+ *  - ignore: 내가 방금 낸 쓰기의 메아리(데스크톱 웹뷰) — 스토어가 이미 갱신돼 있다. 아무것도 하지 않는다.
+ *  - light:  트리가 바뀔 게 거의 없는 쓰기(섹션 분리 창의 자동저장) — 질의 캐시 무효화만 즉시, 트리 전수 재조회는 길게 미룬다.
+ *  - tree:   트리+목록만 다시 읽는다(열린 노트는 건드리지 않는다) — 노트 하나로 좁힐 수 없는 변경, 내 client 의 메아리, 출처 모를 local.
+ *  - body:   트리+목록에 더해 열린 노트 본문까지(그 노트가 바뀌었고 출처가 확실할 때). */
+export type WriteEffect = "ignore" | "light" | "tree" | "body";
+
+/**
+ * 루프 방지·재조회 규칙의 **단일 판정 지점** — 스케줄러(listenRemoteNoteWrite)와 즉시 반영(handleRemoteNoteWrite)은 이 결과만 소비한다.
+ * 백엔드 규칙(src-tauri/src/events.rs 헤더)과 한 쌍이다. 순서가 뜻이 있다:
+ *   1. 데스크톱 웹뷰가 받은 window===내 라벨 → ignore.
+ *   2. 노트 하나로 좁힐 수 없다(note_id 없음) · 내 client 의 메아리 · 데스크톱의 local 쓰기인데 낸 창을 모른다(백그라운드 워커·라벨을 아직
+ *      안 싣는 async 커맨드) → tree. 누가 어느 노트를 썼는지 모르니 열린 노트 본문은 건드리지 않는다(자기 저장을 "다른 곳의 변경" 배너로 오인 금지).
+ *   3. 섹션 분리 창(src-tauri/src/section_window.rs::SECTION_LABEL_PREFIX)의 쓰기(데스크톱 한정) → light. 그 섹션은 본 창에서 플레이스홀더라
+ *      본문 재로드가 필요 없고(타이핑 300ms 마다 열린 노트를 통째로 다시 그리게 된다), 트리가 이 쓰기로 바뀌는 건 updated_at(날짜 범위
+ *      필터가 읽는다) 정도다 — folder_list 는 has_image·tag_names 를 채우지 않고(repo/folders.rs) 제목·폴더·정렬 키는 본문 저장이 안 건드린다.
+ *      그래서 트리 전수 재조회(LIMIT 없는 folder_list — 10만 노트 약 594ms, docs/SCALABILITY.md)를 자동저장마다 돌릴 이유가 없다.
+ *      브라우저(태블릿·폰)는 이 규칙을 안 탄다 — 거기선 이 쓰기도 남의 쓰기라 그대로 tree/body 로 반영한다.
+ *   4. 나머지(노트 id 가 있는 다른 창·원격의 쓰기) → body.
+ */
+export function classifyWrite(payload: RemoteNoteWritePayload, ctx: WriteContext): WriteEffect {
+  if (!ctx.browser && payload.window && payload.window === ctx.ownLabel) return "ignore";
+  const ownClient = !!payload.client && payload.client === ctx.clientId;
+  const unattributedLocal = !ctx.browser && (payload.origin ?? "remote") === "local" && !payload.window;
+  if (!payload.note_id || ownClient || unattributedLocal) return "tree";
+  if (!ctx.browser && !!payload.window?.startsWith("section-")) return "light";
+  return "body";
 }
 
-function isOwnClient(payload: RemoteNoteWritePayload): boolean {
-  return !!payload.client && payload.client === CLIENT_ID;
-}
-
-/** 섹션 분리 창(src-tauri/src/section_window.rs::SECTION_LABEL_PREFIX)의 쓰기 — 그 섹션은 본 창에서 플레이스홀더라
- *  본 창이 편집하지 않고, 창이 닫힐 때 sectionWindows.ts 가 DB 에서 다시 읽는다. 그래서 본문 재로드는 필요 없고
- *  (타이핑 300ms 마다 열린 노트를 통째로 다시 그리게 된다) coarse 로만 반영한다. */
-function isSectionWindowWrite(payload: RemoteNoteWritePayload): boolean {
-  return !!payload.window?.startsWith("section-");
-}
-
-/** 열린 노트 본문까지 갈아끼울 만큼 출처가 확실한가 — 내 클라이언트의 메아리도, 출처 모를 local 쓰기도,
- *  섹션 분리 창의 쓰기도 아니다. */
-function targetsNoteBody(payload: RemoteNoteWritePayload): boolean {
-  return (
-    !!payload.note_id && !isOwnClient(payload) && !isUnattributedLocal(payload) && !isSectionWindowWrite(payload)
-  );
+/** 지금 이 클라이언트의 WriteContext. */
+function writeContext(): WriteContext {
+  return { browser: isBrowser(), ownLabel: ownWindowLabel(), clientId: CLIENT_ID };
 }
 
 /**
@@ -144,7 +165,14 @@ export function listenDataReplaced(): () => void {
 /** 알림 한 건을 즉시 반영한다. 반환값은 트리 새로고침(loadTree)의 완료 — 합치기가 "도는 중"을 알려고 쓴다.
  *  loadTree 는 callSilent 실패를 다시 던지므로 호출자가 붙잡아야 한다(실패 기록은 callSilent 가 이미 남긴다). */
 export function handleRemoteNoteWrite(payload: RemoteNoteWritePayload, opts?: RemoteNoteWriteMobileOpts): Promise<void> {
-  if (isOwnEcho(payload)) return Promise.resolve();
+  const effect = classifyWrite(payload, writeContext());
+  if (effect === "ignore") return Promise.resolve();
+
+  // light — 트리 전수 재조회 없이 질의 캐시만 올린다(미룬 트리 재조회는 listenRemoteNoteWrite 의 몫).
+  if (effect === "light") {
+    bumpNoteQueryVersion();
+    return Promise.resolve();
+  }
 
   const store = useNotesStore.getState();
   // loadTree() 는 이제 스스로 isBrowser()&&isMobileViewport() 를 판정한다(stores/notesTree.ts) —
@@ -159,16 +187,17 @@ export function handleRemoteNoteWrite(payload: RemoteNoteWritePayload, opts?: Re
   // 내가 방금 낸 쓰기의 메아리 — 트리는 갱신하되(위) 열린 노트는 건드리지 않는다. 안 그러면 편집 중 폰이
   // 자기 저장을 "다른 기기에서 변경됨" 배너로 오인한다(2026-10-06 실기기). 출처 모를 local 쓰기와
   // note_id 없는 coarse 도 같다 — 어느 노트인지(또는 누가 냈는지) 모르니 본문 버퍼는 건드리지 않는다.
-  if (!targetsNoteBody(payload) || !payload.note_id) return treeLoaded;
+  const noteId = payload.note_id;
+  if (effect !== "body" || !noteId) return treeLoaded;
   const active = store.activeNote;
-  if (active && active.note.id === payload.note_id && store.savedState !== "saving") {
+  if (active && active.note.id === noteId && store.savedState !== "saving") {
     // 저장 실패·충돌 중이면 포커스와 무관하게 재로드하지 않는다(감사 M-9) — 재로드가 에디터를 상대본으로 덮으면
     // 이어 치는 글이 게이트에 붙잡힌 내 원본을 대체해 [복사]도 [덮어쓰기]도 원본을 잃는다. 배너로만 알린다.
-    const holdingUnsaved = store.savedState === "failed" || store.saveConflict?.noteId === payload.note_id;
+    const holdingUnsaved = store.savedState === "failed" || store.saveConflict?.noteId === noteId;
     if (holdingUnsaved || isEditingFocused()) {
       // 모바일 전용: 포커스 보호로 조용히 건너뛰는 대신 배너를 띄울 신호를 준다. opts 가 없으면
       // (데스크톱) 아무 일도 없다 — 기존 규칙 그대로.
-      opts?.onFocusSkipped?.(payload.note_id);
+      opts?.onFocusSkipped?.(noteId);
     } else {
       void store.reloadActive();
     }
@@ -182,39 +211,70 @@ export function listenRemoteNoteWrite(opts?: RemoteNoteWriteMobileOpts): () => v
   let unlisten: (() => void) | undefined;
   let cancelled = false;
 
-  // 합치기 상태(이 등록 하나의 것) — 모인 노트 id, 모인 게 있나, 예약된 flush, 새로고침이 도는 중인가.
+  // 합치기 상태(이 등록 하나의 것) — 모인 노트 id, 트리가 필요한가 / 질의 캐시만 필요한가, 예약된 flush, 새로고침이 도는 중인가.
   const pendingIds = new Set<string>();
-  let pending = false;
+  let needTree = false;
+  let needQuery = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let inFlight = false;
+  // light(섹션 분리 창 자동저장)가 미루는 트리 재조회 — 디바운스(마지막 쓰기 뒤 LIGHT_TREE_DEBOUNCE_MS)이되 첫 쓰기 기준 최대
+  // LIGHT_TREE_MAX_WAIT_MS 를 넘기지 않는다(계속 치고 있어도 트리가 영영 안 갱신되지는 않게).
+  let lightTimer: ReturnType<typeof setTimeout> | null = null;
+  let lightSince = 0;
 
   const schedule = () => {
     if (timer === null && !inFlight && !cancelled) timer = setTimeout(flush, REMOTE_WRITE_COALESCE_MS);
   };
   const flush = () => {
     timer = null;
-    if (!pending || cancelled) return;
+    if ((!needTree && !needQuery) || cancelled) return;
+    const treeNeeded = needTree;
+    needTree = false;
+    needQuery = false;
+    // light 만 모였으면 질의 캐시만 올린다 — 트리 전수 재조회 없음.
+    if (!treeNeeded) {
+      bumpNoteQueryVersion();
+      return;
+    }
     // 모인 쓰기 중 열린 노트가 있으면 그 노트로, 없으면 coarse(트리+목록만)로 한 번 반영한다.
     const activeId = useNotesStore.getState().activeNote?.note.id ?? null;
     const touchedActive = activeId !== null && pendingIds.has(activeId);
     pendingIds.clear();
-    pending = false;
     inFlight = true;
     handleRemoteNoteWrite({ note_id: touchedActive ? activeId : null, created: false, origin: "remote" }, opts)
       .catch(() => {}) // silent-ok: loadTree 는 callSilent 라 실패가 이미 진단 로그(logError)에 남는다
       .finally(() => {
         inFlight = false;
-        if (pending) schedule();
+        if (needTree || needQuery) schedule();
       });
+  };
+  const scheduleLightTree = () => {
+    const now = Date.now();
+    if (lightTimer === null) lightSince = now;
+    else clearTimeout(lightTimer);
+    const wait = Math.min(LIGHT_TREE_DEBOUNCE_MS, Math.max(0, lightSince + LIGHT_TREE_MAX_WAIT_MS - now));
+    lightTimer = setTimeout(() => {
+      lightTimer = null;
+      if (cancelled) return;
+      needTree = true;
+      schedule();
+    }, wait);
   };
 
   const listener = isBrowser() ? browserListen : listen;
   void listener<RemoteNoteWritePayload>("remote-note-write", (event) => {
-    if (isOwnEcho(event.payload)) return;
-    pending = true;
-    // 내 쓰기의 메아리·출처 모를 local 쓰기는 노트 id 를 모으지 않는다 — 그러면 flush 가 coarse(트리만)로
-    // 처리해 열린 노트를 건드리지 않는다(편집 중 자기 저장을 "다른 기기의 변경" 배너로 오인하던 것, 2026-10-06 실기기).
-    if (targetsNoteBody(event.payload)) pendingIds.add(event.payload.note_id!);
+    const effect = classifyWrite(event.payload, writeContext());
+    if (effect === "ignore") return;
+    if (effect === "light") {
+      needQuery = true;
+      scheduleLightTree();
+      schedule();
+      return;
+    }
+    needTree = true;
+    // tree(내 메아리·출처 모를 local·coarse)는 노트 id 를 모으지 않는다 — 그러면 flush 가 coarse(트리만)로 처리해 열린 노트를
+    // 건드리지 않는다(편집 중 자기 저장을 "다른 기기의 변경" 배너로 오인하던 것, 2026-10-06 실기기). body 만 모은다.
+    if (effect === "body") pendingIds.add(event.payload.note_id!);
     schedule();
   }).then((fn) => {
     if (cancelled) fn();
@@ -223,6 +283,7 @@ export function listenRemoteNoteWrite(opts?: RemoteNoteWriteMobileOpts): () => v
   return () => {
     cancelled = true;
     if (timer !== null) clearTimeout(timer);
+    if (lightTimer !== null) clearTimeout(lightTimer);
     unlisten?.();
   };
 }

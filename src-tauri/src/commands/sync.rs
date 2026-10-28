@@ -215,3 +215,72 @@ mod build_status_tests {
         assert!(is_bind_stale(IpAddr::V4(Ipv4Addr::new(100, 99, 88, 77))));
     }
 }
+
+#[derive(Serialize)]
+pub struct AgentSkillInstall {
+    pub skill_path: String,
+    pub cli_path: String,
+    pub mcp_command: String,
+}
+
+const AGENT_SKILL_MD: &str = include_str!("agent_skill.md");
+
+/// 번들된 cli/brise.mjs 의 절대경로. 윈도우의 `\?\` 확장 접두는 node·사용자 모두 불편하니 뗀다.
+fn bundled_cli_path(app: &tauri::AppHandle) -> Result<String, AppError> {
+    use tauri::Manager;
+    let p = app
+        .path()
+        .resolve("cli/brise.mjs", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| AppError::Io(e.to_string()))?;
+    if !p.exists() {
+        return Err(AppError::Io(format!("cli/brise.mjs not found: {}", p.display())));
+    }
+    Ok(p.to_string_lossy().trim_start_matches(r"\\?\").to_string())
+}
+
+fn mcp_register_command(cli_path: &str, data_dir: &str) -> String {
+    format!("claude mcp add --scope user --transport stdio --env BRISE_DATA_DIR=\"{data_dir}\" brise -- node \"{cli_path}\" mcp")
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn agent_skill_install(
+    app: tauri::AppHandle,
+    state: State<AppState>,
+) -> Result<AgentSkillInstall, AppError> {
+    use tauri::Manager;
+    let cli_path = bundled_cli_path(&app)?;
+    let data_dir = state.data_dir.to_string_lossy().trim_start_matches(r"\\?\").to_string();
+    let mcp_command = mcp_register_command(&cli_path, &data_dir);
+    let dir = app
+        .path()
+        .home_dir()
+        .map_err(|e| AppError::Io(e.to_string()))?
+        .join(".claude")
+        .join("skills")
+        .join("brise");
+    std::fs::create_dir_all(&dir).map_err(|e| AppError::Io(e.to_string()))?;
+    let file = dir.join("SKILL.md");
+    let body = AGENT_SKILL_MD.replace("{{MCP_COMMAND}}", &mcp_command);
+    std::fs::write(&file, body).map_err(|e| AppError::Io(e.to_string()))?;
+    Ok(AgentSkillInstall { skill_path: file.to_string_lossy().to_string(), cli_path, mcp_command })
+}
+
+#[cfg(test)]
+mod agent_skill_tests {
+    use super::*;
+
+    #[test]
+    fn register_command_embeds_cli_and_data_dir() {
+        let c = mcp_register_command(r"C:\app\cli\brise.mjs", r"C:\data");
+        assert!(c.contains(r#"BRISE_DATA_DIR="C:\data""#));
+        assert!(c.ends_with(r#"node "C:\app\cli\brise.mjs" mcp"#));
+    }
+
+    #[test]
+    fn skill_template_has_frontmatter_and_placeholder() {
+        assert!(AGENT_SKILL_MD.starts_with("---
+name: brise
+"));
+        assert!(AGENT_SKILL_MD.contains("{{MCP_COMMAND}}"));
+    }
+}

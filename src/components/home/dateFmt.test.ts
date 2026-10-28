@@ -5,6 +5,7 @@ import {
   formatMonthShort,
   formatTimelineTick,
   isoWeekdayBit,
+  addDaysIso,
 } from "./dateFmt";
 
 describe("formatYearRange (L5-3 shared join)", () => {
@@ -74,5 +75,21 @@ describe("isoWeekdayBit (timeline_routines.weekday_mask ordering — bit0=Mon..b
   it("returns 0 for a malformed date string", () => {
     expect(isoWeekdayBit("not-a-date")).toBe(0);
     expect(isoWeekdayBit("")).toBe(0);
+  });
+});
+
+describe("addDaysIso — 날짜 더하기의 유일한 구현", () => {
+  it("월·연·윤년 경계를 넘는다", () => {
+    expect(addDaysIso("2026-09-30", 1)).toBe("2026-10-01");
+    expect(addDaysIso("2026-12-31", 1)).toBe("2027-01-01");
+    expect(addDaysIso("2026-03-01", -1)).toBe("2026-02-28");
+    expect(addDaysIso("2028-03-01", -1)).toBe("2028-02-29");
+    expect(addDaysIso("2026-08-09", 0)).toBe("2026-08-09");
+    expect(addDaysIso("2026-08-09", -77)).toBe("2026-05-24");
+  });
+
+  it("형식이 깨졌으면 null", () => {
+    expect(addDaysIso("nope", 1)).toBeNull();
+    expect(addDaysIso("2026-8-9", 1)).toBeNull();
   });
 });

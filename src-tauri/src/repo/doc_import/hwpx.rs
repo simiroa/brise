@@ -768,7 +768,11 @@ pub fn parse_file(path: &Path) -> AppResult<Parsed> {
     let file = File::open(path).map_err(io_err)?;
     let mut archive =
         ZipArchive::new(file).map_err(|e| AppError::Validation(format!("not a valid hwpx (zip): {e}")))?;
-    let entries: BTreeMap<String, String> = archive.file_names().map(|n| (n.to_lowercase(), n.to_string())).collect();
+    let entries: BTreeMap<String, String> = archive
+        .file_names()
+        .map(|n| n.map(|n| (n.to_lowercase(), n.to_string())))
+        .collect::<Result<_, _>>()
+        .map_err(|e| AppError::Validation(format!("not a valid hwpx (zip): {e}")))?;
     // XML 은 한 문서가 예산을 공유한다(zip bomb). 그림은 각자 따로 잰다.
     let mut budget = MAX_DECOMPRESSED_BYTES;
 

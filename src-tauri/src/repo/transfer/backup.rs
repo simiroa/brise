@@ -6,6 +6,7 @@
 // 출처 추적은 manifest.json의 device_id(백업을 만든 기기)로 남는다.
 use crate::db::{self, migrations};
 use crate::error::{db as dberr, io, AppError, AppResult};
+use super::swap::{attachments_sibling, swap_live_state, Staged};
 use crate::util::{new_id, now_iso};
 use rusqlite::{Connection, OptionalExtension, MAIN_DB};
 use serde::Serialize;
@@ -373,6 +374,40 @@ pub fn auto_backup_last(data_dir: &Path) -> Option<String> {
     Some(dt.to_rfc3339())
 }
 
+/// 복구 목록 한 줄(설정 › 데이터 관리 › 저장 및 백업) — 파일 하나의 이름·경로·시각·크기.
+#[derive(serde::Serialize, Debug, PartialEq)]
+pub struct AutoBackupEntry {
+    pub name: String,
+    pub path: String,
+    pub created_at: String,
+    pub size_bytes: u64,
+}
+
+/// backups/ 의 auto-*.zip 을 **최신순**으로 최대 `limit`개. 파일명이 고정 폭 타임스탬프라 사전순 역순 = 최신순.
+pub fn auto_backup_list(data_dir: &Path, limit: usize) -> Vec<AutoBackupEntry> {
+    let backups = db::backups_dir(data_dir);
+    let Ok(rd) = std::fs::read_dir(&backups) else { return Vec::new() };
+    let mut paths: Vec<PathBuf> = rd
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.file_name().and_then(|n| n.to_str()).map(is_auto_backup_name).unwrap_or(false))
+        .collect();
+    paths.sort_by(|a, b| b.cmp(a));
+    paths
+        .into_iter()
+        .take(limit)
+        .filter_map(|p| {
+            let meta = std::fs::metadata(&p).ok()?;
+            let dt: chrono::DateTime<chrono::Utc> = meta.modified().ok()?.into();
+            Some(AutoBackupEntry {
+                name: p.file_name()?.to_string_lossy().to_string(),
+                path: p.to_string_lossy().to_string(),
+                created_at: dt.to_rfc3339(),
+                size_bytes: meta.len(),
+            })
+        })
+        .collect()
+}
+
 fn zip_add_dir(
     zip: &mut zip::ZipWriter<std::fs::File>,
     dir: &Path,
@@ -398,30 +433,17 @@ fn zip_add_dir(
     Ok(())
 }
 
-/// 검증 통과 후 스왑에 쓸 준비된(스테이징) 경로들. 이 셋이 모두 채워진 뒤에야 라이브 상태를 건드린다.
-/// backup_restore(zip 에서)와 db_reset(빈 DB 로 — reset.rs)이 같이 쓴다.
-pub(super) struct Staged {
-    pub(super) db_path: PathBuf,
-    pub(super) att_path: PathBuf,
-    pub(super) bg_path: PathBuf,
-}
-
-/// 라이브 attachments/ 와 **같은 부모** 아래의 형제 경로 — 스테이징·옛 첨부 자리는 여기 둔다.
-/// 저장 위치 재정의(db::set_dir_overrides)로 attachments/ 가 data_dir 밖(다른 볼륨)에 있으면
-/// data_dir 쪽 자리로는 rename 이 볼륨을 건너 실패한다. 재정의가 없으면 부모 = data_dir 그대로.
-pub(super) fn attachments_sibling(data_dir: &Path, name: &str) -> PathBuf {
-    let live = db::attachments_dir(data_dir);
-    live.parent().unwrap_or(data_dir).join(name)
-}
-
 /// zip → 스테이징 디렉토리/파일. 실패 시 스테이징 잔여물을 정리하고 에러를 반환한다 — 이 함수가
 /// 끝나기 전까지는 라이브 DB/attachments/workspace_bg 를 전혀 건드리지 않는다(import.rs replace
 /// 모드의 "복사 먼저, 커밋은 나중" 순서와 동일한 이유 — 실패해도 기존 상태가 100% 그대로여야 한다).
 fn stage_from_zip(data_dir: &Path, zip_path: &Path, cur_schema: i64) -> AppResult<Staged> {
     let id = new_id();
-    let staged_db = data_dir.join(format!("brise.restore-incoming-{id}.db"));
-    let staged_att = attachments_sibling(data_dir, &format!("attachments.incoming-{id}"));
-    let staged_bg = data_dir.join(format!("workspace_bg.incoming-{id}"));
+    let staged = Staged {
+        db_path: data_dir.join(format!("brise.restore-incoming-{id}.db")),
+        att_path: attachments_sibling(data_dir, &format!("attachments.incoming-{id}")),
+        bg_path: data_dir.join(format!("workspace_bg.incoming-{id}")),
+    };
+    let (staged_db, staged_att, staged_bg) = (&staged.db_path, &staged.att_path, &staged.bg_path);
 
     let result = (|| -> AppResult<()> {
         let file = std::fs::File::open(zip_path).map_err(io)?;
@@ -434,17 +456,17 @@ fn stage_from_zip(data_dir: &Path, zip_path: &Path, cur_schema: i64) -> AppResul
             let entry = archive
                 .by_index(i)
                 .map_err(|e| AppError::Validation(format!("zip read error: {e}")))?;
-            let name = entry.name();
+            let name = entry.name().map_err(|e| AppError::Validation(format!("zip read error: {e}")))?;
             if !name.ends_with('/') {
-                crate::repo::paths::safe_rel(name)?;
+                crate::repo::paths::safe_rel(&name)?;
             }
         }
 
         // attachments/workspace_bg 는 비어 있어도 항상 존재해야 한다(db::bootstrap 의 불변식과
         // 동일) — zip에 해당 prefix 항목이 하나도 없어도(빈 첨부 라이브러리, 또는 그 기능이 없던
         // 구버전 백업) 스왑 단계의 rename 대상이 있어야 하므로 미리 만들어 둔다.
-        std::fs::create_dir_all(&staged_att).map_err(io)?;
-        std::fs::create_dir_all(&staged_bg).map_err(io)?;
+        std::fs::create_dir_all(staged_att).map_err(io)?;
+        std::fs::create_dir_all(staged_bg).map_err(io)?;
 
         let db_idx = archive.index_for_name(db::DB_FILE).ok_or_else(|| {
             AppError::Validation(format!("backup zip is missing {}", db::DB_FILE))
@@ -453,14 +475,14 @@ fn stage_from_zip(data_dir: &Path, zip_path: &Path, cur_schema: i64) -> AppResul
             let mut entry = archive
                 .by_index(db_idx)
                 .map_err(|e| AppError::Validation(format!("zip error: {e}")))?;
-            let mut out = std::fs::File::create(&staged_db).map_err(io)?;
+            let mut out = std::fs::File::create(staged_db).map_err(io)?;
             std::io::copy(&mut entry, &mut out).map_err(io)?;
         }
 
         // 스키마 호환성 + 손상 여부 — bootstrap 이 복구 후 항상 재검증하는 것과 같은 이유
         // (백업 자체도 손상됐을 수 있다). 여기서 걸러야 라이브 상태를 건드리지 않는다.
         {
-            let tmp_conn = Connection::open(&staged_db).map_err(dberr)?;
+            let tmp_conn = Connection::open(staged_db).map_err(dberr)?;
             let backup_schema = migrations::current_version(&tmp_conn)?;
             let qc = db::quick_check(&tmp_conn);
             drop(tmp_conn);
@@ -490,11 +512,11 @@ fn stage_from_zip(data_dir: &Path, zip_path: &Path, cur_schema: i64) -> AppResul
             if entry.is_dir() {
                 continue;
             }
-            let name = entry.name().to_string();
+            let name = entry.name().map_err(|e| AppError::Validation(format!("zip error: {e}")))?.to_string();
             let (base, rel) = if let Some(rel) = name.strip_prefix("attachments/") {
-                (&staged_att, rel)
+                (staged_att, rel)
             } else if let Some(rel) = name.strip_prefix("workspace_bg/") {
-                (&staged_bg, rel)
+                (staged_bg, rel)
             } else {
                 continue; // brise.db / manifest.json / 알 수 없는 최상위 항목 — 트리 복사 대상 아님
             };
@@ -514,17 +536,11 @@ fn stage_from_zip(data_dir: &Path, zip_path: &Path, cur_schema: i64) -> AppResul
     })();
 
     if let Err(e) = result {
-        let _ = std::fs::remove_file(&staged_db);
-        let _ = std::fs::remove_dir_all(&staged_att);
-        let _ = std::fs::remove_dir_all(&staged_bg);
+        staged.discard();
         return Err(e);
     }
 
-    Ok(Staged {
-        db_path: staged_db,
-        att_path: staged_att,
-        bg_path: staged_bg,
-    })
+    Ok(staged)
 }
 
 /// 전체 복원 — 검증(zip 유효성/스키마 호환성/무결성)을 전부 통과한 뒤에만 라이브 상태를 스왑한다.
@@ -561,155 +577,6 @@ pub fn backup_restore(
         backup_path: safety_backup.to_string_lossy().to_string(),
         note_count,
     })
-}
-
-/// 스왑의 파일 삭제 단계용 io 에러 변환 — Windows 공유 위반(os error 32)은 다른 연결이 brise.db 를
-/// 잡고 있다는 뜻이라, 일반 io 에러 대신 사용자가 할 수 있는 일을 말해 준다.
-/// ponytail: 백그라운드 연결(수집 러너·일정/EXIF 워커·동기화 서버 핸들러·자동 백업)은 각자 db::open 을
-/// 하고, with_db_file_swap 은 채팅 읽기 연결만 닫는다. 그래서 그들이 열려 있는 순간의 스왑은 Windows 에선
-/// 여기서 실패하고(되돌림 경로로 안전), Unix 에선 unlink 된 옛 inode 에 늦은 쓰기가 사라질 수 있다.
-/// 천장: 워커가 db::open 전에 확인하는 일시정지(quiesce) 게이트를 스왑 내내 잡으면 해결된다.
-fn file_in_use(e: std::io::Error) -> AppError {
-    if e.raw_os_error() == Some(32) {
-        AppError::Io(format!(
-            "the database file is in use by another connection (sync server, collect or a background worker) - turn off sync, wait for running collect jobs and retry ({e})"
-        ))
-    } else {
-        io(e)
-    }
-}
-
-/// 스테이징된 DB·첨부·배경 이미지로 라이브 상태를 통째로 갈아끼운다 — backup_restore 와 db_reset 공용.
-/// 성공하면 `*conn` 은 새 라이브 커넥션이다. 호출자는 이미 `safety_backup` 스냅샷을 찍어 뒀어야 한다
-/// (실패 시 그걸로 되돌린다). `carry_secrets` 는 새 DB 에 되돌려 넣을 이 설치본의 비밀 설정,
-/// `op` 는 에러 메시지용 이름("restore"/"reset").
-/// 스왑 자체는 rename 위주(거의 실패하지 않음)로 좁혀 "검증 실패 = 기존 상태 100% 보존"을 보장한다.
-pub(super) fn swap_live_state(
-    conn: &mut Connection,
-    data_dir: &Path,
-    staged: Staged,
-    safety_backup: &Path,
-    carry_secrets: &[(String, String)],
-    op: &str,
-) -> AppResult<()> {
-    // 라이브 커넥션을 놓아야 Windows에서 파일 교체(rename)가 가능하다(핸들이 열려 있으면 실패).
-    // 채팅 검색의 읽기 연결도 같은 이유로 호출자가 닫아 둬야 한다(AppState::with_db_file_swap).
-    let placeholder = Connection::open_in_memory().map_err(dberr)?;
-    let old_conn = std::mem::replace(conn, placeholder);
-    drop(old_conn);
-
-    let live_db = db::db_path(data_dir);
-    let old_att = attachments_sibling(data_dir, &format!("attachments.old-{}", new_id()));
-    let old_bg = data_dir.join(format!("workspace_bg.old-{}", new_id()));
-    let live_att = db::attachments_dir(data_dir);
-    let live_bg = db::workspace_bg_dir(data_dir);
-    let outcome: AppResult<Connection> = (|| {
-        for ext in ["-wal", "-shm"] {
-            let sidecar = data_dir.join(format!("{}{ext}", db::DB_FILE));
-            if sidecar.exists() {
-                std::fs::remove_file(&sidecar).map_err(file_in_use)?;
-            }
-        }
-        if live_db.exists() {
-            std::fs::remove_file(&live_db).map_err(file_in_use)?;
-        }
-        std::fs::rename(&staged.db_path, &live_db).map_err(io)?;
-
-        if live_att.exists() {
-            std::fs::rename(&live_att, &old_att).map_err(io)?;
-        }
-        std::fs::rename(&staged.att_path, &live_att).map_err(io)?;
-        if live_bg.exists() {
-            std::fs::rename(&live_bg, &old_bg).map_err(io)?;
-        }
-        std::fs::rename(&staged.bg_path, &live_bg).map_err(io)?;
-
-        let mut new_conn = db::open(&live_db)?;
-        migrations::run(&mut new_conn)?;
-        db::scrub_zero_row_stats(&new_conn);
-        // 파일 상단 주석 참고: 복원본은 새 설치본이므로 백업 출처 기기의 device_id 를 버리고
-        // 재생성한다(초기화의 빈 DB 엔 애초에 없다 — 같은 줄로 새로 만든다).
-        new_conn
-            .execute("DELETE FROM settings WHERE key='device_id'", [])
-            .map_err(dberr)?;
-        crate::repo::settings::ensure_device_id(&new_conn)?;
-        // export.rs::is_device_local_setting_key 와 같은 이유(G3 device_id 와 동급) — sync_enabled
-        // 는 "이 설치본"의 로컬 서버 on/off 상태다. 복원된 기기가 백업 출처 기기의 sync_enabled=true
-        // 를 그대로 이어받아 조용히(사용자가 한 번도 켠 적 없는데) 토큰 있는 서버를 자동 기동하면
-        // 안 된다(sync_server::maybe_start_at_boot 는 enabled && token 비어있지 않음을 함께 본다).
-        // sync_token 은 backup_create 단계에서 이미 is_secret_setting_key 로 스테이징 사본에서
-        // 지워지지만(위 함수 주석), 여기서도 명시적으로 비워 두 경로 중 하나가 바뀌어도 안전하게
-        // 한다. 삭제만 하면 settings::get_all() 이 default_settings() 의 false/"" 로 폴백한다 —
-        // sync_port 는 민감하지 않으므로(그냥 숫자) device_id/sync_enabled 와 달리 그대로 둔다.
-        new_conn
-            .execute("DELETE FROM settings WHERE key IN ('sync_enabled', 'sync_token')", [])
-            .map_err(dberr)?;
-        super::import::restore_secret_settings(&new_conn, carry_secrets)?;
-        Ok(new_conn)
-    })();
-
-    match outcome {
-        Ok(new_conn) => {
-            *conn = new_conn;
-            // 옛 트리는 새 DB 가 완전히 열린 **뒤에만** 지운다 — 그 전에 지우면 아래 실패 경로가
-            // 스냅샷 DB 로 되돌려도 그 DB 가 가리키는 첨부·배경은 이미 사라진 뒤다.
-            // 삭제 실패는 스왑을 되돌릴 이유가 아니지만(데이터는 새 자리에 있다), 디스크를 조용히
-            // 먹는 잔여물이라 기록은 남긴다(파일 이름만 — 전체 경로 금지).
-            for (old, label) in [(&old_att, "attachments.old"), (&old_bg, "workspace_bg.old")] {
-                if old.exists() {
-                    if let Err(e) = std::fs::remove_dir_all(old) {
-                        crate::diag::warn("backup", "old_tree_remove_failed", format!("{op} {label}: {e}"));
-                    }
-                }
-            }
-            Ok(())
-        }
-        Err(e) => {
-            // 디렉토리부터 제자리로 — DB 를 아래에서 스냅샷으로 되돌리므로 첨부·배경도 옛 트리여야
-            // 짝이 맞는다. old 가 있다는 건 이번 호출의 rename(live → old)이 성공했다는 뜻이고,
-            // 그때 live 자리는 비었거나 스테이징 사본이다(지워도 되는 쪽).
-            for (old, live, label) in [(&old_att, &live_att, "attachments"), (&old_bg, &live_bg, "workspace_bg")] {
-                if !old.exists() {
-                    continue;
-                }
-                let back = (|| -> std::io::Result<()> {
-                    if live.exists() {
-                        std::fs::remove_dir_all(live)?;
-                    }
-                    std::fs::rename(old, live)
-                })();
-                if let Err(re) = back {
-                    crate::diag::warn("backup", "tree_rollback_failed", format!("{op} {label}: {re}"));
-                }
-            }
-            // ponytail: 이 지점의 실패(rename/재오픈/마이그레이션)는 이미 검증을 마친 스테이징
-            // 파일에 대한 디스크 수준 사고에 가깝다 — conn을 in-memory 로 방치하지 않도록
-            // 방금 찍은 안전 스냅샷으로 되돌려 재오픈을 한 번 시도한다. 그마저 실패하면 앱 재시작
-            // (bootstrap의 손상 복구 경로)이 실질적 복구 수단이다.
-            let _ = std::fs::copy(safety_backup, &live_db);
-            if let Ok(mut recovered) = db::open(&live_db) {
-                let _ = migrations::run(&mut recovered);
-                *conn = recovered;
-            }
-            // 위 되돌리기마저 실패했으면 기존 트리가 old 자리에 남아 사라진 것처럼 보인다 —
-            // 메시지에 경로를 남겨 수동 복구 가능하게 한다.
-            let mut msg = format!(
-                "{op} failed after replacing files: {e}. Safety snapshot of the previous state: {}",
-                safety_backup.display()
-            );
-            if old_att.exists() {
-                msg.push_str(&format!(" Previous attachments preserved at: {}.", old_att.display()));
-            }
-            if old_bg.exists() {
-                msg.push_str(&format!(" Previous workspace_bg preserved at: {}.", old_bg.display()));
-            }
-            // 스왑 전 단계에서 실패했으면 스테이징 잔여물이 남는다 — 지워도 되는 사본이다.
-            let _ = std::fs::remove_file(&staged.db_path); // silent-ok: 이미 rename 됐거나 없는 사본
-            let _ = std::fs::remove_dir_all(&staged.att_path); // silent-ok: 같은 이유
-            let _ = std::fs::remove_dir_all(&staged.bg_path); // silent-ok: 같은 이유
-            Err(AppError::Db(msg))
-        }
-    }
 }
 
 #[cfg(test)]
@@ -1058,7 +925,7 @@ mod tests {
         let file = std::fs::File::open(&zip_path).unwrap();
         let mut archive = zip::ZipArchive::new(file).unwrap();
         let names: Vec<String> = (0..archive.len())
-            .map(|i| archive.by_index(i).unwrap().name().to_string())
+            .map(|i| archive.by_index(i).unwrap().name().unwrap().to_string())
             .collect();
         assert!(
             !names.iter().any(|n| n.ends_with("huge-original.bin")),
@@ -1108,7 +975,7 @@ mod tests {
         let file = std::fs::File::open(&zip_path).unwrap();
         let mut archive = zip::ZipArchive::new(file).unwrap();
         let names: Vec<String> = (0..archive.len())
-            .map(|i| archive.by_index(i).unwrap().name().to_string())
+            .map(|i| archive.by_index(i).unwrap().name().unwrap().to_string())
             .collect();
         assert!(
             !names.iter().any(|n| n.contains("orphaned")),
@@ -1116,40 +983,6 @@ mod tests {
         );
 
         drop(conn);
-    }
-
-    /// 스왑 도중(첨부는 이미 갈아끼운 뒤) 실패하면 첨부·배경 트리가 모두 제자리로 돌아와야 한다 —
-    /// 스냅샷 DB 와 짝이 맞는 옛 파일들이 attachments.old-* 에 버려진 채 남으면 안 된다.
-    /// 스테이징 배경 경로를 없는 자리로 줘서 마지막 rename 을 실패시킨다.
-    #[test]
-    fn swap_failure_mid_way_puts_both_trees_back() {
-        let data_dir = tempfile::tempdir().unwrap();
-        let dd = data_dir.path();
-        let mut conn = db::bootstrap(dd).unwrap();
-        std::fs::write(db::attachments_dir(dd).join("keep.txt"), b"att").unwrap();
-        std::fs::write(db::workspace_bg_dir(dd).join("bg.png"), b"bg").unwrap();
-        let safety = db::snapshot_backup(&conn, &db::backups_dir(dd)).unwrap();
-
-        let staged_db = dd.join("staged.db");
-        std::fs::copy(&safety, &staged_db).unwrap();
-        let staged_att = dd.join("att.incoming");
-        std::fs::create_dir_all(&staged_att).unwrap();
-        std::fs::write(staged_att.join("new.txt"), b"new").unwrap();
-        let staged = Staged { db_path: staged_db, att_path: staged_att, bg_path: dd.join("missing-bg") };
-
-        assert!(swap_live_state(&mut conn, dd, staged, &safety, &[], "test").is_err());
-
-        assert_eq!(std::fs::read(db::attachments_dir(dd).join("keep.txt")).unwrap(), b"att");
-        assert!(!db::attachments_dir(dd).join("new.txt").exists());
-        assert_eq!(std::fs::read(db::workspace_bg_dir(dd).join("bg.png")).unwrap(), b"bg");
-        let leftovers: Vec<String> = std::fs::read_dir(dd)
-            .unwrap()
-            .filter_map(|e| e.ok()?.file_name().into_string().ok())
-            .filter(|n| n.contains(".old-") || n.ends_with(".incoming"))
-            .collect();
-        assert!(leftovers.is_empty(), "{leftovers:?}");
-        // 실패 경로도 conn 을 스냅샷 DB 로 다시 연다.
-        conn.query_row("SELECT COUNT(*) FROM workspaces", [], |r| r.get::<_, i64>(0)).unwrap();
     }
 
     // ── Settings redesign (Données ②) — 자동 백업 스케줄/회전 ──────────────────────────────
@@ -1222,6 +1055,26 @@ mod tests {
         // db/mod.rs::newest_backup must not see the auto zip (later timestamp) as a brise-*.db snapshot.
         let picked_db = db::newest_backup(backups).unwrap();
         assert_eq!(picked_db.file_name().unwrap().to_str().unwrap(), "brise-20260901T000000000000-ffffffff.db");
+    }
+
+    #[test]
+    fn auto_backup_list_is_newest_first_limited_and_only_auto_zips() {
+        let data_dir = tempfile::tempdir().unwrap();
+        let backups = db::backups_dir(data_dir.path());
+        std::fs::create_dir_all(&backups).unwrap();
+        for n in ["auto-20260101T000000000000.zip", "auto-20260301T000000000000.zip", "auto-20260201T000000000000.zip"] {
+            std::fs::write(backups.join(n), b"zip").unwrap();
+        }
+        std::fs::write(backups.join("brise-20260901T000000000000-ffffffff.db"), b"db").unwrap();
+        std::fs::write(backups.join("mine.zip"), b"zip").unwrap();
+        let all = auto_backup_list(data_dir.path(), 10);
+        let names: Vec<&str> = all.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(
+            names,
+            ["auto-20260301T000000000000.zip", "auto-20260201T000000000000.zip", "auto-20260101T000000000000.zip"]
+        );
+        assert_eq!(auto_backup_list(data_dir.path(), 2).len(), 2);
+        assert_eq!(all[0].size_bytes, 3);
     }
 
     #[test]
@@ -1373,13 +1226,13 @@ mod tests {
                 if f.is_dir() {
                     continue;
                 }
-                if f.name().starts_with("attachments/") {
+                if f.name().unwrap().starts_with("attachments/") {
                     saw_att = true;
                     assert_eq!(f.compression(), zip::CompressionMethod::Stored);
                 }
                 let mut buf = Vec::new();
                 std::io::Read::read_to_end(&mut f, &mut buf).unwrap();
-                entries.push((f.name().to_string(), buf));
+                entries.push((f.name().unwrap().to_string(), buf));
             }
             assert!(saw_att);
         }

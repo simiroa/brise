@@ -18,6 +18,8 @@
   "unhandled_error": "예상치 못한 오류가 발생했습니다: {{message}}",
   "diag_notice_db_restored_from_backup": "데이터베이스가 손상되어 최근 백업({{backup}})에서 복구했어요. 손상된 파일은 {{quarantine}}(으)로 보관했고, 그 백업 이후 만든 노트의 파일은 데이터 폴더 안 \"orphaned\" 폴더에 보관돼 있어요.",
   "diag_notice_worker_stopped": "{{worker}}이(가) 멈췄어요. 앱을 다시 시작해 보세요.",
+  "diag_notice_db_connection_lost": "복원·초기화가 실패했고 데이터베이스를 다시 열지 못했어요. 지금은 임시 메모리 위에서 돌고 있어 바꾼 내용이 저장되지 않아요. 지금 앱을 다시 시작해 주세요. 이전 상태의 스냅샷: {{snapshot}} (데이터 폴더의 backups 폴더)",
+  "diag_notice_swap_recovery_failed": "복원·초기화가 실패했고 이전 상태로 자동으로 되돌리지 못했어요. 앱을 다시 시작해 보고, 이상하면 이전 상태의 스냅샷({{snapshot}}, 데이터 폴더의 backups 폴더)으로 복원해 주세요.",
   "diag_worker_schedule": "알림/일정 스케줄러",
   "diag_worker_collect": "자동 수집",
   "diag_notice_generic": "문제가 발생했어요 ({{feature}}/{{code}}).",

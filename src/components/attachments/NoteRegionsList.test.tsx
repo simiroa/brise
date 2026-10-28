@@ -837,89 +837,16 @@ describe("NoteRegionsList — autoOpenSearch (popover-only)", () => {
   });
 });
 
-// "현재 위치" 요청에 대한 답: 브라우저 지오로케이션 대신 설정에 이미 있는 지도 기본 위치를
-// 역지오코딩해 한 번에 넣는다. 새 설정 키/커맨드 없음 — defaultMapLocation(Customized) 과
-// geocode_reverse 만 쓴다.
-describe("NoteRegionsList — '기본 위치' quick-add", () => {
-  beforeEach(() => {
-    callMock.mockReset();
-    callMock.mockImplementation(async (cmd: string) => {
-      if (cmd === "note_regions_list") {
-        return { regions: [{ id: "wp-g", note_id: "n1", name: "경주", lat: 35.85, lng: 129.22, position: 0 }] };
-      }
-      if (cmd === "note_region_add") return { id: "wp-new" };
-      if (cmd === "geocode_reverse") return { label: "부산" };
-      return {};
-    });
-    useNotesStore.setState({
-      activeNote: {
-        note: { id: "n1", region: "서울", lat: 37.56, lng: 126.97 } as never,
-        sections: [],
-        sources: [],
-        attachments: [],
-      } as never,
-      activeDraft: false,
-    } as never);
-  });
-
-  afterEach(() => {
-    useNotesStore.setState({ activeNote: null, activeDraft: false } as never);
-    useSettingsStore.setState({ defaultMapLocationCustomized: false });
-  });
-
-  it("is hidden when default_map_location has not been customized", async () => {
-    useSettingsStore.setState({ defaultMapLocationCustomized: false });
+// 자동 감지 토글 — 지도 아래 아이콘 줄 우측. 기본 위치 한 번에 넣기 링크는 홈 버튼으로 대체돼 없어졌다.
+describe("NoteRegionsList — 자동 감지 토글", () => {
+  it("아이콘 줄에 토글이 있고 누르면 regionNudgeEnabled 가 바뀐다", async () => {
+    const setter = vi.fn(async () => {});
+    useSettingsStore.setState({ regionNudgeEnabled: true, setRegionNudgeEnabled: setter } as never);
     render(<NoteRegionsList noteId="n1" primary={{ region: "서울", lat: 37.56, lng: 126.97 }} />);
-    await waitFor(() => expect(screen.getByTestId("note-region-add")).toBeTruthy());
-    fireEvent.click(screen.getByTestId("note-region-add"));
-    expect(screen.queryByTestId("note-region-use-default-location")).toBeNull();
-  });
-
-  it("reverse-geocodes the default location and adds it as a waypoint", async () => {
-    useSettingsStore.setState({
-      defaultMapLocationCustomized: true,
-      defaultMapLocation: { lat: 35.18, lng: 129.08, zoom: 150 },
-    });
-    render(<NoteRegionsList noteId="n1" primary={{ region: "서울", lat: 37.56, lng: 126.97 }} />);
-    await waitFor(() => expect(screen.getByTestId("note-region-add")).toBeTruthy());
-    fireEvent.click(screen.getByTestId("note-region-add"));
-    await waitFor(() => expect(screen.getByTestId("note-region-use-default-location")).toBeTruthy());
-    fireEvent.click(screen.getByTestId("note-region-use-default-location"));
-
-    await waitFor(() => {
-      expect(callMock).toHaveBeenCalledWith("geocode_reverse", expect.objectContaining({ lat: 35.18, lng: 129.08 }));
-      expect(callMock).toHaveBeenCalledWith(
-        "note_region_add",
-        expect.objectContaining({ note_id: "n1", name: "부산", lat: 35.18, lng: 129.08 }),
-      );
-    });
-  });
-
-  it("still adds the place (with a coordinate label) when geocode_reverse fails", async () => {
-    callMock.mockImplementation(async (cmd: string) => {
-      if (cmd === "note_regions_list") {
-        return { regions: [{ id: "wp-g", note_id: "n1", name: "경주", lat: 35.85, lng: 129.22, position: 0 }] };
-      }
-      if (cmd === "note_region_add") return { id: "wp-new" };
-      if (cmd === "geocode_reverse") return Promise.reject(new Error("network down"));
-      return {};
-    });
-    useSettingsStore.setState({
-      defaultMapLocationCustomized: true,
-      defaultMapLocation: { lat: 35.18, lng: 129.08, zoom: 150 },
-    });
-    render(<NoteRegionsList noteId="n1" primary={{ region: "서울", lat: 37.56, lng: 126.97 }} />);
-    await waitFor(() => expect(screen.getByTestId("note-region-add")).toBeTruthy());
-    fireEvent.click(screen.getByTestId("note-region-add"));
-    await waitFor(() => expect(screen.getByTestId("note-region-use-default-location")).toBeTruthy());
-    fireEvent.click(screen.getByTestId("note-region-use-default-location"));
-
-    await waitFor(() => {
-      expect(callMock).toHaveBeenCalledWith(
-        "note_region_add",
-        expect.objectContaining({ note_id: "n1", name: "35.180, 129.080", lat: 35.18, lng: 129.08 }),
-      );
-    });
+    const sw = await screen.findByTestId("note-region-auto-detect");
+    expect(sw.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(sw);
+    expect(setter).toHaveBeenCalledWith(false);
   });
 });
 

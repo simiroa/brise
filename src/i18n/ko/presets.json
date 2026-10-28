@@ -14,7 +14,7 @@
   "ai_disabled_hint": "이 프리셋을 쓰려면 설정에서 AI를 먼저 구성하세요.",
   "ai_checking": "AI 연결 확인 중…",
   "ai_unreachable": "AI에 연결할 수 없음 — 설정에서 확인",
-  "ai_actions_title": "AI 프리셋",
+  "ai_actions_title": "커스텀 프롬프트",
   "assist_autorun": "바로 실행",
   "style_title": "아이콘 · 색",
   "color_default": "기본 색",

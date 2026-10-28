@@ -6,7 +6,10 @@ import {
   commitDateRow,
   shiftRowTimes,
   resizeRowBoundary,
+  moveRowToDay,
   removeDateRow,
+  planGestureWrites,
+  timeChangeLabel,
 } from "./dateWrite";
 
 const callMock = vi.fn();
@@ -472,5 +475,122 @@ describe("calendar/dateWrite pure unit tests", () => {
       const success = await removeDateRow("note-abc", "date-rel");
       expect(success).toBe(false);
     });
+  });
+});
+
+describe("moveRowToDay — 자정을 넘겨 옮길 때의 날짜 필드", () => {
+  it("하루짜리 행은 년/월/일을 옮긴다(종료 트리플이 비어 있으면 비운 채)", () => {
+    const row = makeDateRow({ year: 2026, month: 8, day: 9, end_year: null, end_month: null, end_day: null });
+    expect(moveRowToDay(row, "2026-08-10")).toEqual({
+      year: 2026, month: 8, day: 10, end_year: null, end_month: null, end_day: null,
+    });
+  });
+
+  it("종료 트리플이 시작과 같게 채워진 하루짜리는 같이 옮긴다(월 경계 포함)", () => {
+    const row = makeDateRow({ year: 2026, month: 8, day: 31, end_year: 2026, end_month: 8, end_day: 31 });
+    expect(moveRowToDay(row, "2026-09-01")).toEqual({
+      year: 2026, month: 9, day: 1, end_year: 2026, end_month: 9, end_day: 1,
+    });
+  });
+
+  it("여러 날 span · 반복 행 · 날짜 정밀도 낮은 행은 옮기지 않는다(null = 아무것도 쓰지 않음)", () => {
+    expect(moveRowToDay(makeDateRow({ end_year: 2026, end_month: 8, end_day: 12 }), "2026-08-10")).toBeNull();
+    expect(moveRowToDay(makeDateRow({ rrule: "FREQ=DAILY" }), "2026-08-10")).toBeNull();
+    expect(moveRowToDay(makeDateRow({ day: null }), "2026-08-10")).toBeNull();
+    expect(moveRowToDay(makeDateRow(), "nope")).toBeNull();
+  });
+});
+
+describe("planGestureWrites — 제스처 하나가 어느 행에 무엇을 쓰는가 (순수)", () => {
+  const DAY_MIN = 1440;
+  const HOUR_ROW_H = 28;
+  const chip = { noteId: "note-abc", dateId: "date-123", startMin: 540 };
+  const neighbor = { noteId: "n2", dateId: "d2", startMin: 600 };
+  const base = { chip, day: "2026-09-13", hourRowH: HOUR_ROW_H, neighbors: new Map([["k2", neighbor]]) };
+
+  it("당일 안의 이동: 주 칩 한 줄 — 시각만 쓰고 날짜는 건드리지 않는다, 문구는 이전→이후", () => {
+    const [w, ...rest] = planGestureWrites({ ...base, mode: "move", next: { startMin: 555, endMin: 645 }, linked: [] });
+    expect(rest).toEqual([]);
+    expect([w.noteId, w.dateId]).toEqual(["note-abc", "date-123"]);
+    const r = w.patch(makeDateRow({ start_time: "09:00", end_time: "10:30" }))!;
+    expect(r.fields).toEqual({ start_time: "09:15", end_time: "10:45" }); // 길이 90분은 행이 정한다
+    expect(r.settledStartMin).toBeNull();
+    expect(r.label).toBe("i18n:home.cal_time_changed_at");
+  });
+
+  it("끝 손잡이: 끝 시각만 바뀌고 문구도 끝 시각 기준", () => {
+    const [w] = planGestureWrites({ ...base, mode: "end", next: { startMin: 540, endMin: 660 }, linked: [] });
+    const r = w.patch(makeDateRow({ start_time: "09:00", end_time: "10:30" }))!;
+    expect(r.fields).toEqual({ start_time: "09:00", end_time: "11:00" });
+  });
+
+  it("자정을 넘겨 익일 구간으로 옮기면 날짜도 함께 쓴다 — 시각은 그 날의 분", () => {
+    const [w] = planGestureWrites({
+      ...base,
+      mode: "move",
+      next: { startMin: DAY_MIN + 60, endMin: DAY_MIN + 150 },
+      linked: [],
+    });
+    const r = w.patch(makeDateRow({ year: 2026, month: 9, day: 13, start_time: "23:00", end_time: "00:30" as never }))!;
+    expect(r.fields).toMatchObject({ year: 2026, month: 9, day: 14, start_time: "01:00" });
+  });
+
+  it("옮길 수 없는 행(반복)은 날짜가 바뀌는 쓰기를 하지 않는다 — null", () => {
+    const [w] = planGestureWrites({ ...base, mode: "move", next: { startMin: DAY_MIN + 60, endMin: DAY_MIN + 150 }, linked: [] });
+    expect(w.patch(makeDateRow({ rrule: "FREQ=DAILY" }))).toBeNull();
+  });
+
+  it("move 의 이웃: 원래 시작과 새 시작의 차이만큼 통째로 민다", () => {
+    const writes = planGestureWrites({
+      ...base,
+      mode: "move",
+      next: { startMin: 555, endMin: 645 },
+      linked: [{ key: "k2", startMin: 615, endMin: 675 }],
+    });
+    expect(writes.map((w) => w.noteId)).toEqual(["note-abc", "n2"]);
+    const r = writes[1].patch(makeDateRow({ start_time: "10:00", end_time: "11:00" }))!;
+    expect(r.fields).toEqual({ start_time: "10:15", end_time: "11:15" });
+    expect(r.label).toBeUndefined();
+  });
+
+  it("리사이즈의 이웃: mode 가 가리키는 손잡이의 반대편 경계만 옮긴다", () => {
+    const end = planGestureWrites({
+      ...base,
+      mode: "end",
+      next: { startMin: 540, endMin: 630 },
+      linked: [{ key: "k2", startMin: 630, endMin: 700 }],
+    });
+    // 내가 끝을 늘리면 이웃의 **시작**이 그 자리로.
+    expect(end[1].patch(makeDateRow({ start_time: "10:00", end_time: "11:00" }))!.fields).toEqual({ start_time: "10:30" });
+    const start = planGestureWrites({
+      ...base,
+      mode: "start",
+      next: { startMin: 520, endMin: 600 },
+      linked: [{ key: "k2", startMin: 480, endMin: 520 }],
+    });
+    // 내가 시작을 당기면 이웃의 **끝**이 그 자리로.
+    expect(start[1].patch(makeDateRow({ start_time: "08:00", end_time: "09:00" }))!.fields).toEqual({ end_time: "08:40" });
+  });
+
+  it("목록에 없는 이웃은 건너뛰고, 쓸 수 없는 이웃 행(끝이 없음)은 null", () => {
+    const writes = planGestureWrites({
+      ...base,
+      mode: "start",
+      next: { startMin: 520, endMin: 600 },
+      linked: [
+        { key: "missing", startMin: 1, endMin: 2 },
+        { key: "k2", startMin: 480, endMin: 520 },
+      ],
+    });
+    expect(writes).toHaveLength(2);
+    expect(writes[1].patch(makeDateRow({ start_time: "08:00", end_time: null }))).toBeNull();
+  });
+});
+
+describe("timeChangeLabel", () => {
+  it("둘 다 있으면 이전→이후, 한쪽이라도 없으면 고정 문구", () => {
+    expect(timeChangeLabel("09:00", "10:00")).toBe("i18n:home.cal_time_changed_at");
+    expect(timeChangeLabel(null, "10:00")).toBe("i18n:home.cal_time_changed");
+    expect(timeChangeLabel("09:00", null)).toBe("i18n:home.cal_time_changed");
   });
 });

@@ -9,7 +9,6 @@ import { isBrowser } from "../lib/env";
 export const SETTINGS_TARGETS = {
   habits: { page: "briefing", anchor: "habits_add" },
   habits_list: { page: "briefing", anchor: "habits" },
-  routines: { page: "briefing", anchor: "routines" },
   schedule: { page: "briefing", anchor: "schedule" },
   collect: { page: "collect", anchor: "add" },
   collect_list: { page: "collect" },

@@ -27,6 +27,8 @@ pub(super) fn is_remote_blocked_settings_key(k: &str) -> bool {
                 | "capture_ingest_token"
                 // 이 기기 파일시스템 쓰기 위치 — 원격이 화면 저장 폴더를 임의 경로로 돌리면 안 된다.
                 | "capture_screenshot_dir"
+                // 내보내기 기본 폴더 — 저장 대화상자가 시작하는 이 기기의 경로. 원격이 돌리면 안 된다(capture_screenshot_dir 와 같은 급).
+                | "export_default_dir"
                 // 이 기기에서 **실행되는 프로그램 경로** — slide_preview_render 가 pptx/odp 미리보기 때
                 // 이 경로를 그대로 spawn 한다(repo/slide_render.rs::soffice_path, override 가 우선).
                 // 첨부 업로드는 확장자를 거르지 않으므로 토큰 하나로 exe 를 올리고 여기를 그 경로로

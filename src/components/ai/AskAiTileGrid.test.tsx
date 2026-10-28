@@ -101,7 +101,7 @@ describe("AskAiTileGrid", () => {
 
   it("the pencil opens the editor (onEdit); the add tile opens it with a new preset (onAdd)", () => {
     const { props } = setup();
-    fireEvent.click(screen.getByLabelText("Edit AI presets"));
+    fireEvent.click(screen.getByLabelText("Edit custom prompts"));
     expect(props.onEdit).toHaveBeenCalledTimes(1);
     expect(props.onAdd).not.toHaveBeenCalled();
     fireEvent.click(screen.getByLabelText("Add"));

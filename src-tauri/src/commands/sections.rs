@@ -221,6 +221,17 @@ pub fn section_import_file(
 #[tauri::command(rename_all = "snake_case")]
 pub async fn doc_import_html(
     state: State<'_, AppState>,
+    webview: tauri::Webview,
+    note_id: String,
+    file_path: String,
+) -> Result<crate::repo::doc_import::DocImportHtmlOutput, AppError> {
+    doc_import_html_in(state, Some(webview.label()), note_id, file_path).await
+}
+
+/// doc_import_html 의 본체 — `window` = 호출한 웹뷰 라벨(테스트처럼 창 없이 부르면 None).
+pub(crate) async fn doc_import_html_in(
+    state: State<'_, AppState>,
+    window: Option<&str>,
     note_id: String,
     file_path: String,
 ) -> Result<crate::repo::doc_import::DocImportHtmlOutput, AppError> {
@@ -234,7 +245,7 @@ pub async fn doc_import_html(
     .map_err(|e| AppError::Io(format!("doc import worker failed: {e}")))??;
     // 첨부가 생겼을 때만 — 그림 없는 문서는 데이터가 바뀌지 않았다.
     if out.image_count > 0 {
-        crate::events::publish(Some(&note_id), false);
+        crate::events::publish_as(window, Some(&note_id), false); // async 커맨드 — 창 라벨을 직접(events::publish_as)
     }
     Ok(out)
 }
@@ -626,8 +637,9 @@ mod import_command_tests {
         let (_data_dir, app) = mock_app_with_state();
         let note_id = seeded_note_id(&app);
         let call = |note: &str, path: &std::path::Path| {
-            tauri::async_runtime::block_on(doc_import_html(
+            tauri::async_runtime::block_on(doc_import_html_in(
                 app.state::<AppState>(),
+                None,
                 note.to_string(),
                 path.to_string_lossy().into_owned(),
             ))

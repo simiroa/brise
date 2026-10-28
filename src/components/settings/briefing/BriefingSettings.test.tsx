@@ -150,18 +150,19 @@ describe("BriefingSection (PLAN-2026-10-19-briefing-rewrite §8)", () => {
     vi.spyOn(phraseLib, "loadAllPhrasePacks").mockResolvedValue([]);
   });
 
-  it("표시 시점 → 문구 → 습관 → 반복 일정 순서이고, 옛 편집 안내 카드·편집 버튼은 없다", async () => {
+  it("표시 시점 → 문구 → 습관 순서이고 반복 일정 표는 없으며, 옛 편집 안내 카드·편집 버튼은 없다", async () => {
     mockHabits([]);
     useSettingsStore.setState({ briefingEnabled: true, briefingWhen: "launch", phrasePackId: "off" } as any);
     render(<BriefingSection />);
     await waitFor(() => expect(phraseLib.loadAllPhrasePacks).toHaveBeenCalled());
-    const order = ["briefing-schedule-card", "settings-phrase-packs", "briefing-habits-section", "settings-timeline-routine-section"].map(
+    const order = ["briefing-schedule-card", "settings-phrase-packs", "briefing-habits-section"].map(
       (id) => screen.getByTestId(id),
     );
     for (let i = 1; i < order.length; i += 1) {
       // eslint-disable-next-line no-bitwise
       expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     }
+    expect(screen.queryByTestId("settings-timeline-routine-section")).toBeNull();
     expect(screen.queryByTestId("briefing-edit-hint")).toBeNull();
     expect(screen.queryByTestId("briefing-open-edit")).toBeNull();
     expect(screen.queryByTestId("briefing-layout-radiogroup")).toBeNull();
@@ -177,7 +178,7 @@ describe("BriefingSection (PLAN-2026-10-19-briefing-rewrite §8)", () => {
     expect(screen.queryByTestId("settings-app-scope")).toBeNull();
   });
 
-  it("브리핑이 꺼지면 문구 팩 행도 이유와 함께 막힌다 — 습관·반복 일정 표는 막지 않는다", async () => {
+  it("브리핑이 꺼지면 문구 팩 행도 이유와 함께 막힌다 — 습관 표는 막지 않는다", async () => {
     mockHabits([]);
     useSettingsStore.setState({ briefingEnabled: false, briefingWhen: "launch", phrasePackId: "off" } as any);
     render(<BriefingSection />);

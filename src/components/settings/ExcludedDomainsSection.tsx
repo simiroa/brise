@@ -1,10 +1,8 @@
-import { anchorId } from "./settingsAnchor";
 import { useEffect, useRef, useState } from "react";
 import { useSettingsStore } from "../../stores/settings";
 import { t } from "../../i18n/t";
-import { groupCardStyle } from "./shared";
-import { SectionHeader } from "./SectionHeader";
 import { IconShield } from "../icons";
+import { SettingsCard } from "./SettingsCard";
 
 /** stores/settings.ts::setCollectExcludedDomains 가 자르는 상한과 같은 값 — 넘친 줄은 저장되지 않는다. */
 const MAX_DOMAINS = 200;
@@ -31,6 +29,8 @@ export function ExcludedDomainsSection() {
   const dirty = useRef(false);
   // 상한을 넘어 저장하지 못한 줄 수(0 이면 안내 없음).
   const [dropped, setDropped] = useState(0);
+  // 접힘이 기본 — 쓰는 사람이 드물고, 열어 보기 전엔 무엇을 거르는지 요약 한 줄이면 충분하다(PLAN-2026-10-27 §1).
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     if (!dirty.current) setDraft(excludedDomains.join("\n"));
@@ -51,12 +51,32 @@ export function ExcludedDomainsSection() {
   };
 
   return (
-    <div className="card" style={groupCardStyle} id={anchorId("excluded_domains")} data-testid="settings-collect-excluded">
-      <SectionHeader
-        title={t("settings.collect_excluded_section")}
-        hint={t("settings.collect_excluded_scope_hint")}
-        icon={<IconShield size={14} strokeWidth={2} />}
-      />
+    <SettingsCard
+      title={t("settings.collect_excluded_section")}
+      hint={t("settings.collect_excluded_scope_hint")}
+      icon={<IconShield size={14} strokeWidth={2} />}
+      actions={
+        <button
+          type="button"
+          className="btn"
+          aria-expanded={open}
+          data-testid="settings-collect-excluded-toggle"
+          onClick={() => setOpen((v) => !v)}
+        >
+            {open ? t("settings.collect_excluded_collapse") : t("settings.collect_excluded_expand")}
+          </button>
+        }
+        anchor="excluded_domains"
+        testId="settings-collect-excluded"
+      >
+      {!open && (
+        <div data-testid="settings-collect-excluded-summary" style={{ fontSize: "var(--text-sm)", color: "var(--muted)" }}>
+          {excludedDomains.length
+            ? t("settings.collect_excluded_summary", { n: excludedDomains.length })
+            : t("settings.collect_excluded_summary_none")}
+        </div>
+      )}
+      {open && (
       <textarea
         value={draft}
         onChange={(e) => {
@@ -70,10 +90,13 @@ export function ExcludedDomainsSection() {
         aria-label={t("settings.collect_excluded_domains_label")}
         style={{ width: "100%", fontFamily: "var(--font-mono)", fontSize: "var(--text-sm)", resize: "vertical" }}
       />
+      )}
+      {open && (
       <div style={{ fontSize: "var(--text-xs)", color: "var(--muted)", marginTop: "var(--space-1)" }}>
         {t("settings.collect_excluded_domains_hint")} {t("settings.collect_excluded_cap_hint", { n: MAX_DOMAINS })}
       </div>
-      {dropped > 0 && (
+      )}
+      {open && dropped > 0 && (
         <div
           role="status"
           data-testid="settings-collect-excluded-dropped"
@@ -82,6 +105,6 @@ export function ExcludedDomainsSection() {
           {t("settings.collect_excluded_dropped", { n: dropped, max: MAX_DOMAINS })}
         </div>
       )}
-    </div>
+    </SettingsCard>
   );
 }

@@ -175,3 +175,10 @@ claude mcp add --scope user --transport stdio brise -- node <저장소-절대경
 3. 노트를 생성할 때는 `folder_list_meta`로 `folder_id`를 얻은 뒤 `note_create` → `section_create_with_body` 순서로 본문을 작성합니다.
 4. 모든 쓰기 작업은 데스크톱 앱에 `origin: "remote"`로 실시간 반영되어 사용자가 즉시 화면에서 확인할 수 있습니다.
 
+### 7.4 설정 > 연결에서 설치하기
+
+**설정 > 연결**의 "AI 에이전트 연결 (MCP)" 카드(동기화 서버가 켜져 있을 때만 보임)에서 "스킬 설치하기"를 누르면
+`agent_skill_install`(`commands/sync.rs`)이 `~/.claude/skills/brise/SKILL.md` 를 쓰고(앱 소유 파일, 덮어씀), 앱에 번들된
+`cli/brise.mjs`(`tauri.conf.json` resources)의 절대경로와 이 앱의 `BRISE_DATA_DIR` 이 박힌 `claude mcp add …` 명령을 화면에
+보여준다. MCP 의 "켜기"는 새 스위치가 아니라 동기화 서버다. 노트는 SQLite 안에 있어 에이전트 "작업 폴더"로 지정할
+노트북 폴더는 없다. 스킬 본문은 `src-tauri/src/commands/agent_skill.md`.

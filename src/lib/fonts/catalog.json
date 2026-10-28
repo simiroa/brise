@@ -1,0 +1,1786 @@
+{
+ "version": 1,
+ "fonts": [
+  {
+   "id": "gothic-a1",
+   "name": "Gothic A1",
+   "family": "Gothic A1",
+   "role": "body",
+   "hangul": true,
+   "category": "sans-serif",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "(C) Copyright HanYang I&C Co.,Ltd. All rights reserved. GothicA1-ExtraLight.ttf: (C) Copyright HanYang I&C Co.,Ltd. All rights reserved. GothicA1-Light.ttf: (C) Copyright HanYang I&C Co.,Ltd. All rights reserved. GothicA1-Regular.ttf: (C) Copyright HanYang I&C Co.,Ltd. All rights reserved. GothicA1-Medium.ttf: (C) Copyright HanYang I&C Co.,Ltd. All rights reserved. GothicA1-SemiBold.ttf: (C) Copyright HanYang I&C Co.,Ltd. All rights reserved. GothicA1-Bold.ttf: (C) Copyright HanYang I&C Co.,Ltd. All rights reserved. GothicA1-ExtraBold.ttf: (C) Copyright HanYang I&C Co.,Ltd. All rights reserved. GothicA1-Black.ttf: (C) Copyright HanYang I&C Co.,Ltd. All rights reserved.",
+   "source": "https://fontsource.org/fonts/gothic-a1",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "gothic-a1-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/gothic-a1@5.3.0/files/gothic-a1-korean-400-normal.woff2",
+     "sha256": "b0c37e132b05a93f94d700f5e2ffc13bff9d5bf6886f3bfa54efd36a50d96d7a",
+     "bytes": 243440
+    },
+    {
+     "weight": 400,
+     "file": "gothic-a1-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/gothic-a1@5.3.0/files/gothic-a1-latin-400-normal.woff2",
+     "sha256": "82fb1736b583745a8d67669286076f5adb61c8db6a4175f414abc11cf026716a",
+     "bytes": 15024,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    },
+    {
+     "weight": 600,
+     "file": "gothic-a1-korean-600-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/gothic-a1@5.3.0/files/gothic-a1-korean-600-normal.woff2",
+     "sha256": "3c02ea2c0478789e0e7e6445b547e5549fb712fab48e3132b256d0812eaee72f",
+     "bytes": 247920
+    },
+    {
+     "weight": 600,
+     "file": "gothic-a1-latin-600-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/gothic-a1@5.3.0/files/gothic-a1-latin-600-normal.woff2",
+     "sha256": "0b5902c696b3915ddeba310969e15499d2ed0031c766159df22846bbff175b60",
+     "bytes": 15068,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "ibm-plex-sans-kr",
+   "name": "IBM Plex Sans KR",
+   "family": "IBM Plex Sans KR",
+   "role": "body",
+   "hangul": true,
+   "category": "sans-serif",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2018 IBM Corp. All rights reserved. IBMPlexSansKR-ExtraLight.ttf: Copyright 2018 IBM Corp. All rights reserved. IBMPlexSansKR-Light.ttf: Copyright 2018 IBM Corp. All rights reserved. IBMPlexSansKR-Regular.ttf: Copyright 2018 IBM Corp. All rights reserved. IBMPlexSansKR-Medium.ttf: Copyright 2018 IBM Corp. All rights reserved. IBMPlexSansKR-SemiBold.ttf: Copyright 2018 IBM Corp. All rights reserved. IBMPlexSansKR-Bold.ttf: Copyright 2018 IBM Corp. All rights reserved.",
+   "source": "https://fontsource.org/fonts/ibm-plex-sans-kr",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "ibm-plex-sans-kr-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-sans-kr@5.3.0/files/ibm-plex-sans-kr-korean-400-normal.woff2",
+     "sha256": "e314e0181981858de181984148755444b0bc032874a1096d107a777ad105de5c",
+     "bytes": 517652
+    },
+    {
+     "weight": 400,
+     "file": "ibm-plex-sans-kr-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-sans-kr@5.3.0/files/ibm-plex-sans-kr-latin-400-normal.woff2",
+     "sha256": "071c7c06a3fe2346fd2f4034c762cd0dc79a5021da100ef14401fc07814b279e",
+     "bytes": 15112,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    },
+    {
+     "weight": 600,
+     "file": "ibm-plex-sans-kr-korean-600-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-sans-kr@5.3.0/files/ibm-plex-sans-kr-korean-600-normal.woff2",
+     "sha256": "e4a83c9c3f101504f9697239fb62b8d29155f6ea151430b32d5d77b6ad0d98ba",
+     "bytes": 557972
+    },
+    {
+     "weight": 600,
+     "file": "ibm-plex-sans-kr-latin-600-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-sans-kr@5.3.0/files/ibm-plex-sans-kr-latin-600-normal.woff2",
+     "sha256": "b1d9cc1fdc311431a624220aa1d3be36193a2c5165bc658d8467180d2a051455",
+     "bytes": 16592,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "nanum-gothic",
+   "name": "나눔고딕",
+   "family": "Nanum Gothic",
+   "role": "body",
+   "hangul": true,
+   "category": "sans-serif",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright © 2010 NHN Corporation. All rights reserved. Font designed by Sandoll Communications Inc. NanumGothic-Bold.ttf: Copyright © 2010 NHN Corporation. All rights reserved. Font designed by Sandoll Communications Inc. NanumGothic-ExtraBold.ttf: Copyright © 2010 NHN Corporation. All rights reserved. Font designed by Sandoll Communications Inc.",
+   "source": "https://fontsource.org/fonts/nanum-gothic",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "nanum-gothic-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/nanum-gothic@5.3.0/files/nanum-gothic-korean-400-normal.woff2",
+     "sha256": "4a000e3bca1298c43c70dc97447e537a27e0a8c1585f410be57dfeff06d3f713",
+     "bytes": 340688
+    },
+    {
+     "weight": 400,
+     "file": "nanum-gothic-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/nanum-gothic@5.3.0/files/nanum-gothic-latin-400-normal.woff2",
+     "sha256": "16004450799ab831eb624c1ab9a39f5c28f3f0fae6581e78faedea63acba49ac",
+     "bytes": 17472,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    },
+    {
+     "weight": 600,
+     "file": "nanum-gothic-korean-700-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/nanum-gothic@5.3.0/files/nanum-gothic-korean-700-normal.woff2",
+     "sha256": "0bd36842cc218a7b0e1c0f5ec796d90152a02e4cd487b2d868f1130708fe551a",
+     "bytes": 417252
+    },
+    {
+     "weight": 600,
+     "file": "nanum-gothic-latin-700-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/nanum-gothic@5.3.0/files/nanum-gothic-latin-700-normal.woff2",
+     "sha256": "0309db8bc9bb224686af9f8a015c610d22e2b7266f4789b4efb68610dd9daeb7",
+     "bytes": 17824,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "gowun-dodum",
+   "name": "고운돋움",
+   "family": "Gowun Dodum",
+   "role": "body",
+   "hangul": true,
+   "category": "sans-serif",
+   "weights": 1,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2021 The Gowun Dodum Project Authors (https://github.com/yangheeryu/Gowun-Dodum)",
+   "source": "https://fontsource.org/fonts/gowun-dodum",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "gowun-dodum-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/gowun-dodum@5.3.0/files/gowun-dodum-korean-400-normal.woff2",
+     "sha256": "349c098a6181952dab564bf891b8efcacfbf855adc28d40b4aa2e5937c101c56",
+     "bytes": 406476
+    },
+    {
+     "weight": 400,
+     "file": "gowun-dodum-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/gowun-dodum@5.3.0/files/gowun-dodum-latin-400-normal.woff2",
+     "sha256": "7c677f41fbbb9be189e6f1081c1a8a236cb41a87fb7c48b16743d8e1d2e67562",
+     "bytes": 13788,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "hahmlet",
+   "name": "함렛",
+   "family": "Hahmlet",
+   "role": "body",
+   "hangul": true,
+   "category": "serif",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2020 The Hahmlet Project Authors (https://github.com/hyper-type/hahmlet)",
+   "source": "https://fontsource.org/fonts/hahmlet",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "hahmlet-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/hahmlet@5.3.0/files/hahmlet-korean-400-normal.woff2",
+     "sha256": "8ed5c793eb7b662c205249b2e5e53d881505b78eea4bd0de094375bbbe72383f",
+     "bytes": 172428
+    },
+    {
+     "weight": 400,
+     "file": "hahmlet-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/hahmlet@5.3.0/files/hahmlet-latin-400-normal.woff2",
+     "sha256": "3db04024a930b8f02dd496f445ba84b1a56f76e22e74c887138716cc79099065",
+     "bytes": 18596,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    },
+    {
+     "weight": 600,
+     "file": "hahmlet-korean-600-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/hahmlet@5.3.0/files/hahmlet-korean-600-normal.woff2",
+     "sha256": "94239068d2247238c7374cecbff8f145cb08c4ff7a06354a0daa797a9d03c7dd",
+     "bytes": 219292
+    },
+    {
+     "weight": 600,
+     "file": "hahmlet-latin-600-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/hahmlet@5.3.0/files/hahmlet-latin-600-normal.woff2",
+     "sha256": "f6b73d317a3ddb08364c7fab473b1e9a7d9fd069865c3900ead0b1451a9de669",
+     "bytes": 19392,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "nanum-myeongjo",
+   "name": "나눔명조",
+   "family": "Nanum Myeongjo",
+   "role": "body",
+   "hangul": true,
+   "category": "serif",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright © 2010 NHN Corporation. All rights reserved. Font designed by FONTRIX. NanumMyeongjo-Bold.ttf: Copyright © 2010 NHN Corporation. All rights reserved. Font designed by FONTRIX. NanumMyeongjo-ExtraBold.ttf: Copyright © 2010 NHN Corporation. All rights reserved. Font designed by FONTRIX.",
+   "source": "https://fontsource.org/fonts/nanum-myeongjo",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "nanum-myeongjo-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/nanum-myeongjo@5.3.0/files/nanum-myeongjo-korean-400-normal.woff2",
+     "sha256": "561e9193a6e848b3f7ce9f8f5907310a13e175bc9d69e77da2842a7517a97c16",
+     "bytes": 502068
+    },
+    {
+     "weight": 400,
+     "file": "nanum-myeongjo-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/nanum-myeongjo@5.3.0/files/nanum-myeongjo-latin-400-normal.woff2",
+     "sha256": "e1c889a6e7588ddcbea36e306b593d2098214028229fa3d82e0df6ec6469d1f3",
+     "bytes": 21304,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    },
+    {
+     "weight": 600,
+     "file": "nanum-myeongjo-korean-700-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/nanum-myeongjo@5.3.0/files/nanum-myeongjo-korean-700-normal.woff2",
+     "sha256": "f2c95c35d72782f71cb60e3cc537c461ae3f5ee7e7504db9653ba7a7024dd548",
+     "bytes": 575580
+    },
+    {
+     "weight": 600,
+     "file": "nanum-myeongjo-latin-700-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/nanum-myeongjo@5.3.0/files/nanum-myeongjo-latin-700-normal.woff2",
+     "sha256": "84a60324a3b8f916547358b0a0e07e80b5826f2890f0df4b29f744dda135230a",
+     "bytes": 21024,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "gowun-batang",
+   "name": "고운바탕",
+   "family": "Gowun Batang",
+   "role": "body",
+   "hangul": true,
+   "category": "serif",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2021 The Gowun Batang Project Authors (https://github.com/yangheeryu/Gowun-Batang) GowunBatang-Bold.ttf: Copyright 2021 The Gowun Batang Project Authors (https://github.com/yangheeryu/Gowun-Batang)",
+   "source": "https://fontsource.org/fonts/gowun-batang",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "gowun-batang-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/gowun-batang@5.3.0/files/gowun-batang-korean-400-normal.woff2",
+     "sha256": "0c6a288aa0c12081dccde769c312f71f290b353243747dd24fb8c57f94f01d72",
+     "bytes": 495092
+    },
+    {
+     "weight": 400,
+     "file": "gowun-batang-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/gowun-batang@5.3.0/files/gowun-batang-latin-400-normal.woff2",
+     "sha256": "a5157393614246f752dc2340f4da6e394745690cdf326dccb7e89b7e95702f98",
+     "bytes": 16236,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    },
+    {
+     "weight": 600,
+     "file": "gowun-batang-korean-700-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/gowun-batang@5.3.0/files/gowun-batang-korean-700-normal.woff2",
+     "sha256": "aef1b91ea9ea4688fb296044959b38dfeeaa3e1650af5d543a2b5c160fa30b36",
+     "bytes": 447856
+    },
+    {
+     "weight": 600,
+     "file": "gowun-batang-latin-700-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/gowun-batang@5.3.0/files/gowun-batang-latin-700-normal.woff2",
+     "sha256": "3a3b27f2c4b575f9b7375f9e2d9906e0145dc81f8bd17bf05465b319387e7cc6",
+     "bytes": 16208,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "song-myung",
+   "name": "송명",
+   "family": "Song Myung",
+   "role": "body",
+   "hangul": true,
+   "category": "serif",
+   "weights": 1,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2018 The Song Myung Project Authors",
+   "source": "https://fontsource.org/fonts/song-myung",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "song-myung-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/song-myung@5.3.1/files/song-myung-korean-400-normal.woff2",
+     "sha256": "1c7f07f8df65282cef37dd0f1d5db036b4cba2ed67f7292179f470a51e4086de",
+     "bytes": 314516
+    },
+    {
+     "weight": 400,
+     "file": "song-myung-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/song-myung@5.3.1/files/song-myung-latin-400-normal.woff2",
+     "sha256": "90a8c2830d6325553e4a368178df7363349cf8501dc2f6a36e84604b1cdedf06",
+     "bytes": 13964,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "nanum-pen-script",
+   "name": "나눔손글씨 펜",
+   "family": "Nanum Pen Script",
+   "role": "display",
+   "hangul": true,
+   "category": "handwriting",
+   "weights": 1,
+   "license": "OFL-1.1",
+   "copyright": "Copyright © 2010 NHN Corporation. All rights reserved. Font designed by Sandoll Communications Inc.",
+   "source": "https://fontsource.org/fonts/nanum-pen-script",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "nanum-pen-script-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/nanum-pen-script@5.3.0/files/nanum-pen-script-korean-400-normal.woff2",
+     "sha256": "244502434003503d35bb673087dcdb2484fd1bccf19880d79379563ac93c0038",
+     "bytes": 601344
+    },
+    {
+     "weight": 400,
+     "file": "nanum-pen-script-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/nanum-pen-script@5.3.0/files/nanum-pen-script-latin-400-normal.woff2",
+     "sha256": "899aa0335c147f0574f17a09fce2e301179cb0232bc96e17feded9d1a06ad5aa",
+     "bytes": 14972,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "nanum-brush-script",
+   "name": "나눔손글씨 붓",
+   "family": "Nanum Brush Script",
+   "role": "display",
+   "hangul": true,
+   "category": "handwriting",
+   "weights": 1,
+   "license": "OFL-1.1",
+   "copyright": "Copyright © 2010 NHN Corporation. All rights reserved. Font designed by Sandoll Communications Inc.",
+   "source": "https://fontsource.org/fonts/nanum-brush-script",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "nanum-brush-script-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/nanum-brush-script@5.3.0/files/nanum-brush-script-korean-400-normal.woff2",
+     "sha256": "cc83880831bf3fc2a677e9338ddb06067ab5fa1591f629d8bd06311bc2e41f17",
+     "bytes": 575440
+    },
+    {
+     "weight": 400,
+     "file": "nanum-brush-script-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/nanum-brush-script@5.3.0/files/nanum-brush-script-latin-400-normal.woff2",
+     "sha256": "0fcb6819fafe4c03a1124556e0c7d6be22b1e98c567c048a38d1c48a43620781",
+     "bytes": 18408,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "gaegu",
+   "name": "개구",
+   "family": "Gaegu",
+   "role": "display",
+   "hangul": true,
+   "category": "handwriting",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2018 The Gaegu Project Authors Gaegu-Regular.ttf: Copyright 2018 The Gaegu Project Authors Gaegu-Bold.ttf: Copyright 2018 The Gaegu Project Authors",
+   "source": "https://fontsource.org/fonts/gaegu",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "gaegu-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/gaegu@5.3.0/files/gaegu-korean-400-normal.woff2",
+     "sha256": "a29e208285a173daa0c2b85e01eced0ec2342bd911dfda83c9f6428954468b84",
+     "bytes": 283736
+    },
+    {
+     "weight": 400,
+     "file": "gaegu-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/gaegu@5.3.0/files/gaegu-latin-400-normal.woff2",
+     "sha256": "1964c6ff2196903d2b44f48f71a7a0ab593012bae9216c96f377b90ff9b0435f",
+     "bytes": 17288,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    },
+    {
+     "weight": 600,
+     "file": "gaegu-korean-700-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/gaegu@5.3.0/files/gaegu-korean-700-normal.woff2",
+     "sha256": "8cef36f8ccb00813fe5f96db663839b2fc4fcde245c6d4eb415166a2936ab435",
+     "bytes": 478624
+    },
+    {
+     "weight": 600,
+     "file": "gaegu-latin-700-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/gaegu@5.3.0/files/gaegu-latin-700-normal.woff2",
+     "sha256": "ed52b68b547ba6d0fcfbab942c2382e3738515af8b7cf7e08aa7330ff4534448",
+     "bytes": 16748,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "hi-melody",
+   "name": "하이멜로디",
+   "family": "Hi Melody",
+   "role": "display",
+   "hangul": true,
+   "category": "handwriting",
+   "weights": 1,
+   "license": "OFL-1.1",
+   "copyright": "Copyright (c) YoonDesign Inc. All Rights Reserved.",
+   "source": "https://fontsource.org/fonts/hi-melody",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "hi-melody-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/hi-melody@5.3.0/files/hi-melody-korean-400-normal.woff2",
+     "sha256": "b7b822a6c1c8c470e3e5748bb67effa3472e992e6f71e80441347414761511c2",
+     "bytes": 811376
+    },
+    {
+     "weight": 400,
+     "file": "hi-melody-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/hi-melody@5.3.0/files/hi-melody-latin-400-normal.woff2",
+     "sha256": "d5c81fcdf858e5d8c434715f35e3f9a7a776caf48ea0daf5e0b3787b67c5a5e9",
+     "bytes": 18984,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "gamja-flower",
+   "name": "감자꽃",
+   "family": "Gamja Flower",
+   "role": "display",
+   "hangul": true,
+   "category": "handwriting",
+   "weights": 1,
+   "license": "OFL-1.1",
+   "copyright": "Copyright (c) YoonDesign Inc. All Rights Reserved.",
+   "source": "https://fontsource.org/fonts/gamja-flower",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "gamja-flower-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/gamja-flower@5.3.0/files/gamja-flower-korean-400-normal.woff2",
+     "sha256": "6e26b6643a4bc1db7e4aed91d21a0c0a60400ee069fe3006552497e012403a73",
+     "bytes": 854944
+    },
+    {
+     "weight": 400,
+     "file": "gamja-flower-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/gamja-flower@5.3.0/files/gamja-flower-latin-400-normal.woff2",
+     "sha256": "3bd1535adaef7b06a46ae7abef0fee184e26849d4478e790ec18dcd9e82a937b",
+     "bytes": 18708,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "poor-story",
+   "name": "푸어스토리",
+   "family": "Poor Story",
+   "role": "display",
+   "hangul": true,
+   "category": "display",
+   "weights": 1,
+   "license": "OFL-1.1",
+   "copyright": "Copyright (c) YoonDesign Inc. All Rights Reserved.",
+   "source": "https://fontsource.org/fonts/poor-story",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "poor-story-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/poor-story@5.3.0/files/poor-story-korean-400-normal.woff2",
+     "sha256": "d3bf7295e2662bae028991edff5f47f5b14b741e84d9f08d96fdfda9a5b295f3",
+     "bytes": 409340
+    },
+    {
+     "weight": 400,
+     "file": "poor-story-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/poor-story@5.3.0/files/poor-story-latin-400-normal.woff2",
+     "sha256": "627d74f83e419aefc7fc3e9874cc6f3aacdce27ac2c5271b3dcbe810c77275de",
+     "bytes": 11388,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "east-sea-dokdo",
+   "name": "동해독도",
+   "family": "East Sea Dokdo",
+   "role": "display",
+   "hangul": true,
+   "category": "handwriting",
+   "weights": 1,
+   "license": "OFL-1.1",
+   "copyright": "Copyright (c) YoonDesign Inc. All Rights Reserved.",
+   "source": "https://fontsource.org/fonts/east-sea-dokdo",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "east-sea-dokdo-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/east-sea-dokdo@5.3.0/files/east-sea-dokdo-korean-400-normal.woff2",
+     "sha256": "65edf319f134311f7627db88469ad5861a10bc18afc237c79f5b2d2be896b383",
+     "bytes": 246872
+    },
+    {
+     "weight": 400,
+     "file": "east-sea-dokdo-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/east-sea-dokdo@5.3.0/files/east-sea-dokdo-latin-400-normal.woff2",
+     "sha256": "65cc98fc63b014671e55262d09cd250127c7ad0803a73231e8feccf5c3f6cb37",
+     "bytes": 32088,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "dokdo",
+   "name": "독도",
+   "family": "Dokdo",
+   "role": "display",
+   "hangul": true,
+   "category": "display",
+   "weights": 1,
+   "license": "OFL-1.1",
+   "copyright": "Copyright (c) 2005-2017 FONTRIX. All Rights Reserved.",
+   "source": "https://fontsource.org/fonts/dokdo",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "dokdo-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/dokdo@5.3.0/files/dokdo-korean-400-normal.woff2",
+     "sha256": "6974869ecf0e7c7e9e6a5eed8b9d0a44ddfc6a28c15dd0c43f6109577354cfb4",
+     "bytes": 400164
+    },
+    {
+     "weight": 400,
+     "file": "dokdo-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/dokdo@5.3.0/files/dokdo-latin-400-normal.woff2",
+     "sha256": "1bb194fc94b6d7e8dac013bf2a752f4c9c8148cdbf6a401744acac2d414026d2",
+     "bytes": 15228,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "jua",
+   "name": "주아",
+   "family": "Jua",
+   "role": "display",
+   "hangul": true,
+   "category": "sans-serif",
+   "weights": 1,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2018 The BM JUA Project Authors",
+   "source": "https://fontsource.org/fonts/jua",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "jua-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/jua@5.3.0/files/jua-korean-400-normal.woff2",
+     "sha256": "b5c280f7c75d6634c3011682ab7787b73b8cfc4acaee4b70fa7aad228adf7d70",
+     "bytes": 368172
+    },
+    {
+     "weight": 400,
+     "file": "jua-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/jua@5.3.0/files/jua-latin-400-normal.woff2",
+     "sha256": "a317499f46a11810207ace4e5fdf04c9949250abeb914a1e713c391e4606c4f2",
+     "bytes": 16620,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "do-hyeon",
+   "name": "도현",
+   "family": "Do Hyeon",
+   "role": "display",
+   "hangul": true,
+   "category": "sans-serif",
+   "weights": 1,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2018 The Do Hyeon Project Authors",
+   "source": "https://fontsource.org/fonts/do-hyeon",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "do-hyeon-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/do-hyeon@5.3.0/files/do-hyeon-korean-400-normal.woff2",
+     "sha256": "d7497da8e90cd6a569ecb825d1ac2644e72813460b730540076a8442d19628f6",
+     "bytes": 180676
+    },
+    {
+     "weight": 400,
+     "file": "do-hyeon-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/do-hyeon@5.3.0/files/do-hyeon-latin-400-normal.woff2",
+     "sha256": "f45baf5d5da50d10aeda8f53884bac9a6a973b21e13424064188f193f7a9f8df",
+     "bytes": 9768,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "black-han-sans",
+   "name": "검은고딕",
+   "family": "Black Han Sans",
+   "role": "display",
+   "hangul": true,
+   "category": "sans-serif",
+   "weights": 1,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2015 The Black Han Sans Project Authors (https://github.com/zesstype/Black-Han-Sans)",
+   "source": "https://fontsource.org/fonts/black-han-sans",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "black-han-sans-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/black-han-sans@5.3.0/files/black-han-sans-korean-400-normal.woff2",
+     "sha256": "e02f4e41a5852756cff190d9280944f9a86ef3b2841c0400f2245781588ea8cf",
+     "bytes": 190420
+    },
+    {
+     "weight": 400,
+     "file": "black-han-sans-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/black-han-sans@5.3.0/files/black-han-sans-latin-400-normal.woff2",
+     "sha256": "f4cb9b35097dd2e71eaa7122771305f4dff4f62e0f697aaa27701d2d519ee16c",
+     "bytes": 9456,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "dongle",
+   "name": "동글",
+   "family": "Dongle",
+   "role": "display",
+   "hangul": true,
+   "category": "sans-serif",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2021 The Dongle Project Authors (https://github.com/yangheeryu/Dongle) Dongle-Regular.ttf: Copyright 2021 The Dongle Project Authors (https://github.com/yangheeryu/Dongle) Dongle-Bold.ttf: Copyright 2021 The Dongle Project Authors (https://github.com/yangheeryu/Dongle)",
+   "source": "https://fontsource.org/fonts/dongle",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "dongle-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/dongle@5.3.0/files/dongle-korean-400-normal.woff2",
+     "sha256": "ce8e6ab08de1d5e213aed6e9f3d5a950114960a90c8eadb92aae5e42f4ac822c",
+     "bytes": 202476
+    },
+    {
+     "weight": 400,
+     "file": "dongle-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/dongle@5.3.0/files/dongle-latin-400-normal.woff2",
+     "sha256": "28968d5071c20728aad201dbcadfd1f55cf9336468e0bbc8483d387f2e405eed",
+     "bytes": 13516,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    },
+    {
+     "weight": 600,
+     "file": "dongle-korean-700-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/dongle@5.3.0/files/dongle-korean-700-normal.woff2",
+     "sha256": "ccc96eb73244fe79fd66c14a3943a006626e4691b6f5ca9affd87885ec7628f6",
+     "bytes": 209748
+    },
+    {
+     "weight": 600,
+     "file": "dongle-latin-700-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/dongle@5.3.0/files/dongle-latin-700-normal.woff2",
+     "sha256": "f814183ad11b4c0f1ceb53b2079c58750f5729a447aa2cc7cf049317853f16f6",
+     "bytes": 13512,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "sunflower",
+   "name": "해바라기",
+   "family": "Sunflower",
+   "role": "display",
+   "hangul": true,
+   "category": "sans-serif",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2008 The Sunflower Project Authors Sunflower-Medium.ttf: Copyright 2008 The Sunflower Project Authors Sunflower-Bold.ttf: Copyright 2008 The Sunflower Project Authors",
+   "source": "https://fontsource.org/fonts/sunflower",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "sunflower-korean-500-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/sunflower@5.3.1/files/sunflower-korean-500-normal.woff2",
+     "sha256": "6bd9faf6d161e7b63f799974125d10d731ee3d710823ca6d3c30387d92879eb2",
+     "bytes": 122932
+    },
+    {
+     "weight": 400,
+     "file": "sunflower-latin-500-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/sunflower@5.3.1/files/sunflower-latin-500-normal.woff2",
+     "sha256": "c4b7908be7932e28f6e9ddbb61478ccfb77517c0532d5a6736137509ba5c4a44",
+     "bytes": 8996,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    },
+    {
+     "weight": 600,
+     "file": "sunflower-korean-700-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/sunflower@5.3.1/files/sunflower-korean-700-normal.woff2",
+     "sha256": "a6b01a3b3fecb6ea6b86d2fa64bb860281a265693f474c810a9f3a155ce8f398",
+     "bytes": 136052
+    },
+    {
+     "weight": 600,
+     "file": "sunflower-latin-700-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/sunflower@5.3.1/files/sunflower-latin-700-normal.woff2",
+     "sha256": "d280cd6c63e10a78b220cb9d2bcbaa11e7509ddfcfaf1ed3dfb82a254cfa4ad9",
+     "bytes": 8796,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "yeon-sung",
+   "name": "연성",
+   "family": "Yeon Sung",
+   "role": "display",
+   "hangul": true,
+   "category": "display",
+   "weights": 1,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2018 The Yeon Sung Project Authors",
+   "source": "https://fontsource.org/fonts/yeon-sung",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "yeon-sung-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/yeon-sung@5.3.0/files/yeon-sung-korean-400-normal.woff2",
+     "sha256": "9062fc516977e00a64c25c0e43ea3e43d524dea1502c50c035bcff5223a3bd5b",
+     "bytes": 506516
+    },
+    {
+     "weight": 400,
+     "file": "yeon-sung-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/yeon-sung@5.3.0/files/yeon-sung-latin-400-normal.woff2",
+     "sha256": "e34bed181fdb2ee29c61f31d6810dcb9f60102d5cd2edcc6b04c8b7900bce09e",
+     "bytes": 21624,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "gasoek-one",
+   "name": "가석",
+   "family": "Gasoek One",
+   "role": "display",
+   "hangul": true,
+   "category": "sans-serif",
+   "weights": 1,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2022 The Gasoek Project Authors (https://github.com/JAMO-TYPEFACE/Gasoek)",
+   "source": "https://fontsource.org/fonts/gasoek-one",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "gasoek-one-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/gasoek-one@5.3.0/files/gasoek-one-korean-400-normal.woff2",
+     "sha256": "0cfcf59854271a718c2853f793cf4d42e1525d04d59beca4c55d9c396807a4c2",
+     "bytes": 296204
+    },
+    {
+     "weight": 400,
+     "file": "gasoek-one-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/gasoek-one@5.3.0/files/gasoek-one-latin-400-normal.woff2",
+     "sha256": "ca4cb63df4b3356abcdfe9f24894c968f55fc8065910fbc09da10995fe91d4c9",
+     "bytes": 20384,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "bagel-fat-one",
+   "name": "베이글",
+   "family": "Bagel Fat One",
+   "role": "display",
+   "hangul": true,
+   "category": "display",
+   "weights": 1,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2022 The Bagel Fat Project Authors (https://github.com/JAMO-TYPEFACE/BagelFat)",
+   "source": "https://fontsource.org/fonts/bagel-fat-one",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "bagel-fat-one-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/bagel-fat-one@5.3.0/files/bagel-fat-one-korean-400-normal.woff2",
+     "sha256": "2cce4897cf9a7f4199eca3abdcfc490154f3d9b5af4beba471aa83a69a11e3cc",
+     "bytes": 429960
+    },
+    {
+     "weight": 400,
+     "file": "bagel-fat-one-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/bagel-fat-one@5.3.0/files/bagel-fat-one-latin-400-normal.woff2",
+     "sha256": "115ac5b80f2bd487ab5d5af59dd374261b6e81d00eda8361dd70e671d5aa35e4",
+     "bytes": 24376,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "orbit",
+   "name": "오르빗",
+   "family": "Orbit",
+   "role": "display",
+   "hangul": true,
+   "category": "sans-serif",
+   "weights": 1,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2022 The Orbit Project Authors (https://github.com/JAMO-TYPEFACE/Orbit)",
+   "source": "https://fontsource.org/fonts/orbit",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "orbit-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/orbit@5.3.0/files/orbit-korean-400-normal.woff2",
+     "sha256": "543c8482c7e2b4b96010b27d67cf1125930ba759f14f2de0563a7ac194ec18f0",
+     "bytes": 208124
+    },
+    {
+     "weight": 400,
+     "file": "orbit-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/orbit@5.3.0/files/orbit-latin-400-normal.woff2",
+     "sha256": "1b030de9086b92bd1a556d648af9cd45cc79eec9c273ad66e41320e7512c7157",
+     "bytes": 14664,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "diphylleia",
+   "name": "디필리아",
+   "family": "Diphylleia",
+   "role": "display",
+   "hangul": true,
+   "category": "serif",
+   "weights": 1,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2022 The Diphylleia Project Authors (https://github.com/JAMO-TYPEFACE/Diphylleia)",
+   "source": "https://fontsource.org/fonts/diphylleia",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "diphylleia-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/diphylleia@5.3.0/files/diphylleia-korean-400-normal.woff2",
+     "sha256": "9690c223be7be27527c9715115e265fb7b655b20a0a62906f4e2e85725c5548a",
+     "bytes": 385424
+    },
+    {
+     "weight": 400,
+     "file": "diphylleia-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/diphylleia@5.3.0/files/diphylleia-latin-400-normal.woff2",
+     "sha256": "40953670430b821c860c1cecce08dbdad7a681901e06f73be5a54b655cf00cd7",
+     "bytes": 24592,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "gugi",
+   "name": "구기",
+   "family": "Gugi",
+   "role": "display",
+   "hangul": true,
+   "category": "display",
+   "weights": 1,
+   "license": "OFL-1.1",
+   "copyright": "Copyright (c) 2017 by TAE System & Typefaces Co.. All rights reserved.",
+   "source": "https://fontsource.org/fonts/gugi",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "gugi-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/gugi@5.3.0/files/gugi-korean-400-normal.woff2",
+     "sha256": "5373cf70f8b5b77fcb3eca6c463fa3ef4e35344642aac0a86cb6fc5f1f65cb12",
+     "bytes": 180480
+    },
+    {
+     "weight": 400,
+     "file": "gugi-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/gugi@5.3.0/files/gugi-latin-400-normal.woff2",
+     "sha256": "ba4a17d21db19c2214ad6178e06f7c19b1aab881760367b33fd3b2a37c7a802c",
+     "bytes": 9380,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "cute-font",
+   "name": "귀여운",
+   "family": "Cute Font",
+   "role": "display",
+   "hangul": true,
+   "category": "display",
+   "weights": 1,
+   "license": "OFL-1.1",
+   "copyright": "Google Inc.",
+   "source": "https://fontsource.org/fonts/cute-font",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "cute-font-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/cute-font@5.3.0/files/cute-font-korean-400-normal.woff2",
+     "sha256": "b401543bbd3e87496bc87c68e551d691709c5a54f8dc438d88bcbcb5b395f802",
+     "bytes": 135404
+    },
+    {
+     "weight": 400,
+     "file": "cute-font-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/cute-font@5.3.0/files/cute-font-latin-400-normal.woff2",
+     "sha256": "6c541e12f93ee2db1548c578a3bd5ada20592b766a7e3c1d3068a4a484ca3424",
+     "bytes": 9364,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "stylish",
+   "name": "스타일리시",
+   "family": "Stylish",
+   "role": "display",
+   "hangul": true,
+   "category": "sans-serif",
+   "weights": 1,
+   "license": "OFL-1.1",
+   "copyright": "Copyright (c) 1992-2018 AsiaSoft Inc. Seoul Korea All Rights Reserved.",
+   "source": "https://fontsource.org/fonts/stylish",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "stylish-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/stylish@5.3.1/files/stylish-korean-400-normal.woff2",
+     "sha256": "2f3043908fd40475a732676a7da834f616fd8c63847366a64bd45157fe1bac43",
+     "bytes": 964792
+    },
+    {
+     "weight": 400,
+     "file": "stylish-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/stylish@5.3.1/files/stylish-latin-400-normal.woff2",
+     "sha256": "b5c2d09cd13e57793e05f7c83ecde05a8d976a0c1af08a9e24e6b1631be12176",
+     "bytes": 15188,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "single-day",
+   "name": "싱글데이",
+   "family": "Single Day",
+   "role": "display",
+   "hangul": true,
+   "category": "display",
+   "weights": 1,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2015 DXKorea Inc. All rights reserved.",
+   "source": "https://fontsource.org/fonts/single-day",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "single-day-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/single-day@5.3.1/files/single-day-korean-400-normal.woff2",
+     "sha256": "3add87a2e4d3a4a94828f465a23999995b5658c699563167baa1df97cea190f5",
+     "bytes": 91324
+    },
+    {
+     "weight": 400,
+     "file": "single-day-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/single-day@5.3.1/files/single-day-latin-400-normal.woff2",
+     "sha256": "330d1c995dad549cbf47bcd8bb802238b38ecb5e1501f5939b215c25071d9aed",
+     "bytes": 15180,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "kirang-haerang",
+   "name": "기랑해랑",
+   "family": "Kirang Haerang",
+   "role": "display",
+   "hangul": true,
+   "category": "display",
+   "weights": 1,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2018 The Kirang Haerang Project Authors",
+   "source": "https://fontsource.org/fonts/kirang-haerang",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "kirang-haerang-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/kirang-haerang@5.3.0/files/kirang-haerang-korean-400-normal.woff2",
+     "sha256": "c85accd0bcc0ff95ea9fa7fca1c2d03cb477ee40dcf450a7eae18dce17347b94",
+     "bytes": 794752
+    },
+    {
+     "weight": 400,
+     "file": "kirang-haerang-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/kirang-haerang@5.3.0/files/kirang-haerang-latin-400-normal.woff2",
+     "sha256": "9672863fc6a4f791bc441e402eda185f188c495b356521e5cc14f9b56e456694",
+     "bytes": 35200,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "black-and-white-picture",
+   "name": "흑백사진",
+   "family": "Black And White Picture",
+   "role": "display",
+   "hangul": true,
+   "category": "display",
+   "weights": 1,
+   "license": "OFL-1.1",
+   "copyright": "Copyright (c) 1992-2018 AsiaSoft Inc. Seoul Korea All Rights Reserved.",
+   "source": "https://fontsource.org/fonts/black-and-white-picture",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "black-and-white-picture-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/black-and-white-picture@5.3.0/files/black-and-white-picture-korean-400-normal.woff2",
+     "sha256": "5258bd990f785dd709706cf0bb8a6f344f1a11afb70a34bb9d2c978557811fd2",
+     "bytes": 439568
+    },
+    {
+     "weight": 400,
+     "file": "black-and-white-picture-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/black-and-white-picture@5.3.0/files/black-and-white-picture-latin-400-normal.woff2",
+     "sha256": "9b1d7faa4056c0ad8e5a6e190e05fb6fa84083e1e613761eb729d80144459a34",
+     "bytes": 51724,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "moirai-one",
+   "name": "모이라이",
+   "family": "Moirai One",
+   "role": "display",
+   "hangul": true,
+   "category": "display",
+   "weights": 1,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2022 The Moirai Project Authors (https://github.com/JAMO-TYPEFACE/Moirai)",
+   "source": "https://fontsource.org/fonts/moirai-one",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "moirai-one-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/moirai-one@5.3.0/files/moirai-one-korean-400-normal.woff2",
+     "sha256": "c61bcfb66cee842468f2b78eb014d1f814533dbdba553dba43c9bbd1dc52a8b8",
+     "bytes": 532744
+    },
+    {
+     "weight": 400,
+     "file": "moirai-one-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/moirai-one@5.3.0/files/moirai-one-latin-400-normal.woff2",
+     "sha256": "febef5e964de3bb722b5147a52c78c1695991b2ac9f75458e991440f14f36198",
+     "bytes": 31612,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "grandiflora-one",
+   "name": "그랜디플로라",
+   "family": "Grandiflora One",
+   "role": "display",
+   "hangul": true,
+   "category": "serif",
+   "weights": 1,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2022 The Grandiflora Project Authors (https://github.com/JAMO-TYPEFACE/Grandiflora)",
+   "source": "https://fontsource.org/fonts/grandiflora-one",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "grandiflora-one-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/grandiflora-one@5.3.0/files/grandiflora-one-korean-400-normal.woff2",
+     "sha256": "d157ee01c923f5db32a5ce4440579156b7ee98b6c8ffd4a2aa881b2212abc065",
+     "bytes": 323416
+    },
+    {
+     "weight": 400,
+     "file": "grandiflora-one-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/grandiflora-one@5.3.0/files/grandiflora-one-latin-400-normal.woff2",
+     "sha256": "c84d3145f096d1760681d20d3fe0899e51d54c383a9d02762eb74833711f8df6",
+     "bytes": 25168,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "nanum-gothic-coding",
+   "name": "나눔고딕코딩",
+   "family": "Nanum Gothic Coding",
+   "role": "mono",
+   "hangul": true,
+   "category": "handwriting",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright © 2009 NHN Corporation. All rights reserved. Font designed by Sandoll Communications Inc. NanumGothicCoding-Bold.ttf: Copyright © 2009 NHN Corporation. All rights reserved. Font designed by Sandoll Communications Inc.",
+   "source": "https://fontsource.org/fonts/nanum-gothic-coding",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "nanum-gothic-coding-korean-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/nanum-gothic-coding@5.3.0/files/nanum-gothic-coding-korean-400-normal.woff2",
+     "sha256": "87ab32ebaf4e1f803099ad1d096744092c8f985b2e08a24e2304f5ac05d81d6a",
+     "bytes": 521332
+    },
+    {
+     "weight": 400,
+     "file": "nanum-gothic-coding-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/nanum-gothic-coding@5.3.0/files/nanum-gothic-coding-latin-400-normal.woff2",
+     "sha256": "73c2277fdc8688b2a1c6a9a5c0c0f04e6d8d8a4afa7e9adcfedbfc3b78d5f9de",
+     "bytes": 14236,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    },
+    {
+     "weight": 600,
+     "file": "nanum-gothic-coding-korean-700-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/nanum-gothic-coding@5.3.0/files/nanum-gothic-coding-korean-700-normal.woff2",
+     "sha256": "2fe66da1c9c3f8beca2c618a139e7edabd36a26dd810a324ced06f8b214b2ccd",
+     "bytes": 534060
+    },
+    {
+     "weight": 600,
+     "file": "nanum-gothic-coding-latin-700-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/nanum-gothic-coding@5.3.0/files/nanum-gothic-coding-latin-700-normal.woff2",
+     "sha256": "662deb6f290fb6abf4ee03a08433f4d2456f33f8b506fed88ffa2ab0b6ef3cc4",
+     "bytes": 14448,
+     "unicode_range": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
+    }
+   ]
+  },
+  {
+   "id": "jetbrains-mono",
+   "name": "JetBrains Mono",
+   "family": "JetBrains Mono",
+   "role": "mono",
+   "hangul": false,
+   "category": "monospace",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono) JetBrainsMono-Italic[wght].ttf: Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)",
+   "source": "https://fontsource.org/fonts/jetbrains-mono",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "jetbrains-mono-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.3.0/files/jetbrains-mono-latin-400-normal.woff2",
+     "sha256": "14425ba9c695763c1547f48a206b7aa60350a33ae23de09f0407877f3fcd89eb",
+     "bytes": 21168
+    },
+    {
+     "weight": 600,
+     "file": "jetbrains-mono-latin-600-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.3.0/files/jetbrains-mono-latin-600-normal.woff2",
+     "sha256": "400c6bfda18d5d14acad1c15d6dcb9f8e13c015e7286317e0b9a482539bef147",
+     "bytes": 21860
+    }
+   ]
+  },
+  {
+   "id": "fira-code",
+   "name": "Fira Code",
+   "family": "Fira Code",
+   "role": "mono",
+   "hangul": false,
+   "category": "monospace",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2014-2020 The Fira Code Project Authors (https://github.com/tonsky/FiraCode)",
+   "source": "https://fontsource.org/fonts/fira-code",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "fira-code-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/fira-code@5.3.0/files/fira-code-latin-400-normal.woff2",
+     "sha256": "6dc9da171ccea71d525379ee1cbf51d143e31acac330a251bb71b3d6060e687c",
+     "bytes": 23312
+    },
+    {
+     "weight": 600,
+     "file": "fira-code-latin-600-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/fira-code@5.3.0/files/fira-code-latin-600-normal.woff2",
+     "sha256": "53bd904d81c086b103b9e01ef84a98640b2124b78c789bb47ddabb4c41fc94b2",
+     "bytes": 23316
+    }
+   ]
+  },
+  {
+   "id": "ibm-plex-mono",
+   "name": "IBM Plex Mono",
+   "family": "IBM Plex Mono",
+   "role": "mono",
+   "hangul": false,
+   "category": "monospace",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2017 IBM Corp. All rights reserved. IBMPlexMono-ThinItalic.ttf: Copyright 2017 IBM Corp. All rights reserved. IBMPlexMono-ExtraLight.ttf: Copyright 2017 IBM Corp. All rights reserved. IBMPlexMono-ExtraLightItalic.ttf: Copyright 2017 IBM Corp. All rights reserved. IBMPlexMono-Light.ttf: Copyright 2017 IBM Corp. All rights reserved. IBMPlexMono-LightItalic.ttf: Copyright 2017 IBM Corp. All rights reserved. IBMPlexMono-Regular.ttf: Copyright 2017 IBM Corp. All rights reserved. IBMPlexMono-Italic.ttf: Copyright 2017 IBM Corp. All rights reserved. IBMPlexMono-Medium.ttf: Copyright 2017 IBM Corp. All rights reserved. IBMPlexMono-MediumItalic.ttf: Copyright 2017 IBM Corp. All rights reserved. IBMPlexMono-SemiBold.ttf: Copyright 2017 IBM Corp. All rights reserved. IBMPlexMono-SemiBoldItalic.ttf: Copyright 2017 IBM Corp. All rights reserved. IBMPlexMono-Bold.ttf: Copyright 2017 IBM Corp. All rights reserved. IBMPlexMono-BoldItalic.ttf: Copyright 2017 IBM Corp. All rights reserved.",
+   "source": "https://fontsource.org/fonts/ibm-plex-mono",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "ibm-plex-mono-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-mono@5.3.0/files/ibm-plex-mono-latin-400-normal.woff2",
+     "sha256": "08949f728dc52d528e69b1667d15c89a5686a4ee9a296ff90983985f99c380f7",
+     "bytes": 14708
+    },
+    {
+     "weight": 600,
+     "file": "ibm-plex-mono-latin-600-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-mono@5.3.0/files/ibm-plex-mono-latin-600-normal.woff2",
+     "sha256": "0d1f0b8d0722224e32e9f28261bdc86c79115be73444ae5eceb73976a1bcdf83",
+     "bytes": 15620
+    }
+   ]
+  },
+  {
+   "id": "cascadia-code",
+   "name": "Cascadia Code",
+   "family": "Cascadia Code",
+   "role": "mono",
+   "hangul": false,
+   "category": "sans-serif",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Google Inc.",
+   "source": "https://fontsource.org/fonts/cascadia-code",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "cascadia-code-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/cascadia-code@5.3.0/files/cascadia-code-latin-400-normal.woff2",
+     "sha256": "923fd5a61f1618f4597422b66172d0d8615577f81eb9382724390ec8cb8bfd5d",
+     "bytes": 29452
+    },
+    {
+     "weight": 600,
+     "file": "cascadia-code-latin-600-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/cascadia-code@5.3.0/files/cascadia-code-latin-600-normal.woff2",
+     "sha256": "be5e5cbe3958e21cf2c7404e09853dcc83cf667e71327264274dd26fc8d92d9b",
+     "bytes": 30356
+    }
+   ]
+  },
+  {
+   "id": "geist-mono",
+   "name": "Geist Mono",
+   "family": "Geist Mono",
+   "role": "mono",
+   "hangul": false,
+   "category": "monospace",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2024 The Geist Project Authors (https://github.com/vercel/geist-font.git) GeistMono-Italic[wght].ttf: Copyright 2024 The Geist Project Authors (https://github.com/vercel/geist-font.git)",
+   "source": "https://fontsource.org/fonts/geist-mono",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "geist-mono-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/geist-mono@5.3.0/files/geist-mono-latin-400-normal.woff2",
+     "sha256": "3f98383b122fe015a48536cd4a1cda855a201718923ffe74931a01597107b9b5",
+     "bytes": 9864
+    },
+    {
+     "weight": 600,
+     "file": "geist-mono-latin-600-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/geist-mono@5.3.0/files/geist-mono-latin-600-normal.woff2",
+     "sha256": "8b111a81bab818cf5393b81149c69d6a1756f3acc3a846decafef01974d12bd3",
+     "bytes": 10144
+    }
+   ]
+  },
+  {
+   "id": "victor-mono",
+   "name": "Victor Mono",
+   "family": "Victor Mono",
+   "role": "mono",
+   "hangul": false,
+   "category": "monospace",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2023 The Victor Mono Project Authors (https://github.com/rubjo/victor-mono-font) VictorMono-Italic[wght].ttf: Copyright 2023 The Victor Mono Project Authors (https://github.com/rubjo/victor-mono-font)",
+   "source": "https://fontsource.org/fonts/victor-mono",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "victor-mono-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/victor-mono@5.3.0/files/victor-mono-latin-400-normal.woff2",
+     "sha256": "1c96d4706ad792e7740ba352e709380a7328e1d5b853d4d909b771c04be1a94a",
+     "bytes": 15924
+    },
+    {
+     "weight": 600,
+     "file": "victor-mono-latin-600-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/victor-mono@5.3.0/files/victor-mono-latin-600-normal.woff2",
+     "sha256": "461562081f29d135cd94b43cccc3a7c6aaadf57b15c99e7b5475bf3e0d457d8e",
+     "bytes": 15748
+    }
+   ]
+  },
+  {
+   "id": "inter",
+   "name": "Inter",
+   "family": "Inter",
+   "role": "body",
+   "hangul": false,
+   "category": "sans-serif",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter) Inter-Italic[opsz,wght].ttf: Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)",
+   "source": "https://fontsource.org/fonts/inter",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "inter-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/inter@5.3.0/files/inter-latin-400-normal.woff2",
+     "sha256": "8909904ab6c872eb994093482a88a28eca2cd95912d7b6fecd72103b0dc07edc",
+     "bytes": 23664
+    },
+    {
+     "weight": 600,
+     "file": "inter-latin-600-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/inter@5.3.0/files/inter-latin-600-normal.woff2",
+     "sha256": "f9a06e79cd3a2a20951c0f0e28f66dd0e6d3fda73911d640a2125c8fcb78f21a",
+     "bytes": 24452
+    }
+   ]
+  },
+  {
+   "id": "ibm-plex-sans",
+   "name": "IBM Plex Sans",
+   "family": "IBM Plex Sans",
+   "role": "body",
+   "hangul": false,
+   "category": "sans-serif",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2019 IBM Corp. All rights reserved. IBMPlexSans-Italic[wdth,wght].ttf: Copyright 2019 IBM Corp. All rights reserved.",
+   "source": "https://fontsource.org/fonts/ibm-plex-sans",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "ibm-plex-sans-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-sans@5.3.0/files/ibm-plex-sans-latin-400-normal.woff2",
+     "sha256": "3b646991d30055a93a4ecc499713d4347953a74a947ecab435ab72070cbdab0e",
+     "bytes": 22588
+    },
+    {
+     "weight": 600,
+     "file": "ibm-plex-sans-latin-600-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-sans@5.3.0/files/ibm-plex-sans-latin-600-normal.woff2",
+     "sha256": "8960851d691c054ed38e259bdcf1a6190d157b4203ed5bb32c632a863fb8ec2f",
+     "bytes": 24252
+    }
+   ]
+  },
+  {
+   "id": "ibm-plex-serif",
+   "name": "IBM Plex Serif",
+   "family": "IBM Plex Serif",
+   "role": "body",
+   "hangul": false,
+   "category": "serif",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2020 IBM Corp. All rights reserved. IBMPlexSerif-ThinItalic.ttf: Copyright 2020 IBM Corp. All rights reserved. IBMPlexSerif-ExtraLight.ttf: Copyright 2020 IBM Corp. All rights reserved. IBMPlexSerif-ExtraLightItalic.ttf: Copyright 2020 IBM Corp. All rights reserved. IBMPlexSerif-Light.ttf: Copyright 2020 IBM Corp. All rights reserved. IBMPlexSerif-LightItalic.ttf: Copyright 2020 IBM Corp. All rights reserved. IBMPlexSerif-Regular.ttf: Copyright 2020 IBM Corp. All rights reserved. IBMPlexSerif-Italic.ttf: Copyright 2020 IBM Corp. All rights reserved. IBMPlexSerif-Medium.ttf: Copyright 2020 IBM Corp. All rights reserved. IBMPlexSerif-MediumItalic.ttf: Copyright 2020 IBM Corp. All rights reserved. IBMPlexSerif-SemiBold.ttf: Copyright 2020 IBM Corp. All rights reserved. IBMPlexSerif-SemiBoldItalic.ttf: Copyright 2020 IBM Corp. All rights reserved. IBMPlexSerif-Bold.ttf: Copyright 2020 IBM Corp. All rights reserved. IBMPlexSerif-BoldItalic.ttf: Copyright 2020 IBM Corp. All rights reserved.",
+   "source": "https://fontsource.org/fonts/ibm-plex-serif",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "ibm-plex-serif-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-serif@5.3.0/files/ibm-plex-serif-latin-400-normal.woff2",
+     "sha256": "cb2c5eee2c0a43ff30d2365407c7bc8b20e3bd90720a4a64102ba0b328022a02",
+     "bytes": 19580
+    },
+    {
+     "weight": 600,
+     "file": "ibm-plex-serif-latin-600-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-serif@5.3.0/files/ibm-plex-serif-latin-600-normal.woff2",
+     "sha256": "e279e4f8baa0d4634d98868092f2198ae0dcd9e142c935822c385b9843352a9b",
+     "bytes": 20516
+    }
+   ]
+  },
+  {
+   "id": "geist",
+   "name": "Geist",
+   "family": "Geist",
+   "role": "body",
+   "hangul": false,
+   "category": "sans-serif",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2024 The Geist Project Authors (https://github.com/vercel/geist-font) Geist-Italic[wght].ttf: Copyright 2024 The Geist Project Authors (https://github.com/vercel/geist-font)",
+   "source": "https://fontsource.org/fonts/geist",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "geist-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/geist@5.3.0/files/geist-latin-400-normal.woff2",
+     "sha256": "ead637fd0b6b887d829b3ce3f25fdc242b1de0cfb69c0d97987933675d1315ba",
+     "bytes": 12956
+    },
+    {
+     "weight": 600,
+     "file": "geist-latin-600-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/geist@5.3.0/files/geist-latin-600-normal.woff2",
+     "sha256": "edde7cc4e2719898f981a6d970a756030fff75a8ed36dd6a457a60181b889ebf",
+     "bytes": 13372
+    }
+   ]
+  },
+  {
+   "id": "figtree",
+   "name": "Figtree",
+   "family": "Figtree",
+   "role": "body",
+   "hangul": false,
+   "category": "sans-serif",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2022 The Figtree Project Authors (https://github.com/erikdkennedy/figtree) Figtree-Italic[wght].ttf: Copyright 2022 The Figtree Project Authors (https://github.com/erikdkennedy/figtree)",
+   "source": "https://fontsource.org/fonts/figtree",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "figtree-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/figtree@5.3.0/files/figtree-latin-400-normal.woff2",
+     "sha256": "8f98dd642986f1fa39c45b89665a57372897c235b36028e0e4a136e43dc5f8ab",
+     "bytes": 11384
+    },
+    {
+     "weight": 600,
+     "file": "figtree-latin-600-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/figtree@5.3.0/files/figtree-latin-600-normal.woff2",
+     "sha256": "367d713287918784702563518f59239989da815c80d3c7337686b9816635a08b",
+     "bytes": 11544
+    }
+   ]
+  },
+  {
+   "id": "manrope",
+   "name": "Manrope",
+   "family": "Manrope",
+   "role": "body",
+   "hangul": false,
+   "category": "sans-serif",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2019 The Manrope Project Authors (https://github.com/sharanda/manrope)",
+   "source": "https://fontsource.org/fonts/manrope",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "manrope-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/manrope@5.3.0/files/manrope-latin-400-normal.woff2",
+     "sha256": "849290ef12a2eeb9af5c11924120d11aa4ae8b435ed3347d7fc8bc240c293ca3",
+     "bytes": 14108
+    },
+    {
+     "weight": 600,
+     "file": "manrope-latin-600-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/manrope@5.3.0/files/manrope-latin-600-normal.woff2",
+     "sha256": "f7ac6258da20ab7541939b59851155753d1d24f1b30cbcb949077a3faa3d1593",
+     "bytes": 14172
+    }
+   ]
+  },
+  {
+   "id": "atkinson-hyperlegible",
+   "name": "Atkinson Hyperlegible",
+   "family": "Atkinson Hyperlegible",
+   "role": "body",
+   "hangul": false,
+   "category": "sans-serif",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2020 Braille Institute of America, Inc. AtkinsonHyperlegible-Italic.ttf: Copyright 2020 Braille Institute of America, Inc. AtkinsonHyperlegible-Bold.ttf: Copyright 2020 Braille Institute of America, Inc. AtkinsonHyperlegible-BoldItalic.ttf: Copyright 2020 Braille Institute of America, Inc.",
+   "source": "https://fontsource.org/fonts/atkinson-hyperlegible",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "atkinson-hyperlegible-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/atkinson-hyperlegible@5.3.0/files/atkinson-hyperlegible-latin-400-normal.woff2",
+     "sha256": "d64ba838ef5472bba248620ec4fd8b5aa7cf0db2908e0bb230600caf279ba7bc",
+     "bytes": 17208
+    },
+    {
+     "weight": 600,
+     "file": "atkinson-hyperlegible-latin-700-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/atkinson-hyperlegible@5.3.0/files/atkinson-hyperlegible-latin-700-normal.woff2",
+     "sha256": "140e2bd25a7315c8a062508391426b0d8c3297400c947b8d847be28f73a199f0",
+     "bytes": 17524
+    }
+   ]
+  },
+  {
+   "id": "lora",
+   "name": "Lora",
+   "family": "Lora",
+   "role": "body",
+   "hangul": false,
+   "category": "serif",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2011 The Lora Project Authors (https://github.com/cyrealtype/Lora-Cyrillic), with Reserved Font Name \"Lora\". Lora-Italic[wght].ttf: Copyright 2011 The Lora Project Authors (https://github.com/cyrealtype/Lora-Cyrillic), with Reserved Font Name \"Lora\".",
+   "source": "https://fontsource.org/fonts/lora",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "lora-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/lora@5.3.0/files/lora-latin-400-normal.woff2",
+     "sha256": "ac079950fd9885261c0f73d9e87233f31b5427333ce0eb20e26c119458493c40",
+     "bytes": 21148
+    },
+    {
+     "weight": 600,
+     "file": "lora-latin-600-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/lora@5.3.0/files/lora-latin-600-normal.woff2",
+     "sha256": "7bbfe9f3c9e9d6d07e17da4d5229a42b042cc2e16024993cb687dc08cc762557",
+     "bytes": 21916
+    }
+   ]
+  },
+  {
+   "id": "literata",
+   "name": "Literata",
+   "family": "Literata",
+   "role": "body",
+   "hangul": false,
+   "category": "serif",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2017 The Literata Project Authors (https://github.com/googlefonts/literata) Literata-Italic[opsz,wght].ttf: Copyright 2017 The Literata Project Authors (https://github.com/googlefonts/literata)",
+   "source": "https://fontsource.org/fonts/literata",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "literata-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/literata@5.3.0/files/literata-latin-400-normal.woff2",
+     "sha256": "a60c193b55766b68b922e2327e15c2d8c145532f283a27c3411b9c47a8583d18",
+     "bytes": 20420
+    },
+    {
+     "weight": 600,
+     "file": "literata-latin-600-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/literata@5.3.0/files/literata-latin-600-normal.woff2",
+     "sha256": "99284fd89c86b8c58e921f42e05a42dae1add53e797b80d82165778b932bf924",
+     "bytes": 21860
+    }
+   ]
+  },
+  {
+   "id": "merriweather",
+   "name": "Merriweather",
+   "family": "Merriweather",
+   "role": "body",
+   "hangul": false,
+   "category": "serif",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2024 The Merriweather Project Authors (https://github.com/EbenSorkin/Merriweather4) with Reserved Font Name \"Merriweather\". Merriweather-Italic[opsz,wdth,wght].ttf: Copyright 2024 The Merriweather Project Authors (https://github.com/EbenSorkin/Merriweather4) with Reserved Font Name \"Merriweather\".",
+   "source": "https://fontsource.org/fonts/merriweather",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "merriweather-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/merriweather@5.3.0/files/merriweather-latin-400-normal.woff2",
+     "sha256": "66f5bd22d738a801a9e58d71920559743b0baaced04be299e3c4feca3dce3556",
+     "bytes": 49168
+    },
+    {
+     "weight": 600,
+     "file": "merriweather-latin-600-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/merriweather@5.3.0/files/merriweather-latin-600-normal.woff2",
+     "sha256": "3ef93c94387a5a08bbe3115b15b912ea9ed27cae4d5b7db869dc07c443fadc4c",
+     "bytes": 48892
+    }
+   ]
+  },
+  {
+   "id": "newsreader",
+   "name": "Newsreader",
+   "family": "Newsreader",
+   "role": "body",
+   "hangul": false,
+   "category": "serif",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2020 The Newsreader Project Authors (http://github.com/productiontype/Newsreader) Newsreader-Italic[opsz,wght].ttf: Copyright 2020 The Newsreader Project Authors (http://github.com/productiontype/Newsreader)",
+   "source": "https://fontsource.org/fonts/newsreader",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "newsreader-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/newsreader@5.3.0/files/newsreader-latin-400-normal.woff2",
+     "sha256": "e66067814f1c672d33a457e4f4d102c818b481420e2234cf685ebdbf2f443904",
+     "bytes": 22480
+    },
+    {
+     "weight": 600,
+     "file": "newsreader-latin-600-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/newsreader@5.3.0/files/newsreader-latin-600-normal.woff2",
+     "sha256": "05c91a26d19a61eafe7ce8e0b77eff3fd279ce994dc89f432f4cd06784935e84",
+     "bytes": 23876
+    }
+   ]
+  },
+  {
+   "id": "eb-garamond",
+   "name": "EB Garamond",
+   "family": "EB Garamond",
+   "role": "body",
+   "hangul": false,
+   "category": "serif",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2017 The EB Garamond Project Authors (https://github.com/octaviopardo/EBGaramond12) EBGaramond-Italic[wght].ttf: Copyright 2017 The EB Garamond Project Authors (https://github.com/octaviopardo/EBGaramond12)",
+   "source": "https://fontsource.org/fonts/eb-garamond",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "eb-garamond-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/eb-garamond@5.3.0/files/eb-garamond-latin-400-normal.woff2",
+     "sha256": "912929dba0faab5e151849ea5e988adba3080ad6d2bcc4dbff27aa427896498d",
+     "bytes": 23820
+    },
+    {
+     "weight": 600,
+     "file": "eb-garamond-latin-600-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/eb-garamond@5.3.0/files/eb-garamond-latin-600-normal.woff2",
+     "sha256": "6a195b7e4f518d53813581f415d7956e02049dd2762b4b9a3af80d56b4257e28",
+     "bytes": 25348
+    }
+   ]
+  },
+  {
+   "id": "crimson-pro",
+   "name": "Crimson Pro",
+   "family": "Crimson Pro",
+   "role": "body",
+   "hangul": false,
+   "category": "serif",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2018 The Crimson Pro Project Authors (https://github.com/Fonthausen/CrimsonPro) CrimsonPro-Italic[wght].ttf: Copyright 2018 The Crimson Pro Project Authors (https://github.com/Fonthausen/CrimsonPro)",
+   "source": "https://fontsource.org/fonts/crimson-pro",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "crimson-pro-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/crimson-pro@5.3.0/files/crimson-pro-latin-400-normal.woff2",
+     "sha256": "d2a3a146387d91b8d476d508849dd1d93a3cbde85d1e0d303e3d5c970726a703",
+     "bytes": 18336
+    },
+    {
+     "weight": 600,
+     "file": "crimson-pro-latin-600-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/crimson-pro@5.3.0/files/crimson-pro-latin-600-normal.woff2",
+     "sha256": "2d8f33b2352a04f3ed3af648df66d053c00d5c3ccbe793797273509824a5044a",
+     "bytes": 18776
+    }
+   ]
+  },
+  {
+   "id": "fraunces",
+   "name": "Fraunces",
+   "family": "Fraunces",
+   "role": "body",
+   "hangul": false,
+   "category": "serif",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2020 The Fraunces Project Authors (github.com/undercasetype/Fraunces) Fraunces-Italic[SOFT,WONK,opsz,wght].ttf: Copyright 2020 The Fraunces Project Authors (github.com/undercasetype/Fraunces)",
+   "source": "https://fontsource.org/fonts/fraunces",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "fraunces-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/fraunces@5.3.0/files/fraunces-latin-400-normal.woff2",
+     "sha256": "e558f39453a9c611908be04294b50dea5f21ae6c49b41c6e47f4115e91f90209",
+     "bytes": 17968
+    },
+    {
+     "weight": 600,
+     "file": "fraunces-latin-600-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/fraunces@5.3.0/files/fraunces-latin-600-normal.woff2",
+     "sha256": "3a1de7711d147bad4422825045f87597fd77cca72e7c96d3b0a81735d00dda82",
+     "bytes": 18096
+    }
+   ]
+  },
+  {
+   "id": "caveat",
+   "name": "Caveat",
+   "family": "Caveat",
+   "role": "display",
+   "hangul": false,
+   "category": "handwriting",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright 2014 The Caveat Project Authors (https://github.com/googlefonts/caveat)",
+   "source": "https://fontsource.org/fonts/caveat",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "caveat-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/caveat@5.3.0/files/caveat-latin-400-normal.woff2",
+     "sha256": "d0b7b931b8980049327e8f8f9ac264617c8200b8422d62e886473d3d9527bad3",
+     "bytes": 48836
+    },
+    {
+     "weight": 600,
+     "file": "caveat-latin-600-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/caveat@5.3.0/files/caveat-latin-600-normal.woff2",
+     "sha256": "d51e2283010e661d9f3dafdc9ff4b82b2ebcb2f7aa43ca48a105f5f68d46cc32",
+     "bytes": 51220
+    }
+   ]
+  },
+  {
+   "id": "kalam",
+   "name": "Kalam",
+   "family": "Kalam",
+   "role": "display",
+   "hangul": false,
+   "category": "handwriting",
+   "weights": 2,
+   "license": "OFL-1.1",
+   "copyright": "Copyright (c) 2014 Indian Type Foundry (info@indiantypefoundry.com) Kalam-Regular.ttf: Copyright (c) 2014 Indian Type Foundry (info@indiantypefoundry.com) Kalam-Bold.ttf: Copyright (c) 2014 Indian Type Foundry (info@indiantypefoundry.com)",
+   "source": "https://fontsource.org/fonts/kalam",
+   "faces": [
+    {
+     "weight": 400,
+     "file": "kalam-latin-400-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/kalam@5.3.0/files/kalam-latin-400-normal.woff2",
+     "sha256": "954410601a823f37e219f7930b7446f86afa15621326a7078d56fb9c910135cb",
+     "bytes": 22336
+    },
+    {
+     "weight": 600,
+     "file": "kalam-latin-700-normal.woff2",
+     "url": "https://cdn.jsdelivr.net/npm/@fontsource/kalam@5.3.0/files/kalam-latin-700-normal.woff2",
+     "sha256": "252063af6ade8b9a744cde4ddad0fc21ea53b8ba711eed121a0c2e8610ea9c93",
+     "bytes": 22144
+    }
+   ]
+  }
+ ]
+}

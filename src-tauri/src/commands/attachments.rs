@@ -14,6 +14,7 @@ use tauri_plugin_opener::OpenerExt;
 #[tauri::command(rename_all = "snake_case")]
 pub async fn attachment_add_file(
     state: State<'_, AppState>,
+    webview: tauri::Webview,
     note_id: String,
     file_path: String,
     mode: Option<String>,
@@ -31,7 +32,9 @@ pub async fn attachment_add_file(
         )?
     };
     thumb_follow_up(&state, &att).await;
-    crate::events::publish(Some(&note_id), false);
+    // async 커맨드라 invoke_handler 의 창 라벨 스코프 밖이다 — 호출 창 라벨을 직접 싣는다(events::publish_as). 안 그러면
+    // window=null("출처 모를 local")로 나가 본 창이 자기 붙여넣기·드롭마다 트리를 통째로 다시 읽는다.
+    crate::events::publish_as(Some(webview.label()), Some(&note_id), false);
     attachments::post_add::spawn_auto_meta(&state.data_dir, &note_id, &att, false, None);
     Ok(att)
 }
@@ -55,6 +58,19 @@ async fn thumb_follow_up(state: &State<'_, AppState>, att: &Attachment) {
 #[tauri::command(rename_all = "snake_case")]
 pub async fn attachment_add_bytes(
     state: State<'_, AppState>,
+    webview: tauri::Webview,
+    note_id: String,
+    name: String,
+    data_base64: String,
+) -> Result<Attachment, AppError> {
+    attachment_add_bytes_in(state, Some(webview.label()), note_id, name, data_base64).await
+}
+
+/// attachment_add_bytes 의 본체 — `window` 는 호출한 웹뷰의 라벨(없으면 트레이 같은 창 없는 호출 → 출처 모름 publish).
+/// 펫의 화면 저장(pet::capture_to_inbox)이 창 없이 부른다.
+pub(crate) async fn attachment_add_bytes_in(
+    state: State<'_, AppState>,
+    window: Option<&str>,
     note_id: String,
     name: String,
     data_base64: String,
@@ -84,7 +100,7 @@ pub async fn attachment_add_bytes(
     let att = add_result?;
 
     thumb_follow_up(&state, &att).await;
-    crate::events::publish(Some(&note_id), false);
+    crate::events::publish_as(window, Some(&note_id), false); // attachment_add_file 주석 참고
     attachments::post_add::spawn_auto_meta(&state.data_dir, &note_id, &att, false, None);
     Ok(att)
 }
@@ -304,6 +320,7 @@ pub fn attachment_query(
     offset: Option<i64>,
     limit: Option<i64>,
     workspace_id: Option<String>,
+    sort: Option<String>,
 ) -> Result<AttachmentQueryResult, AppError> {
     let q = AttachmentQuery {
         kinds: kinds.unwrap_or_default(),
@@ -311,6 +328,7 @@ pub fn attachment_query(
         offset: offset.unwrap_or(0),
         limit,
         workspace_id,
+        sort,
     };
     let conn = state.db.lock();
     att_query::query(&conn, &state.data_dir, q)

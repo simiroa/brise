@@ -442,6 +442,15 @@ pub struct CollectedNote {
     pub tags: Vec<String>,
 }
 
+/// 설정 > 수집 > 수집 이력 표의 한 행 — 표가 쓰는 필드만(repo::briefing::collect_history). 소스가 삭제됐으면 source_name 이 None.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CollectHistoryNote {
+    pub note_id: String,
+    pub title: String,
+    pub source_name: Option<String>,
+    pub collected_at: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct RecentCollected {
     pub items: Vec<CollectedNote>,

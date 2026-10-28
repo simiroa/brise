@@ -33,20 +33,13 @@ import {
   resolveTheme,
   attachSystemThemeListener,
 } from "../lib/appearance";
+import { DEFAULT_FONT_MONO } from "../lib/fonts/stacks";
 import {
   type FilterRosterEntry,
   type DashboardTabEntry,
   ensureOneEnabled,
-  normalizeFilterRoster,
-  normalizeDashboardTabs,
 } from "../lib/settingsNormalize";
 export type { Theme, ThemePref, Accent, SurfaceStyle };
-export type BriefingWhen = "time" | "launch" | "manual";
-/** 자동 표시 방식 — 창 / OS 알림 한 줄 / 둘 다(W10). */
-export type BriefingNotify = "window" | "os" | "both";
-export type WeekStart = "sunday" | "monday";
-/** 달력 공휴일 지역 — 날짜 표는 lib/holidays.ts, 백엔드 allowlist 는 `holiday_region`. */
-export type HolidayRegion = "none" | "kr";
 
 // 오너 결정(2026-09-20, "4~7번도 넣어봐, 보고 이상하면 지울게") — **실험적** 에디터 설정 4종.
 // 8cdaa347 웨이브의 여섯 키(위 dateNudgeModeOf 근처 주석)와 달리 "오늘까지의 동작을 지키는
@@ -55,13 +48,10 @@ export type HolidayRegion = "none" | "kr";
 // 얽지 않는다 — 빼려면 그 넷만 지우면 된다).
 /** 본문 최대 폭(editor_width). "normal"(기본) = 오늘까지의 800px 상한. editorFullWidth(전체
  *  너비)가 켜져 있으면 이 값은 쓰이지 않는다 — 설정 화면이 그 상태의 행을 잠근다. */
-export type EditorWidth = "narrow" | "normal" | "wide";
 /** 새 노트가 받는 오늘 날짜의 정밀도(new_note_date_precision). "day"(기본) = 오늘까지의 동작
  *  (연·월·일까지). 노트별로 언제든 바꿀 수 있으므로 이 값은 "새로 만들 때의 시작값"만 정한다. */
-export type NewNoteDatePrecision = "day" | "month" | "year";
 /** S2 입력(docs/PLAN-2026-10-06-s2-input.md §1.1) — 사진·음성·위치가 공유하는 3단 자동 정책.
  *  auto = 묻지 않고 반영 + 되돌리기 토스트, ask = 제안만, off = 반영하지 않음. */
-export type InputAutoMode = "off" | "ask" | "auto";
 
 // 오너 결정(2026-09-20): 설정 > 에디터의 날짜/지역 제안을 3단(off/suggest/auto,
 // off/strict/loose)으로 보여준다. 저장은 여전히 **불리언 두 개**다 — 새 enabled 키(신설,
@@ -85,19 +75,6 @@ export function regionNudgeModeOf(enabled: boolean, strict: boolean): RegionNudg
   return strict ? "strict" : "loose";
 }
 
-// Mercator scale k ∈ [1, 400] (useMapPanZoom). k=1 ≈ whole world; k=50 ≈ 7.2° lon (country/wide);
-// k=150 ≈ 2.4° lon city-scale so labels are visible (city dots k≥20, city labels k≥32).
-// Named so migrations / MapSection reset share the same city-level default.
-export const FACTORY_DEFAULT_MAP_ZOOM = 150.0 as const;
-
-// Factory fallback for defaultMapLocation (Seoul) — used both as the store's initial value and
-// to detect "user never touched onboarding's location step" (see lib/weather.ts's location
-// priority chain: this exact coordinate is treated as "workspace default not set").
-export const FACTORY_DEFAULT_MAP_LOCATION = {
-  lat: 37.5665,
-  lng: 126.978,
-  zoom: FACTORY_DEFAULT_MAP_ZOOM,
-} as const;
 
 // 필터 로스터·대시보드 탭 정규화(§2.4 HANDOFF-calendar-onboarding.md · W7 §7.3)는 순수 함수라
 // lib/settingsNormalize.ts 로 옮겼다. import 지점이 그대로 가도록 같은 이름으로 다시 내보낸다.
@@ -110,8 +87,48 @@ export {
 } from "../lib/settingsNormalize";
 export type { RosterMode, FilterRosterEntry, DashboardTabId, DashboardTabEntry } from "../lib/settingsNormalize";
 
+// 단순 설정(PREFS 표)·열거형 값 목록·변환 도우미는 stores/prefs.ts 한 곳 — 이 파일은 스토어(모양·클릭 setter)만 갖는다.
+// 기존 import 지점(`from "../stores/settings"`)이 그대로 가도록 타입·상수를 다시 내보낸다.
+import {
+  PREFS,
+  PREF_SNAKE,
+  prefDefaults,
+  DEFAULT_FONT_FAMILY,
+  type SimplePrefKey,
+  type BriefingWhen,
+  type BriefingNotify,
+  type WeekStart,
+  type TimelineDefaultRange,
+  type BoardDoneAutohide,
+  type GalleryTileSize,
+  type GallerySort,
+  type HolidayRegion,
+  type EditorWidth,
+  type NewNoteDatePrecision,
+  type InputAutoMode,
+  type PetDblclickAction,
+  type AttachmentStorageMode,
+} from "./prefs";
+export {
+  FACTORY_DEFAULT_MAP_ZOOM,
+  FACTORY_DEFAULT_MAP_LOCATION,
+  type SimplePrefKey,
+  type BriefingWhen,
+  type BriefingNotify,
+  type WeekStart,
+  type TimelineDefaultRange,
+  type BoardDoneAutohide,
+  type GalleryTileSize,
+  type GallerySort,
+  type HolidayRegion,
+  type EditorWidth,
+  type NewNoteDatePrecision,
+  type InputAutoMode,
+  type PetDblclickAction,
+  type AttachmentStorageMode,
+} from "./prefs";
+
 // W18 (결정 8 & 결정 10): 펫 반응 액션 & 챗봇 메모리
-export type PetDblclickAction = "chat" | "new_note" | "off";
 export const CHAT_MEMORY_MAX_ITEMS = 50;
 export const CHAT_MEMORY_MAX_LENGTH = 200;
 export interface ChatMemoryItem {
@@ -120,7 +137,7 @@ export interface ChatMemoryItem {
   created_at: string;
 }
 
-interface SettingsState {
+export interface SettingsState {
   themePref: ThemePref;
   theme: Theme;
   accent: Accent;
@@ -146,6 +163,8 @@ interface SettingsState {
    *  실패가 토스트로 보인다. setBgTone 도 같다. */
   setBgDim: (v: number, opts?: { live?: boolean }) => void;
   setUiLock: (v: boolean) => Promise<void>;
+  /** 단순 설정 여러 개를 한 번에 저장한다 — set() 한 번 + settings_set 한 번 + 실패 시 롤백 한 번(키별 최신 요청 규약은 setSimplePref 와 같다). */
+  setSimplePrefs: (patch: Partial<Pick<SettingsState, SimplePrefKey>>) => Promise<void>;
   setLeftWidth: (v: number) => void; // 디바운스 없이 즉시
   setSourcePct: (v: number) => void;
   aiEnabled: boolean;
@@ -402,7 +421,7 @@ interface SettingsState {
   favoritesOpen: boolean;
   setFavoritesOpen: (v: boolean) => Promise<void>;
   /** 스키마가 올라간 기존 설치의 첫 부팅에 백업을 권하는 띠(backup_nudge_pending, db/migrations.rs
-   *  가 한 번만 세운다). 그리는 쪽은 notetree/BackupNudgeBanner.tsx. */
+   *  가 한 번만 세운다). 그리는 쪽은 home/ReminderBell.tsx(토스트 + 벨 메뉴). */
   backupNudgePending: boolean;
   setBackupNudgePending: (v: boolean) => Promise<void>;
   // 2026-09-20 — "에디터" 설정 페이지 신설(오너: "일반-에디터 페이지 신설해서, 날짜 자동등록,
@@ -417,6 +436,13 @@ interface SettingsState {
   setSpellcheckEnabled: (v: boolean) => Promise<void>;
   weekStart: WeekStart;
   setWeekStart: (v: WeekStart) => Promise<void>;
+  /** 시간축 표현 범위 — 24시 아래에 이어 붙이는 익일 시간(0 = 당일만, 기본 3 = 익일 03시까지). 세 마운트(대시보드·사이드바·
+   *  브리핑)가 같은 값을 TimeAxis `tailHours` 로 넘긴다. 백엔드 allowlist(settings_schema.rs)는 0..=12. */
+  calendarAxisTailHours: number;
+  setCalendarAxisTailHours: (v: number) => Promise<void>;
+  /** 앱 데이터(DB+첨부) 용량 알림 한도, GB. 0 = 끔. 넘으면 시작 시 한 번 알린다(설정 › 데이터 관리, 앱 전체 키). */
+  storageAlertGb: number;
+  setStorageAlertGb: (v: number) => Promise<void>;
   holidayRegion: HolidayRegion;
   setHolidayRegion: (v: HolidayRegion) => Promise<void>;
   // 트레이 상주(close_to_tray, 기본 true) — X 버튼이 트레이로 숨기는지 실제 종료하는지.
@@ -436,6 +462,11 @@ interface SettingsState {
   // W11: 글꼴 패밀리 ("serif" | "sans" | 시스템 글꼴명). 기본 "serif".
   fontFamily: string;
   setFontFamily: (v: string) => Promise<void>;
+  // PLAN-2026-10-27-fonts Q2/Q3 — 노트 본문 글꼴("" = fontFamily 를 따름)과 코드체. 값 형식은 lib/fonts/stacks.ts.
+  fontEditor: string;
+  setFontEditor: (v: string) => Promise<void>;
+  fontMono: string;
+  setFontMono: (v: string) => Promise<void>;
   // W18: 펫 반응 설정 & 챗봇 메모리
   petDblclickAction: PetDblclickAction;
   setPetDblclickAction: (v: PetDblclickAction) => Promise<void>;
@@ -483,6 +514,30 @@ interface SettingsState {
    *  읽고, stores/taxonomy.ts::addStatus 가 우회 경로까지 막는다. */
   statusAddLocked: boolean;
   setStatusAddLocked: (v: boolean) => Promise<void>;
+  /** 대시보드 탭별 설정(2026-10-28, 설정 › 대시보드의 켜진 탭 카드) — 전부 앱 전역. */
+  timelineDefaultRange: TimelineDefaultRange;
+  setTimelineDefaultRange: (v: TimelineDefaultRange) => Promise<void>;
+  boardDoneAutohide: BoardDoneAutohide;
+  setBoardDoneAutohide: (v: BoardDoneAutohide) => Promise<void>;
+  boardCardThumb: boolean;
+  setBoardCardThumb: (v: boolean) => Promise<void>;
+  boardCardDate: boolean;
+  setBoardCardDate: (v: boolean) => Promise<void>;
+  graphHideIsolated: boolean;
+  setGraphHideIsolated: (v: boolean) => Promise<void>;
+  /** 0 = 서버 기본(500). */
+  graphNodeCap: number;
+  setGraphNodeCap: (v: number) => Promise<void>;
+  /** 내보내기 저장 대화상자가 처음 여는 폴더. 빈 문자열 = 지정 안 함. 앱 전역. */
+  exportDefaultDir: string;
+  setExportDefaultDir: (v: string) => Promise<void>;
+  /** 사이드패널 갤러리 옵션(설정 › 첨부파일) — 앱 전역. */
+  galleryTileSize: GalleryTileSize;
+  setGalleryTileSize: (v: GalleryTileSize) => Promise<void>;
+  gallerySort: GallerySort;
+  setGallerySort: (v: GallerySort) => Promise<void>;
+  galleryShowNames: boolean;
+  setGalleryShowNames: (v: boolean) => Promise<void>;
   /** PLAN-2026-09-04-local-import §3b — 첫 부팅 자동 감지(lib/collectDetectOnce.ts)가 찾은,
    *  아직 소스로 등록되지 않은 로컬 후보 개수. 설정 > 수집 레일 항목의 뱃지 숫자
    *  (SettingsPanel.tsx). 수집 페이지를 한 번 열면(CollectSection 마운트) 0으로 돌아간다. */
@@ -498,12 +553,14 @@ interface SettingsState {
 /** 지금 화면의 모양 값 10개를 설정 키 그대로 — 되돌리기 스냅샷(PLAN-2026-09-19 §5).
  *  키 목록은 Rust `settings_schema.rs::APPEARANCE_KEYS` 와 같아야 한다(appearanceKeys.test.ts 가 대조). */
 export function appearanceEntries(
-  s: Pick<SettingsState, "themePref" | "accent" | "fontFamily" | "fontScale" | "bgDim" | "bgTone" | "bgSat" | "contentTint" | "surfaceStyle" | "sheetAlpha">,
+  s: Pick<SettingsState, "themePref" | "accent" | "fontFamily" | "fontEditor" | "fontMono" | "fontScale" | "bgDim" | "bgTone" | "bgSat" | "contentTint" | "surfaceStyle" | "sheetAlpha">,
 ): Record<string, unknown> {
   return {
     theme: s.themePref,
     accent: s.accent,
     font_family: s.fontFamily,
+    font_editor: s.fontEditor,
+    font_mono: s.fontMono,
     font_scale: s.fontScale,
     bg_dim: s.bgDim,
     bg_tone: s.bgTone,
@@ -514,78 +571,26 @@ export function appearanceEntries(
   };
 }
 
-const defaultSettings = (): Omit<SettingsState,
-  "applyRoot" | "load" | "setTheme" | "setAccent" | "setFontScale" | "setBgDim" | "setUiLock" |
-  "setLeftWidth" | "setSourcePct" | "setAiEnabled" | "setAiPostProcess" | "setAiChatMemory" | "setAiConfirmBeforeApply" | "setAiDebugVerbose" | "setChatWriteEnabled" | "setChatReadHistory" | "setChatReadFiles" | "loaded" | "setSourceOriginalPolicy" | "setUiLang" | "setUpdateCheckAuto" |
-  "setBgTone" | "setBgSat" | "setContentTint" | "setSurfaceStyle" | "setSheetAlpha" | "addRecentColorHue" | "addEmojiRecent" | "toggleEmojiFavorite" | "setDefaultMapLocation" | "setRegionEnabled" | "setFilterRoster" | "setDashboardTabs" | "setOnboardingCompleted" | "setPhrasePackId" | "setEditorFullWidth" | "setSpellcheckEnabled" | "setWeekStart" | "setHolidayRegion" | "setCloseToTray" | "setLinkSuggestions" | "setDateNudgeAuto" | "setRegionNudgeStrict" |
-  "setDateNudgeEnabled" | "setRegionNudgeEnabled" | "setPasteLinkNudge" | "setPastePathInlineCode" | "setPasteTableSheetSuggest" | "setEditorMdAutoformat" | "setDateNudgeMode" | "setRegionNudgeMode" |
-  "setLinkOpenOnClick" | "setEditorWidth" | "setEditorWordCount" | "setNewNoteDatePrecision" | "setNewNoteSectionName" | "setPhotoMetaMode" | "setVoiceTranscribeMode" | "setVoiceCleanupMode" |
-  "setBriefingEnabled" | "setBriefingWhen" | "setBriefingTime" | "setBriefingLastShown" | "setBriefingEveningEnabled" | "setBriefingEveningTime" | "setBriefingLastShownEvening" | "setBriefingNotify" | "setBriefingLastSeen" | "setFavoritesOpen" | "setBackupNudgePending" |
-  "setNotificationsEnabled" | "setReminderAllDayAt" | "setUserName" | "setFontFamily" | "setPetDblclickAction" | "setChatMemory" | "addChatMemory" | "removeChatMemory" |   "setAttachmentStorageMode" | "setSlidePreview" | "setSofficePath" | "setCollectExcludedDomains" | "setLinkSuggestionsModel" | "setCollectPausedUntil" | "setSeenFeatureBriefs" | "setCollectChatRegister" | "setStatusAddLocked" | "setCollectDetectPending" | "setCollectDetectSeen" | "setAiPolicyLevel" | "applySurfaceEffectAfterShow" | "applyAppearance" | "reloadAppearance" | "setAssistPresetAutorun"> => {
+/** 데이터 필드만(함수 — setter·액션 — 제외) — defaultSettings 가 돌려줄 모양. 예전엔 setter 이름 약 90개를 손으로 `Omit<>` 했다. */
+type SettingsData = {
+  [K in keyof SettingsState as SettingsState[K] extends (...args: never[]) => unknown ? never : K]: SettingsState[K];
+};
+
+const defaultSettings = (): Omit<SettingsData, "loaded"> => {
   const seed = loadAppearanceSeed();
   return {
+    // 단순 설정(PREFS 표 — stores/prefs.ts)의 기본값은 표의 coerce(undefined) 한 곳에서 온다 — 아래는 표가 모르는 필드와 시드로 덮는 글꼴.
+    ...prefDefaults(),
     themePref: seed.themePref,
     theme: seed.theme,
     accent: seed.accent,
     fontScale: seed.fontScale,
     bgDim: seed.bgDim,
-    uiLock: false,
     leftWidth: 324,
     sourcePct: 25, // 온보딩 직후 어시스트 창이 화면 절반을 먹지 않도록 — 에디터가 주인공 (2026-08-20 오너)
     activeWorkspaceId: null,
-    aiEnabled: false,
-    aiPostProcess: true,
-    aiChatMemory: true,
-    aiConfirmBeforeApply: true,
-    assistPresetAutorun: false,
-    aiDebugVerbose: false,
-    aiPolicyLevel: "organize",
-    chatWriteEnabled: true,
-    linkSuggestions: false,
-    dateNudgeAuto: false,
-    // PLAN-2026-09-19-date-region-ui.md §P3 D12 — 백엔드 default_settings 시드(true)와 같은 값.
-    regionNudgeStrict: true,
-    // 오너 결정(2026-09-20) — 여섯 키 전부 백엔드 default_settings 시드(true)와 같은 값
-    // (오늘까지의 동작 유지). PREFS 의 boolDefaultTrue 가 load() 의 강제 변환도 맡는다.
-    dateNudgeEnabled: true,
-    regionNudgeEnabled: true,
-    pasteLinkNudge: true,
-    pastePathInlineCode: true,
-    pasteTableSheetSuggest: true,
-    editorMdAutoformat: true,
-    // 실험적(2026-09-20, "4~7번도 넣어봐") — 백엔드 default_settings 시드와 같은 값. 넷 다
-    // "오늘까지의 동작 유지"가 목적이 아니라 새 값이라 기본값이 제각각이다(불리언 둘은 false,
-    // editorWidth/newNoteDatePrecision 은 "오늘과 같은 뜻"의 문자열, newNoteSectionName 은
-    // "내장 기본 이름을 쓴다"는 빈 문자열).
-    linkOpenOnClick: false,
-    editorWidth: "normal",
-    editorWordCount: true,
-    newNoteDatePrecision: "day",
-    newNoteSectionName: "",
-    // S2 입력 — 백엔드 default_settings 시드와 같은 값(사진 auto / 음성 auto / 정리 off).
-    photoMetaMode: "auto",
-    voiceTranscribeMode: "auto",
-    voiceCleanupMode: "off",
-    briefingEnabled: true,
-    briefingWhen: "time",
-    briefingTime: "08:00",
-    briefingLastShown: "",
-    briefingEveningEnabled: false,
-    briefingEveningTime: "21:00",
-    briefingLastShownEvening: "",
-    briefingNotify: "window",
-    briefingLastSeen: "",
-    favoritesOpen: false,
-    backupNudgePending: false,
-    onboardingCompleted: false,
-    sourceOriginalPolicy: "ask",
-    uiLang: "ko",
-    updateCheckAuto: true,
     bgTone: seed.bgTone,
     bgSat: seed.bgSat,
-    // 0 = tokens.css 의 테마 기준값 그대로(다크 16% / 라이트 7%). 시드에는 담지 않는다 —
-    // 첫 페인트는 CSS 기본값이 이미 같은 그림을 그리고, load() 가 곧바로 실제 값을 적용한다.
-    contentTint: 0,
     surfaceStyle: seed.surfaceStyle,
     // W15 Part 3: 시드에 저장된 지난 실측값으로 시작한다(추측 아님) — load()/applySurfaceEffectAfterShow
     // 가 실제 OS 호출 결과로 다시 확정한다. 구 시드(필드 없음)는 loadAppearanceSeed 가 true 로 채운다.
@@ -595,50 +600,15 @@ const defaultSettings = (): Omit<SettingsState,
     recentColorHues: [],
     emojiRecent: [],
     emojiFavorites: [],
-    defaultMapLocation: FACTORY_DEFAULT_MAP_LOCATION,
     defaultMapLocationCustomized: false,
     // 기본 ON — 백엔드 default_settings 시드("1")와 같은 값. 키가 아예 없는 구 설치도 ON 으로
     // 읽어 업그레이드 전후 화면이 같다(load() 의 `!== "0"`).
     regionEnabled: true,
-    filterRoster: normalizeFilterRoster([]),
-    dashboardTabs: normalizeDashboardTabs([]),
     // Default to first bundled pack; user can switch off in Settings.
     phrasePackId: defaultPhrasePackId(),
-    editorFullWidth: false,
-    // 백엔드 default_settings 시드("false")와 같은 값 — spellcheck_enabled, §2.2.
-    spellcheckEnabled: false,
-    weekStart: "sunday",
-    holidayRegion: "none",
-    closeToTray: true,
-    notificationsEnabled: false,
-    reminderAllDayAt: "00:00",
-    userName: "",
-    fontFamily: seed.fontFamily ?? "pretendard",
-    petDblclickAction: "new_note",
-    chatMemory: [],
-    attachmentStorageMode: "copy",
-    slidePreview: "auto",
-    sofficePath: "",
-    // 빈 배열 = 차단 도메인 없음. capture_visit_excluded_domains (구 키)는 부팅 시
-    // load() 에서 한 번 읽어 비어있으면 폴백한다(setSimplePref 가 그 역할).
-    collectExcludedDomains: [],
-    // 빈 문자열 = 전역 ai_model 폴백(commands::suggestions::link_proposal). 시드하지 않은
-    // link_suggestions_model 키는 load() 에서 미존재 = 빈 문자열로 매핑된다.
-    linkSuggestionsModel: "",
-    // 빈 문자열 = 일시중지 아님. 키 부재/빈 문자열/과거 시각 모두 정상 동작.
-    collectPausedUntil: "",
-    // 빈 배열 = 아직 아무 브리핑도 못 봤고, 소급 시딩도 아직 안 돌았음(useFeatureBrief.ts 가
-    // 첫 loaded 전환 때 정확히 한 번 채운다).
-    seenFeatureBriefs: [],
-    // 둘 다 옵트인 — 백엔드 default_settings 의 시드(false)와 같은 값.
-    collectChatRegister: false,
-    statusAddLocked: false,
-    chatReadHistory: true,
-    chatReadFiles: true,
-    // 둘 다 시드하지 않는 키(부재 = 이 기본값) — §3b, collectPausedUntil과 같은 "빈 문자열/
-    // false = 아직 아무 일도 없었음" 부류.
-    collectDetectPending: 0,
-    collectDetectSeen: false,
+    fontFamily: seed.fontFamily ?? DEFAULT_FONT_FAMILY,
+    fontEditor: seed.fontEditor ?? "",
+    fontMono: seed.fontMono ?? DEFAULT_FONT_MONO,
   };
 };
 
@@ -662,221 +632,9 @@ function saveBgSlider(entries: Record<string, number>, live?: boolean) {
 }
 
 // Simple settings — persist-only, no CSS/OS side effect (unlike theme/accent/bgTone/surfaceStyle/
-// etc, which stay hand-written below). One descriptor per key drives BOTH load()'s coercion (raw
-// JSON value -> typed default) and the setter's snake_case persistence key — previously these were
-// two hand-maintained copies of the same camel<->snake table that could (and did) drift apart.
-export type AttachmentStorageMode = "copy" | "link" | "reference";
+// etc, which stay hand-written below). 기술자 표(PREFS)는 stores/prefs.ts: 한 항목이 load() 의 강제 변환·기본값·setter 의
+// snake_case 저장 키를 함께 정한다 — 예전엔 같은 camel<->snake 표의 손 사본들이 따로 표류했다.
 
-// Exported so lib/aiCapabilities.ts (settings.ts §3 W2) can type-check its "kill switch" control
-// keys against the same set setSimplePref() actually persists — one drift-checked source instead
-// of a second hand-maintained key list.
-export type SimplePrefKey =
-  | "uiLock" | "aiEnabled" | "aiPostProcess" | "aiChatMemory" | "aiConfirmBeforeApply" | "assistPresetAutorun" | "aiDebugVerbose" | "aiPolicyLevel" | "chatWriteEnabled" | "linkSuggestions" | "dateNudgeAuto" | "regionNudgeStrict" | "onboardingCompleted" | "sourceOriginalPolicy" | "uiLang" | "updateCheckAuto"
-  | "defaultMapLocation" | "filterRoster" | "dashboardTabs" | "editorFullWidth" | "spellcheckEnabled"
-  | "weekStart" | "holidayRegion" | "closeToTray" | "notificationsEnabled" | "reminderAllDayAt" | "userName" | "fontFamily"
-  | "petDblclickAction" | "chatMemory" | "attachmentStorageMode" | "slidePreview" | "sofficePath"
-  | "collectExcludedDomains" | "linkSuggestionsModel" | "collectPausedUntil" | "seenFeatureBriefs"
-  | "collectChatRegister" | "statusAddLocked" | "collectDetectPending" | "collectDetectSeen"
-  | "chatReadHistory" | "chatReadFiles" | "contentTint"
-  | "dateNudgeEnabled" | "regionNudgeEnabled" | "pasteLinkNudge" | "pastePathInlineCode" | "pasteTableSheetSuggest" | "editorMdAutoformat"
-  | "linkOpenOnClick" | "editorWidth" | "editorWordCount" | "newNoteDatePrecision" | "newNoteSectionName" | "photoMetaMode" | "voiceTranscribeMode" | "voiceCleanupMode"
-  | "briefingEnabled" | "briefingWhen" | "briefingTime" | "briefingLastShown" | "briefingEveningEnabled" | "briefingEveningTime" | "briefingLastShownEvening" | "briefingNotify" | "briefingLastSeen"
-  | "favoritesOpen" | "backupNudgePending";
-
-interface PrefDescriptor<K extends SimplePrefKey> {
-  camel: K;
-  snake: string;
-  coerce: (raw: unknown) => SettingsState[K];
-}
-
-function pref<K extends SimplePrefKey>(
-  camel: K,
-  snake: string,
-  coerce: (raw: unknown) => SettingsState[K],
-): PrefDescriptor<K> {
-  return { camel, snake, coerce };
-}
-
-const boolDefaultFalse = (raw: unknown) => Boolean(raw);
-const inputAutoModeOr = (raw: unknown, fallback: InputAutoMode): InputAutoMode =>
-  raw === "off" || raw === "ask" || raw === "auto" ? raw : fallback;
-// §3b collect_detect_pending — 숫자가 아니면(부재 포함) 0. 백엔드가 0..=99로 검증하므로 여기는
-// 방어적 clamp까지는 하지 않는다(잘못된 값이 저장돼 있었다면 그 자체가 버그 신호).
-const numDefault0 = (raw: unknown) => (typeof raw === "number" ? raw : 0);
-// header_*_visible predate this table and used "missing key = true" (not Boolean()'s "missing =
-// false") — new users get every header widget on by default.
-const boolDefaultTrue = (raw: unknown) => (raw === undefined ? true : Boolean(raw));
-
-const PREFS = [
-  pref("uiLock", "ui_lock", boolDefaultFalse),
-  pref("aiEnabled", "ai_enabled", boolDefaultFalse),
-  // 기본 ON — 없는 키(구 설치)도 켜짐으로 읽는다(header_*_visible 과 같은 관례).
-  pref("aiPostProcess", "ai_post_process", boolDefaultTrue),
-  // PLAN-2026-08-30 §3 W2 — 챗 메모리 자동 추출 킬 스위치. 기본 ON, 없는 키(구 설치)도 켜짐으로.
-  pref("aiChatMemory", "ai_chat_memory", boolDefaultTrue),
-  // PLAN-2026-09-05 §2 B-4 — 어시스트 결과 프리뷰 게이트. 기본 ON, 없는 키(구 설치)도 켜짐으로.
-  pref("aiConfirmBeforeApply", "ai_confirm_before_apply", boolDefaultTrue),
-  // PLAN-2026-09-27 §7-4 (W5) — 어시스트 패널 AI 프리셋 바로 실행 토글. 기본 OFF.
-  pref("assistPresetAutorun", "assist_preset_autorun", boolDefaultFalse),
-  // PLAN-2026-09-05 §3 C-3 — 호출 로그 본문 동봉. 기본 OFF.
-  pref("aiDebugVerbose", "ai_debug_verbose", boolDefaultFalse),
-  // PLAN-2026-08-30 §6-A — 전역 AI 정책 사다리. 결측/오타/구버전 값은 전부 "organize"(가장
-  // 넓음, 기존 동작 유지)로 폴백 — 백엔드 commands::ai::AiPolicyLevel::parse 와 같은 규칙.
-  pref("aiPolicyLevel", "ai_policy_level", (raw) =>
-    raw === "gather" || raw === "refine" || raw === "organize" ? raw : "organize",
-  ),
-  // F-P01 쓰기 게이트 — 기본 ON. 없는 키(구 설치)도 켜짐으로 읽는다.
-  pref("chatWriteEnabled", "chat_write_enabled", boolDefaultTrue),
-  pref("chatReadHistory", "chat_read_history", boolDefaultTrue),
-  pref("chatReadFiles", "chat_read_files", boolDefaultTrue),
-  // P2 3단계(docs/PLAN-2026-08-07-second-brain.md Q5) — 기본 OFF(옵트인, 외부 fetch 프라이버시
-  // 게이트). 백엔드 settings_schema.rs 기본값(false)과 동일.
-  pref("linkSuggestions", "link_suggestions", boolDefaultFalse),
-  // PLAN-2026-09-18-nl-dates.md §W4 — 에디터 날짜 넛지 완전자동 등록 옵트인. 기본 OFF(넛지가
-  // 기본, 자동은 옵트인 — D4). settings_schema.rs 기본값(false)과 동일.
-  pref("dateNudgeAuto", "date_nudge_auto", boolDefaultFalse),
-  // PLAN-2026-09-19-date-region-ui.md §P3 D12 — 지역 사전 매칭 넛지 강도. 기본 ON(엄격) —
-  // settings_schema.rs 기본값(true)과 동일. "없는 키(구 설치)도 켜짐으로" 읽어야 하므로
-  // boolDefaultTrue(dateNudgeAuto 의 boolDefaultFalse 와 반대 — D12 자체가 반대 기본값).
-  pref("regionNudgeStrict", "region_nudge_strict", boolDefaultTrue),
-  // 오너 결정(2026-09-20) — 3단 UI의 "enabled" 불리언 쌍 + 붙여넣기 자동 동작 3종 + 마크다운
-  // 자동 서식. 여섯 다 기본 ON(오늘까지의 동작 유지) — settings_schema.rs 기본값(true)과 동일.
-  pref("dateNudgeEnabled", "date_nudge_enabled", boolDefaultTrue),
-  pref("regionNudgeEnabled", "region_nudge_enabled", boolDefaultTrue),
-  pref("pasteLinkNudge", "paste_link_nudge", boolDefaultTrue),
-  pref("pastePathInlineCode", "paste_path_inline_code", boolDefaultTrue),
-  pref("pasteTableSheetSuggest", "paste_table_sheet_suggest", boolDefaultTrue),
-  pref("editorMdAutoformat", "editor_md_autoformat", boolDefaultTrue),
-  // 실험적(2026-09-20, "4~7번도 넣어봐") — 넷 다 settings_schema.rs 기본값과 동일. 위 여섯 키와
-  // 달리 기본값이 제각각이다(§4~7 은 킬스위치가 아니라 새 값) — 코드 주석 참고.
-  pref("linkOpenOnClick", "link_open_on_click", boolDefaultFalse),
-  pref("editorWordCount", "editor_word_count", boolDefaultTrue),
-  pref("editorWidth", "editor_width", (raw) =>
-    raw === "narrow" || raw === "normal" || raw === "wide" ? raw : "normal",
-  ),
-  pref("newNoteDatePrecision", "new_note_date_precision", (raw) =>
-    raw === "day" || raw === "month" || raw === "year" ? raw : "day",
-  ),
-  // 저장 전 클램프는 setNewNoteSectionName(아래)이 맡는다 — 여기 coerce 는 이미 잘못 저장된 값
-  // (수동 DB 편집·구버전 왕복 등)을 읽을 때의 방어선이라 같은 규칙(trim + 40자)을 한 번 더 건다.
-  pref("newNoteSectionName", "new_note_section_name", (raw) =>
-    typeof raw === "string" ? raw.trim().slice(0, 40) : "",
-  ),
-  // S2 입력 3종 — settings_schema.rs 기본값과 동일. 결측/오타는 각자의 기본값으로 폴백.
-  pref("photoMetaMode", "photo_meta_mode", (raw) => inputAutoModeOr(raw, "auto")),
-  pref("voiceTranscribeMode", "voice_transcribe_mode", (raw) => inputAutoModeOr(raw, "auto")),
-  pref("voiceCleanupMode", "voice_cleanup_mode", (raw) => inputAutoModeOr(raw, "off")),
-  pref("onboardingCompleted", "onboarding_completed", boolDefaultFalse),
-  pref("briefingEnabled", "briefing_enabled", boolDefaultTrue),
-  pref("briefingWhen", "briefing_when", (raw) => (raw === "launch" || raw === "manual" ? raw : "time")),
-  pref("briefingTime", "briefing_time", (raw) =>
-    typeof raw === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(raw) ? raw : "08:00",
-  ),
-  pref("briefingLastShown", "briefing_last_shown", (raw) => (typeof raw === "string" ? raw : "")),
-  pref("briefingEveningEnabled", "briefing_evening_enabled", boolDefaultFalse),
-  pref("briefingEveningTime", "briefing_evening_time", (raw) =>
-    typeof raw === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(raw) ? raw : "21:00",
-  ),
-  pref("briefingLastShownEvening", "briefing_last_shown_evening", (raw) => (typeof raw === "string" ? raw : "")),
-  pref("briefingNotify", "briefing_notify", (raw) => (raw === "os" || raw === "both" ? raw : "window")),
-  pref("briefingLastSeen", "briefing_last_seen", (raw) => (typeof raw === "string" ? raw : "")),
-  pref("favoritesOpen", "favorites_open", boolDefaultFalse),
-  pref("backupNudgePending", "backup_nudge_pending", (raw) => raw === true),
-  pref("sourceOriginalPolicy", "source_original_policy", (raw) => (typeof raw === "string" ? raw : "ask")),
-  pref("uiLang", "ui_lang", (raw) => (typeof raw === "string" ? raw : "ko")),
-  pref("updateCheckAuto", "update_check_auto", boolDefaultTrue),
-  pref("defaultMapLocation", "default_map_location", (raw) => {
-    const loc = raw as { lat?: number; lng?: number; zoom?: number } | undefined;
-    if (loc && typeof loc.lat === "number" && typeof loc.lng === "number" && typeof loc.zoom === "number") {
-      return { lat: loc.lat, lng: loc.lng, zoom: loc.zoom };
-    }
-    return FACTORY_DEFAULT_MAP_LOCATION;
-  }),
-  pref("filterRoster", "filter_roster", (raw) => normalizeFilterRoster(raw)),
-  pref("dashboardTabs", "dashboard_tabs", (raw) => normalizeDashboardTabs(raw)),
-  pref("editorFullWidth", "editor_full_width", boolDefaultFalse),
-  // 2026-09-20 — 에디터 툴바(SpellcheckToggle.tsx)와 설정 > 에디터 페이지가 같은 값을 보게
-  // simplePrefs 로 승격. 백엔드 allowlist·기본값(false)은 이미 있었다(§2.2 4곳 중 이 한 곳만 신규).
-  pref("spellcheckEnabled", "spellcheck_enabled", boolDefaultFalse),
-  pref("weekStart", "week_start", (raw) =>
-    ["sunday", "monday"].includes(raw as string) ? (raw as WeekStart) : "sunday",
-  ),
-  pref("holidayRegion", "holiday_region", (raw) =>
-    ["none", "kr"].includes(raw as string) ? (raw as HolidayRegion) : "none",
-  ),
-  // 날씨 표시 토글(`header_weather_visible`)은 2026-09-12 오너 결정 D11 로 **사라졌다** —
-  // 날씨는 항상 보인다. DB 에 옛 키가 남아 있어도 여기서 읽지 않으므로 무해하다(get_all 은
-  // 검증 없이 행을 그대로 돌려주고, 프런트는 이 목록에 있는 키만 집는다).
-  pref("closeToTray", "close_to_tray", boolDefaultTrue),
-  // docs/PLAN-schedule-system.md §5.5 — 백엔드 settings_schema.rs 기본값과 동일(둘 다 기본 OFF /
-  // "00:00"). 형식이 어긋난 값(구 설치·수동 편집)은 안전 기본값으로 되돌린다.
-  pref("notificationsEnabled", "notifications_enabled", boolDefaultFalse),
-  pref("reminderAllDayAt", "reminder_all_day_at", (raw) =>
-    typeof raw === "string" && /^\d{2}:\d{2}$/.test(raw) ? raw : "00:00",
-  ),
-  // W10: 사용자 이름 (선택, 최대 64자). 기본 빈 문자열.
-  pref("userName", "user_name", (raw) => (typeof raw === "string" ? raw : "")),
-  // W11: 글꼴 패밀리 ("serif" | "sans" | 시스템 글꼴명). 기본 "serif".
-  pref("fontFamily", "font_family", (raw) =>
-    typeof raw === "string" && raw.trim().length > 0 ? raw : "serif",
-  ),
-  // W18: 펫 반응 설정 & 챗봇 메모리 (클릭=채팅 고정, pet_click_action 삭제)
-  pref("petDblclickAction", "pet_dblclick_action", (raw) => {
-    // W18: 구값 search/open_note 를 new_note 로 흡수 (마이그레이션 없음, normalizeFilterRoster 패턴)
-    if (raw === "search" || raw === "open_note") return "new_note";
-    if (raw === "chat" || raw === "new_note" || raw === "off") return raw as PetDblclickAction;
-    return "new_note";
-  }),
-  pref("chatMemory", "chat_memory", (raw) => {
-    if (Array.isArray(raw)) {
-      return raw.filter((item) =>
-        item && typeof item === "object" && typeof (item as any).id === "string" && typeof (item as any).text === "string"
-      ).slice(0, 50) as ChatMemoryItem[];
-    }
-    return [];
-  }),
-  pref("attachmentStorageMode", "attachment_storage_mode", (raw) =>
-    ["copy", "link", "reference"].includes(raw as string) ? (raw as AttachmentStorageMode) : "copy",
-  ),
-  pref("slidePreview", "slide_preview", (raw) => (raw === "off" ? "off" : "auto")),
-  pref("sofficePath", "soffice_path", (raw) => (typeof raw === "string" ? raw : "")),
-  // collect_excluded_domains — capture_visit_excluded_domains 와 같은 형식. 부팅 시
-  // load() 안의 "구 키 폴백" 분기에서 비어있으면 capture_visit_excluded_domains 값을
-  // 한 번 읽어 채운다(마이그레이션 불필요, 사용자가 다음 저장부터 새 키로 자동 이관).
-  pref("collectExcludedDomains", "collect_excluded_domains", (raw) => {
-    if (!Array.isArray(raw)) return [];
-    return raw.filter((d): d is string => typeof d === "string" && d.trim().length > 0).slice(0, 200);
-  }),
-  // link_suggestions_model — 빈 문자열이면 전역 ai_model 폴백. 부재(구 설치)는 빈 문자열로
-  // 매핑(키가 있으면 string 으로 강제, 빈 값은 ai_model 폴백 신호).
-  pref("linkSuggestionsModel", "link_suggestions_model", (raw) => (typeof raw === "string" ? raw : "")),
-  // collect_paused_until — ISO-8601 datetime 또는 빈 문자열. 부재/빈/과거/형식 오류 모두 빈
-  // 문자열로 강등(서버 측 validate_setting 이 형식을 보장하지만 망실 경로 대비). 형식 검증은
-  // 서버가 chrono::DateTime::parse_from_rfc3339 로 한다.
-  pref("collectPausedUntil", "collect_paused_until", (raw) => (typeof raw === "string" ? raw.trim() : "")),
-  // PLAN-2026-08-30 §4 W7 — 본 기능 브리핑 id 배열(+ 소급 시딩 sentinel). recentClosedTabs 와
-  // 같은 형식(문자열 배열, 결측 시 빈 배열).
-  pref("seenFeatureBriefs", "seen_feature_briefs", (raw) =>
-    Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string") : [],
-  ),
-  // PLAN-2026-09-01 W0 — 둘 다 기본 OFF. 키가 없는 구 설치도 꺼짐으로 읽는다(boolDefaultFalse).
-  pref("collectChatRegister", "collect_chat_register", boolDefaultFalse),
-  pref("statusAddLocked", "status_add_locked", boolDefaultFalse),
-  // PLAN-2026-09-04-local-import §3b — 둘 다 시드하지 않는 키(부재 = 기본값, defaultSettings 참고).
-  pref("collectDetectPending", "collect_detect_pending", numDefault0),
-  pref("collectDetectSeen", "collect_detect_seen", boolDefaultFalse),
-  // PLAN-2026-09-12 §5 — 본문 틴트 오프셋. **load()의 강제 변환만 여기서 가져간다**: 저장은
-  // 아래 setContentTint 가 직접 한다(setSimplePref 는 CSS 를 다시 칠하지 않는데 이 값은
-  // 슬라이더를 끄는 동안 화면에 바로 보여야 한다 — bg_tone/sheet_alpha 와 같은 부류).
-  // 범위는 백엔드 validate_setting(-30..=40)과 같은 숫자다.
-  pref("contentTint", "content_tint", (raw) =>
-    typeof raw === "number" && Number.isFinite(raw)
-      ? clamp(Math.round(raw), CONTENT_TINT_MIN, CONTENT_TINT_MAX)
-      : 0,
-  ),
-] as const;
-
-const PREF_SNAKE = Object.fromEntries(PREFS.map((p) => [p.camel, p.snake])) as Record<SimplePrefKey, string>;
 
 // setSimplePref 가 실패 사이 같은 키에 새 요청이 뜨면(연타 토글) 그 옛 실패로 롤백하지
 // 않기 위한 요청 순번표 — 스토어 인스턴스당 하나면 충분하다(useSettingsStore 는 싱글턴).
@@ -911,17 +669,32 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
   // 단계로 넘어가지만, 유일하게 결과가 갈리는 setAiEnabled 후속 처리(ensureAiReachable)는
   // 로컬 스토어가 아니라 DB 를 다시 읽어 판단하므로(stores/ai.ts::ensureAiReachable) 롤백된
   // 값과 무관하게 스스로 정합성을 되찾는다.
-  const setSimplePref = async <K extends SimplePrefKey>(camel: K, value: SettingsState[K]) => {
-    const prev = get()[camel];
-    const seq = (simplePrefSeq[camel] ?? 0) + 1;
-    simplePrefSeq[camel] = seq;
-    set({ [camel]: value } as Pick<SettingsState, K>);
+  //
+  // 배치(setSimplePrefs): 여러 키를 **set() 한 번 + settings_set 한 번 + 롤백 한 번**으로(전체 토글처럼 키 넷을 따로 쏘면 IPC 가 넷이고
+  // 롤백도 넷이었다). 위 규약은 키마다 그대로다 — 순번을 키별로 찍고, 실패했을 때 **아직 내가 최신인 키만** 이전 값으로 되돌린다.
+  // 단일 키 setSimplePref 는 이것의 한 키짜리 경우다.
+  const setSimplePrefs = async (patch: Partial<Pick<SettingsState, SimplePrefKey>>) => {
+    const keys = Object.keys(patch) as SimplePrefKey[];
+    if (keys.length === 0) return;
+    const prev: Partial<Record<SimplePrefKey, unknown>> = {};
+    const seqs: Partial<Record<SimplePrefKey, number>> = {};
+    const entries: Record<string, unknown> = {};
+    for (const k of keys) {
+      prev[k] = get()[k];
+      seqs[k] = simplePrefSeq[k] = (simplePrefSeq[k] ?? 0) + 1;
+      entries[PREF_SNAKE[k]] = patch[k];
+    }
+    set(patch as Partial<SettingsState>);
     try {
-      await call("settings_set", { entries: { [PREF_SNAKE[camel]]: value } });
+      await call("settings_set", { entries });
     } catch {
-      if (simplePrefSeq[camel] === seq) set({ [camel]: prev } as Pick<SettingsState, K>);
+      const rollback: Record<string, unknown> = {};
+      for (const k of keys) if (simplePrefSeq[k] === seqs[k]) rollback[k] = prev[k];
+      if (Object.keys(rollback).length > 0) set(rollback as Partial<SettingsState>);
     }
   };
+  const setSimplePref = <K extends SimplePrefKey>(camel: K, value: SettingsState[K]) =>
+    setSimplePrefs({ [camel]: value } as Partial<Pick<SettingsState, SimplePrefKey>>);
 
   // 외형 값을 set() 한 직후의 공통 꼬리 — 시드(다음 부팅의 첫 페인트) 저장 → CSS 변수 재칠, 이 순서.
   // setTheme·setSurfaceStyle 은 OS 효과(syncWindowEffect) 결과를 set() 한 뒤 이걸 다시 부른다.
@@ -929,6 +702,21 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
   const repaint = () => {
     saveAppearanceSeed(get());
     applyCssVars(get());
+  };
+  // 글꼴 세 키 공용 click setter — 낙관적 칠하기 + 저장, 실패하면 내가 최신 요청일 때만 되돌린다.
+  const setFontPref = async (key: "fontFamily" | "fontEditor" | "fontMono", snake: string, v: string) => {
+    const prev = get()[key];
+    const seq = nextClickSeq(key);
+    const paint = (f: string) => {
+      set({ [key]: f } as Pick<SettingsState, typeof key>);
+      repaint();
+    };
+    paint(v);
+    try {
+      await call("settings_set", { entries: { [snake]: v } });
+    } catch {
+      if (isLatestClick(key, seq)) paint(prev);
+    }
   };
 
   return {
@@ -1188,6 +976,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
     // (--surface-base, CSS)에만 즉시 반영되면 충분하고 재적용/디바운스가 필요 없다.
     saveBgSlider({ bg_dim: v }, opts?.live);
   },
+  setSimplePrefs,
   setUiLock: (v) => setSimplePref("uiLock", v),
   // 영속은 드래그가 끝났을 때 일괄 처리한다. 여기서 반올림하는 게 핵심: 두 값 모두 마우스
   // 좌표에서 나오므로 소수(예: 43.27)가 되는데, 백엔드 validate_setting 은 as_i64() 로 검사해
@@ -1429,25 +1218,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
   setEditorFullWidth: (v) => setSimplePref("editorFullWidth", v),
   setSpellcheckEnabled: (v) => setSimplePref("spellcheckEnabled", v),
   setWeekStart: (v) => setSimplePref("weekStart", v),
+  setCalendarAxisTailHours: (v) => setSimplePref("calendarAxisTailHours", v),
+  setStorageAlertGb: (v) => setSimplePref("storageAlertGb", v),
   setHolidayRegion: (v) => setSimplePref("holidayRegion", v),
   setCloseToTray: (v) => setSimplePref("closeToTray", v),
   setNotificationsEnabled: (v) => setSimplePref("notificationsEnabled", v),
   setReminderAllDayAt: (v) => setSimplePref("reminderAllDayAt", v),
   setUserName: (v) => setSimplePref("userName", v),
-  setFontFamily: async (v) => {
-    const prev = get().fontFamily;
-    const seq = nextClickSeq("fontFamily");
-    const paint = (f: string) => {
-      set({ fontFamily: f });
-      repaint();
-    };
-    paint(v);
-    try {
-      await call("settings_set", { entries: { font_family: v } });
-    } catch {
-      if (isLatestClick("fontFamily", seq)) paint(prev);
-    }
-  },
+  setFontFamily: (v) => setFontPref("fontFamily", "font_family", v),
+  setFontEditor: (v) => setFontPref("fontEditor", "font_editor", v),
+  setFontMono: (v) => setFontPref("fontMono", "font_mono", v),
   setPetDblclickAction: (v) => setSimplePref("petDblclickAction", v),
   setChatMemory: (v) => setSimplePref("chatMemory", v),
   addChatMemory: async (text: string) => {
@@ -1488,6 +1268,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
   setCollectPausedUntil: (v) => setSimplePref("collectPausedUntil", v.trim()),
   setCollectChatRegister: (v) => setSimplePref("collectChatRegister", v),
   setStatusAddLocked: (v) => setSimplePref("statusAddLocked", v),
+  setTimelineDefaultRange: (v) => setSimplePref("timelineDefaultRange", v),
+  setBoardDoneAutohide: (v) => setSimplePref("boardDoneAutohide", v),
+  setBoardCardThumb: (v) => setSimplePref("boardCardThumb", v),
+  setBoardCardDate: (v) => setSimplePref("boardCardDate", v),
+  setGraphHideIsolated: (v) => setSimplePref("graphHideIsolated", v),
+  setGraphNodeCap: (v) => setSimplePref("graphNodeCap", v),
+  setExportDefaultDir: (v) => setSimplePref("exportDefaultDir", v),
+  setGalleryTileSize: (v) => setSimplePref("galleryTileSize", v),
+  setGallerySort: (v) => setSimplePref("gallerySort", v),
+  setGalleryShowNames: (v) => setSimplePref("galleryShowNames", v),
   setCollectDetectPending: (v) => setSimplePref("collectDetectPending", v),
   setCollectDetectSeen: (v) => setSimplePref("collectDetectSeen", v),
   };

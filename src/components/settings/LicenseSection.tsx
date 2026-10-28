@@ -3,12 +3,11 @@ import { resolveResource } from "@tauri-apps/api/path";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { t } from "../../i18n/t";
 import { isBrowser } from "../../lib/env";
-import { SectionHeader } from "./SectionHeader";
-import { groupCardStyle } from "./shared";
 import { MetricTileGroup } from "./MetricTileGroup";
 import { IconScale, IconFile, IconWrench, IconArchive, IconExternalLink } from "../icons";
 import { IconAction } from "./IconAction";
 import summary from "../../lib/noticesSummary.json";
+import { SettingsCard } from "./SettingsCard";
 
 /**
  * 설정 > 라이선스 (PLAN-2026-09-01 §1, 오너 결정 D5).
@@ -45,39 +44,6 @@ export function LicenseSection() {
 
   return (
     <>
-      {/* 외부 열기 버튼은 카드 제목 줄로(PLAN-2026-10-24 D4). F7(PLAN-2026-09-15): 브라우저 탭엔 리소스 파일이
-          없다 — 조용히 아무 일도 안 하던 버튼을 끄고 이유를 툴팁으로 말한다(다른 페이지 관례 그대로). */}
-      <div className="card" style={groupCardStyle} data-testid="settings-license-card">
-        <SectionHeader
-          title={t("settings.page_license")}
-          icon={<IconScale size={14} strokeWidth={2} />}
-          actions={
-            <IconAction
-              icon={<IconExternalLink size={16} />}
-              label={t("settings.license_open_external")}
-              titleOverride={browser ? t("common.desktop_only") : undefined}
-              data-testid="settings-open-licenses-btn"
-              disabled={browser}
-              onClick={() => void handleOpen()}
-            />
-          }
-        />
-        {failed && (
-          <p
-            data-testid="settings-license-open-failed"
-            style={{ fontSize: "var(--text-xs)", color: "var(--danger)", margin: 0 }}
-          >
-            {t("settings.license_open_failed")}
-          </p>
-        )}
-        <p
-          data-testid="settings-license-generated"
-          style={{ fontSize: "var(--text-xs)", color: "var(--muted)", margin: 0 }}
-        >
-          {t("settings.license_generated_at", { date: summary.generatedAt })}
-        </p>
-      </div>
-
       <MetricTileGroup
         testId="settings-license-tiles"
         columns={summary.noTextTotal > 0 ? 3 : 2}
@@ -96,6 +62,39 @@ export function LicenseSection() {
             : []),
         ]}
       />
+
+      {/* 외부 열기 버튼은 카드 제목 줄로(PLAN-2026-10-24 D4). F7(PLAN-2026-09-15): 브라우저 탭엔 리소스 파일이
+          없다 — 조용히 아무 일도 안 하던 버튼을 끄고 이유를 툴팁으로 말한다(다른 페이지 관례 그대로). */}
+      <SettingsCard
+        title={t("settings.page_license")}
+        icon={<IconScale size={14} strokeWidth={2} />}
+        actions={
+          <IconAction
+            icon={<IconExternalLink size={16} />}
+            label={t("settings.license_open_external")}
+            titleOverride={browser ? t("common.desktop_only") : undefined}
+            data-testid="settings-open-licenses-btn"
+            disabled={browser}
+            onClick={() => void handleOpen()}
+          />
+        }
+        testId="settings-license-card"
+      >
+        {failed && (
+          <p
+            data-testid="settings-license-open-failed"
+            style={{ fontSize: "var(--text-xs)", color: "var(--danger)", margin: 0 }}
+          >
+            {t("settings.license_open_failed")}
+          </p>
+        )}
+        <p
+          data-testid="settings-license-generated"
+          style={{ fontSize: "var(--text-xs)", color: "var(--muted)", margin: 0 }}
+        >
+          {t("settings.license_generated_at", { date: summary.generatedAt })}
+        </p>
+      </SettingsCard>
 
       {/* 한컴 공개 문서 고지 — HWPX 가져오기·내보내기가 한컴의 공개 문서를 참고해 만들어졌다는 고지 조건
           (docs/research/doc-format-compat-2026-10-07.md §6.7). ko 문구는 스펙 PDF("글 문서 파일 형식 5.0" 저작권 안내)가 요구한

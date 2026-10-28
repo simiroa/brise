@@ -4,11 +4,9 @@
  * Lists bundled packs + user packs from app data dir (phrase_packs/*.json).
  * With AI on, "AI로 생성" writes a new user pack from a topic (PhrasePackAiModal below).
  */
-import { anchorId } from "./settingsAnchor";
 import { useEffect, useState } from "react";
 import { useSettingsStore } from "../../stores/settings";
 import { t } from "../../i18n/t";
-import { groupCardStyle } from "./shared";
 import { SectionHeader } from "./SectionHeader";
 import { SettingsRow } from "./SettingsRow";
 import { Badge } from "./Badge";
@@ -27,6 +25,7 @@ import { call } from "../../lib/invoke";
 import { ensureAiAskGate, useAiStore } from "../../stores/ai";
 import { reportFallback } from "../../lib/diag";
 import type { PhrasePackSaveOutput } from "../../lib/commands.gen";
+import { SettingsCard } from "./SettingsCard";
 
 /** 팩 목록 — 실패해도 번들 선택지(끄기·노트 명언)로 계속 고를 수 있으니 토스트 없이 진단에만 남긴다. */
 function loadPacksOrEmpty(): Promise<PhrasePack[]> {
@@ -68,12 +67,13 @@ export function PhrasePacksSection({ disabled, disabledReason }: { disabled?: bo
   const selectedIsUser = packs.find((p) => p.id === phrasePackId)?.origin === "user";
 
   return (
-    <div className="card" style={groupCardStyle} id={anchorId("phrase_packs")} data-testid="settings-phrase-packs">
-      <SectionHeader
-        title={t("settings.phrase_packs")}
-        hint={t("settings.phrase_packs_hint")}
-        icon={<IconQuote size={14} strokeWidth={2} />}
-      />
+    <SettingsCard
+      title={t("settings.phrase_packs")}
+      hint={t("settings.phrase_packs_hint")}
+      icon={<IconQuote size={14} strokeWidth={2} />}
+      anchor="phrase_packs"
+      testId="settings-phrase-packs"
+    >
       <SettingsRow
         anchor="phrase_pack_active"
         label={t("settings.phrase_pack_active")}
@@ -116,7 +116,7 @@ export function PhrasePacksSection({ disabled, disabledReason }: { disabled?: bo
       {aiOpen && (
         <PhrasePackAiModal onClose={() => setAiOpen(false)} onSaved={() => void handleSaved()} />
       )}
-    </div>
+    </SettingsCard>
   );
 }
 

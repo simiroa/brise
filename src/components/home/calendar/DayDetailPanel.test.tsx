@@ -16,10 +16,10 @@ import type { CalendarItem, NoteDate } from "../../../lib/commands.gen";
 import type { DailyForecast } from "../../../lib/weather";
 import { DayDetailPanel, DayDetailBody } from "./DayDetailPanel";
 import { useUiStore } from "../../../stores/ui";
+import { useSettingsStore } from "../../../stores/settings";
 import {
   DAY_AXIS_H,
   TIME_LABEL_W,
-  STACK_GAP_PX,
   HOUR_ROW_H,
   PX_PER_MIN,
   MIN_HOUR_ROW_H,
@@ -53,6 +53,8 @@ vi.mock("../../../lib/undo", async (importOriginal) => ({
 }));
 
 beforeEach(() => {
+  // 이 파일의 기하 단정은 "당일만" 축 기준이다 — 익일 구간(기본 3시간)은 전용 describe 가 켠다.
+  useSettingsStore.setState({ calendarAxisTailHours: 0 });
   callMock.mockReset();
   // 포커스된 카드가 NoteDatesList 를 마운트한다 — 그 목록의 note_dates_list 는 어느
   // 테스트에서든 불릴 수 있으므로 기본 목에 응답을 둔다.
@@ -156,25 +158,35 @@ describe("DayDetailPanel time axis", () => {
     expect(queryByTestId("cal-detail-note-trip")).not.toBeNull();
   });
 
-  it("stacks near-time overlaps vertically — full width is never split into columns", () => {
+  // 기하 통일(오너 결정 2026-10-27): 겹쳐도 아래로 밀지 않는다 — top 은 시각, 겹침은 들여쓰기.
+  it("겹치는 칩은 각자 시각 자리에 서고, 뒤 칩만 한 칸 들여쓴다", () => {
     const { getByTestId } = renderPanel([
       item({ note_id: "a", kind: "event", start_time: "09:00", end_time: "11:00" }),
       item({ note_id: "b", kind: "event", start_time: "09:30", end_time: "10:00" }),
     ]);
     const a = getByTestId("cal-time-event-a") as HTMLElement;
     const b = getByTestId("cal-time-event-b") as HTMLElement;
-    // Both chips keep the SAME left/right — width is shared by stacking, not by division.
+    expect(a.style.top).toBe(`${(540 / 1440) * DAY_AXIS_H}px`);
+    expect(a.style.height).toBe(`${(120 / 1440) * DAY_AXIS_H}px`);
+    expect(b.style.top).toBe(`${(570 / 1440) * DAY_AXIS_H}px`); // 밀리지 않는다
+    expect(b.style.height).toBe(`${(30 / 1440) * DAY_AXIS_H}px`);
     expect(a.style.left).toBe(`${TIME_LABEL_W}px`);
-    expect(b.style.left).toBe(`${TIME_LABEL_W}px`);
+    expect(b.style.left).toBe(`calc(${TIME_LABEL_W}px + var(--space-5) * 1)`);
     expect(a.style.right).toBe("0px");
     expect(b.style.right).toBe("0px");
-    // a sits exactly on its 09:00 time coordinate (672px/24h axis)...
-    const topA = (540 / 1440) * DAY_AXIS_H;
-    expect(a.style.top).toBe(`${topA}px`);
-    // ...b overlaps a's time span, so it's pushed to sit right below a instead of on top of it.
-    const heightA = (120 / 1440) * DAY_AXIS_H;
-    expect(a.style.height).toBe(`${heightA}px`);
-    expect(b.style.top).toBe(`${topA + heightA + STACK_GAP_PX}px`);
+    // 손잡이도 칩의 칸을 따라 들어간다 — 같은 높이의 손잡이를 서로 빼앗지 않게.
+    expect((getByTestId("cal-time-handle-start-b") as HTMLElement).style.left).toBe(b.style.left);
+  });
+
+  it("짧은 칩도 가운데는 옮기기다 — 손잡이가 칩을 통째로 덮지 않는다", () => {
+    const { getByTestId } = renderPanel([
+      item({ note_id: "s", kind: "event", start_time: "09:00", end_time: "09:30" }), // 14px
+    ]);
+    const start = getByTestId("cal-time-handle-start-s") as HTMLElement;
+    const end = getByTestId("cal-time-handle-end-s") as HTMLElement;
+    const startBottom = Number.parseFloat(start.style.top) + Number.parseFloat(start.style.height);
+    const endTop = Number.parseFloat(end.style.top);
+    expect(endTop - startBottom).toBeGreaterThan(0); // 두 손잡이 사이에 몸통(이동)이 남는다
   });
 
   it("scrolls the axis to the first event — inside its own container, not the aside", () => {
@@ -726,10 +738,10 @@ describe("TimeAxis — 칩 드래그로 시각 옮기기 (W3)", () => {
     ]);
     const chip = getByTestId("cal-time-event-m");
     drag(chip, HOUR_ROW_H);
-    // 드롭 직후엔 낙관적으로 이미 밀려 있고...
-    expect(chip.style.transform).toBe(`translateY(${HOUR_ROW_H}px)`);
+    // 드롭 직후엔 낙관적으로 이미 옮겨져 있고(칩의 top 이 곧 새 시각)...
+    expect(chip.style.top).toBe(`${600 * (HOUR_ROW_H / 60)}px`);
     // ...실패가 돌아오면 원위치.
-    await waitFor(() => expect(chip.style.transform).toBe(""));
+    await waitFor(() => expect(chip.style.top).toBe(`${540 * (HOUR_ROW_H / 60)}px`));
     expect(chip.textContent).toContain("09:00");
   });
 
@@ -861,7 +873,7 @@ describe("TimeAxis — 손잡이 · 빈 곳 드래그 · 현재 시각 (W5)", ()
     expect(updatePayload()).toMatchObject({ start_time: "10:00", end_time: "11:00" });
   });
 
-  it("최소 길이 30분 아래로는 못 줄인다", async () => {
+  it("최소 길이(스냅 한 칸, 15분) 아래로는 못 줄인다", async () => {
     mockRows([dbRow({ id: "d-m", start_time: "09:00", end_time: "10:00" })]);
     const { getByTestId } = renderPanel([
       item({ note_id: "m", kind: "event", start_time: "09:00", end_time: "10:00" }),
@@ -869,7 +881,7 @@ describe("TimeAxis — 손잡이 · 빈 곳 드래그 · 현재 시각 (W5)", ()
     dragEl(getByTestId("cal-time-handle-end-m"), -1000); // 끝을 시작 위로
 
     await waitFor(() => expect(updatePayload()).toBeDefined());
-    expect(updatePayload()).toMatchObject({ start_time: "09:00", end_time: "09:30" });
+    expect(updatePayload()).toMatchObject({ start_time: "09:00", end_time: "09:15" });
   });
 
   // 이 웨이브에서 조용히 남의 날짜를 망칠 수 있는 유일한 경로.
@@ -2368,19 +2380,19 @@ describe("DayDetailPanel W11", () => {
       });
     }
 
-    it("시각·반복 / 제목 / 발췌 첫 줄이 각각 한 줄로 뜬다", async () => {
+    it("충분히 긴 칩은 시각·반복 / 제목 / 발췌 첫 줄이 각각 한 줄로 뜬다", async () => {
       mockNoteGet();
       const view = renderPanel([
         item({
           note_id: "m",
           kind: "event",
           start_time: "09:00",
-          end_time: "10:00",
+          end_time: "12:00", // 84px — 3줄 단계
           rrule: "FREQ=WEEKLY",
         }),
       ]);
       const meta = view.getByTestId("cal-chip-meta-m") as HTMLElement;
-      expect(meta.textContent).toBe("09:00–10:00 · Weekly");
+      expect(meta.textContent).toBe("09:00–12:00 · Weekly");
       expect(view.getByTestId("cal-chip-title-m").textContent).toBe("m");
       // 발췌는 캐시의 **첫 줄만** — 두 줄을 칩에 넣지 않는다.
       await waitFor(() =>
@@ -2409,16 +2421,23 @@ describe("DayDetailPanel W11", () => {
       expect(view.getByTestId("cal-chip-meta-trip").textContent).toBe("09:00");
     });
 
-    it("발췌가 없어도 레이아웃이 안 깨진다 — 3행이 빠지고 바닥 높이는 그대로", () => {
-      const view = renderPanel([item({ note_id: "m", kind: "event", start_time: "09:00" })]);
-      expect(view.queryByTestId("cal-chip-excerpt-m")).toBeNull();
-      const chip = view.getByTestId("cal-time-event-m") as HTMLElement;
-      // 30분 칩(14px)도 3줄이 다 보이는 바닥. 스냅샷이 아니라 유도식 그대로를 못 박는다.
-      expect(chip.style.minHeight).toBe(
-        "calc(var(--text-md) * var(--lh-ui) * 3 + var(--space-1) * 2)",
-      );
-      // height 는 스태킹이 쓰는 값이라 그대로다(바닥이 그것을 덮어쓰지 않는다).
-      expect(chip.style.height).toBe(`${(30 / 1440) * DAY_AXIS_H}px`);
+    it("칩 높이는 실제 길이다 — 짧은 칩은 줄 수를 줄이고 높이를 부풀리지 않는다", () => {
+      const view = renderPanel([
+        item({ note_id: "half", kind: "event", start_time: "09:00", end_time: "09:30" }), // 14px
+        item({ note_id: "hour", kind: "event", start_time: "11:00", end_time: "12:00" }), // 28px
+        item({ note_id: "long", kind: "event", start_time: "14:00", end_time: "17:00" }), // 84px
+        item({ note_id: "q", kind: "event", start_time: "19:00", end_time: "19:15" }), // 7px
+      ]);
+      const chip = (id: string) => view.getByTestId(`cal-time-event-${id}`) as HTMLElement;
+      const tier = (id: string) => view.getByTestId(`cal-chip-clip-${id}`).getAttribute("data-tier");
+      expect(chip("half").style.height).toBe(`${(30 / 1440) * DAY_AXIS_H}px`);
+      expect(chip("half").style.minHeight).toBe("");
+      expect([tier("q"), tier("half"), tier("hour"), tier("long")]).toEqual(["bar", "compact", "one", "full"]);
+      // 한 줄 단계도 시각과 제목을 보인다.
+      expect(view.getByTestId("cal-chip-title-half").textContent).toBe("half");
+      // 막대 단계에도 설정 버튼은 남는다 — 시각 있는 항목이 시각·반복에 이르는 유일한 자리.
+      expect(view.getByTestId("cal-chip-settings-q")).toBeDefined();
+      expect(view.queryByTestId("cal-chip-title-q")).toBeNull();
     });
   });
 
@@ -2449,7 +2468,7 @@ describe("DayDetailPanel W11", () => {
 
     it("(a) 체크리스트 줄은 칩 하단 체크박스로 뜨고 발췌에는 안 보인다", async () => {
       mockNoteGetWithBody("본문 첫 줄\n- [ ] 할일 하나\n둘째 줄");
-      const view = renderPanel([item({ note_id: "m", kind: "event", start_time: "09:00" })]);
+      const view = renderPanel([item({ note_id: "m", kind: "event", start_time: "09:00", end_time: "12:00" })]);
 
       await waitFor(() =>
         expect(view.getByTestId("cal-chip-checklist-item-m-1")).toBeDefined(),
@@ -2465,7 +2484,7 @@ describe("DayDetailPanel W11", () => {
 
     it("(b) 체크박스 클릭 시 todo_toggle이 올바른 section_id/line_index로 호출된다", async () => {
       mockNoteGetWithBody("본문 첫 줄\n- [ ] 할일 하나\n둘째 줄");
-      const view = renderPanel([item({ note_id: "m", kind: "event", start_time: "09:00" })]);
+      const view = renderPanel([item({ note_id: "m", kind: "event", start_time: "09:00", end_time: "12:00" })]);
       await waitFor(() =>
         expect(view.getByTestId("cal-chip-checklist-checkbox-m-1")).toBeDefined(),
       );
@@ -2484,17 +2503,15 @@ describe("DayDetailPanel W11", () => {
 
     it("(c) 체크리스트가 없는 노트의 칩은 기존 동작 그대로다 — 발췌 2줄, sub-list 없음", async () => {
       mockNoteGetWithBody("본문 첫 줄\n둘째 줄");
-      const view = renderPanel([item({ note_id: "m", kind: "event", start_time: "09:00" })]);
+      const view = renderPanel([item({ note_id: "m", kind: "event", start_time: "09:00", end_time: "12:00" })]);
 
       await waitFor(() =>
         expect(view.getByTestId("cal-chip-excerpt-m").textContent).toBe("본문 첫 줄"),
       );
       expect(view.queryByTestId("cal-chip-checklist-m")).toBeNull();
-      // 회귀 방지: 체크박스가 없는 칩은 바닥 높이가 그대로다(요구사항 ⑤).
+      // 회귀 방지: 칩 높이는 그 일정의 길이 그대로다(요구사항 ⑤).
       const chip = view.getByTestId("cal-time-event-m") as HTMLElement;
-      expect(chip.style.minHeight).toBe(
-        "calc(var(--text-md) * var(--lh-ui) * 3 + var(--space-1) * 2)",
-      );
+      expect(chip.style.height).toBe(`${(180 / 1440) * DAY_AXIS_H}px`);
     });
   });
 
@@ -2533,19 +2550,17 @@ describe("DayDetailPanel W11", () => {
     const lastUpdate = () =>
       updates()[updates().length - 1]?.[1] as Record<string, unknown> | undefined;
 
-    it("접혀 있다가 아이콘을 누르면 시각·반복 칩이 나온다 (팝오버가 아니라 칩 안)", () => {
+    it("⚙ 를 누르면 일정 수정 모달이 뜬다 — 칩 안의 메뉴가 아니다", () => {
       mockRows([dbRow({ id: "d-m" })]);
       const view = renderPanel([item({ note_id: "m", kind: "event", start_time: "09:00" })]);
-      expect(view.queryByTestId("cal-chip-menu-m")).toBeNull();
+      expect(view.queryByTestId("cal-event-modal")).toBeNull();
       fireEvent.click(view.getByTestId("cal-chip-settings-m"));
-      const menu = view.getByTestId("cal-chip-menu-m");
-      // 펼침 영역은 칩 **안**에 있다(떠 있는 레이어가 아니다).
-      expect(view.getByTestId("cal-time-event-m").contains(menu)).toBe(true);
-      expect(view.getByTestId("cal-chip-time-m")).toBeDefined();
-      expect(view.getByTestId("cal-chip-repeat-m")).toBeDefined();
-      // 한 번 더 누르면 접힌다.
-      fireEvent.click(view.getByTestId("cal-chip-settings-m"));
-      expect(view.queryByTestId("cal-chip-menu-m")).toBeNull();
+      expect(view.getByTestId("cal-event-modal")).toBeDefined();
+      expect(view.getByTestId("cal-time-event-m").contains(view.getByTestId("cal-event-modal"))).toBe(false);
+      // 취소는 아무것도 쓰지 않고 닫는다.
+      fireEvent.click(view.getByTestId("cal-event-cancel"));
+      expect(view.queryByTestId("cal-event-modal")).toBeNull();
+      expect(updates()).toHaveLength(0);
     });
 
     it("설정 클릭은 포커스·열기로 새지 않는다", () => {
@@ -2567,7 +2582,7 @@ describe("DayDetailPanel W11", () => {
       expect(onOpen).not.toHaveBeenCalled();
     });
 
-    it("시각 입력이 note_dates_list → note_date_update 한 길을 지난다 (DB 행 기준 페이로드)", async () => {
+    it("시각 저장이 note_dates_list → note_date_update 한 길을 지난다 (DB 행 기준 페이로드)", async () => {
       // 씨앗 행은 7월 5일, 화면 항목은 8월 9일 회차 — 함정 ⓑ 가 여기서도 지켜져야 한다.
       mockRows([dbRow({ id: "d-m", month: 7, day: 5, rrule: "FREQ=WEEKLY" })]);
       const view = renderPanel([
@@ -2580,10 +2595,8 @@ describe("DayDetailPanel W11", () => {
         }),
       ]);
       fireEvent.click(view.getByTestId("cal-chip-settings-m"));
-      fireEvent.click(view.getByTestId("cal-chip-time-m"));
-      const input = view.getByTestId("cal-chip-start-time-m") as HTMLInputElement;
-      fireEvent.change(input, { target: { value: "1030" } });
-      fireEvent.blur(input);
+      fireEvent.change(view.getByTestId("cal-event-start"), { target: { value: "1030" } });
+      fireEvent.click(view.getByTestId("cal-event-save"));
       await waitFor(() => expect(lastUpdate()).toBeDefined());
       expect(lastUpdate()).toMatchObject({
         id: "d-m",
@@ -2596,20 +2609,22 @@ describe("DayDetailPanel W11", () => {
       await waitFor(() => expect(undoToastMock).toHaveBeenCalled());
     });
 
-    it("빈 입력은 해제, 파싱 실패는 되돌리기 — 오타가 저장된 시각을 지우지 않는다", async () => {
+    it("시작 시각이 파싱되지 않으면 저장이 막힌다 — 오타가 저장된 시각을 지우지 않는다", () => {
       mockRows([dbRow({ id: "d-m" })]);
       const view = renderPanel([item({ note_id: "m", kind: "event", start_time: "09:00" })]);
       fireEvent.click(view.getByTestId("cal-chip-settings-m"));
-      fireEvent.click(view.getByTestId("cal-chip-time-m"));
-      const input = view.getByTestId("cal-chip-start-time-m") as HTMLInputElement;
+      fireEvent.change(view.getByTestId("cal-event-start"), { target: { value: "어제" } });
+      expect(view.getByTestId("cal-event-error")).toBeDefined();
+      expect((view.getByTestId("cal-event-save") as HTMLButtonElement).disabled).toBe(true);
+      expect(updates()).toHaveLength(0);
+    });
 
-      fireEvent.change(input, { target: { value: "어제" } });
-      fireEvent.blur(input);
-      expect(input.value).toBe("09:00"); // 직전 값으로 되돌아왔다
-      expect(updates()).toHaveLength(0); // 아무것도 쓰지 않았다
-
-      fireEvent.change(input, { target: { value: "  " } });
-      fireEvent.blur(input);
+    it("종일을 켜고 저장하면 시각이 해제된다", async () => {
+      mockRows([dbRow({ id: "d-m" })]);
+      const view = renderPanel([item({ note_id: "m", kind: "event", start_time: "09:00" })]);
+      fireEvent.click(view.getByTestId("cal-chip-settings-m"));
+      fireEvent.click(view.getByTestId("cal-event-all-day"));
+      fireEvent.click(view.getByTestId("cal-event-save"));
       await waitFor(() => expect(lastUpdate()).toMatchObject({ start_time: null }));
     });
 
@@ -2623,10 +2638,8 @@ describe("DayDetailPanel W11", () => {
         item({ note_id: "m", kind: "event", start_time: "09:00", rrule: "FREQ=WEEKLY" }),
       ]);
       fireEvent.click(view.getByTestId("cal-chip-settings-m"));
-      fireEvent.click(view.getByTestId("cal-chip-repeat-m"));
-      fireEvent.click(view.getByTestId("cal-chip-byday-TH-m"));
+      fireEvent.click(view.getByTestId("cal-event-byday-TH"));
       expect(updates()).toHaveLength(0);
-      expect(view.queryByTestId("modal-shell")).toBeNull();
     });
 
     it("적용 → 확인 → 저장, 오늘 목록에 그대로면 '바뀌었다' 되돌리기 토스트 (D4)", async () => {
@@ -2635,12 +2648,11 @@ describe("DayDetailPanel W11", () => {
         item({ note_id: "m", kind: "event", start_time: "09:00", rrule: "FREQ=WEEKLY" }),
       ]);
       fireEvent.click(view.getByTestId("cal-chip-settings-m"));
-      fireEvent.click(view.getByTestId("cal-chip-repeat-m"));
-      fireEvent.click(view.getByTestId("cal-chip-byday-TH-m"));
-      fireEvent.click(view.getByTestId("cal-chip-repeat-apply-m"));
-      // 적용을 눌러도 아직은 확인 대기 — 포포버 위 모달을 만들지 않으려 메뉴부터 닫힌다.
+      fireEvent.click(view.getByTestId("cal-event-byday-TH"));
+      fireEvent.click(view.getByTestId("cal-event-save"));
+      // 저장을 눌러도 반복은 아직 확인 대기 — 모달 위 모달을 만들지 않으려 수정 모달부터 닫힌다.
+      expect(view.queryByTestId("cal-event-modal")).toBeNull();
       expect(view.getByTestId("modal-shell")).toBeDefined();
-      expect(view.queryByTestId("cal-chip-menu-m")).toBeNull();
       expect(updates()).toHaveLength(0);
 
       fireEvent.click(view.getByRole("button", { name: "Apply" }));
@@ -2670,9 +2682,8 @@ describe("DayDetailPanel W11", () => {
         item({ note_id: "m", kind: "event", start_time: "09:00", rrule: "FREQ=WEEKLY" }),
       ]);
       fireEvent.click(view.getByTestId("cal-chip-settings-m"));
-      fireEvent.click(view.getByTestId("cal-chip-repeat-m"));
-      fireEvent.click(view.getByTestId("cal-chip-byday-TH-m"));
-      fireEvent.click(view.getByTestId("cal-chip-repeat-apply-m"));
+      fireEvent.click(view.getByTestId("cal-event-byday-TH"));
+      fireEvent.click(view.getByTestId("cal-event-save"));
       fireEvent.click(view.getByRole("button", { name: "Apply" }));
       await waitFor(() => expect(lastUpdate()).toBeDefined());
 
@@ -2684,7 +2695,7 @@ describe("DayDetailPanel W11", () => {
       expect(undoToastMock.mock.calls[0][0]).toBe("Removed from today's list");
     });
 
-    it("여러 날 span 에는 시각 칩이 없다 — 끝 시각이 남의 날짜 것이다", () => {
+    it("여러 날 span 에는 종료 시각·날짜 입력이 잠긴다 — 끝 시각이 남의 날짜 것이다", () => {
       mockRows([
         dbRow({ id: "d-trip", note_id: "trip", end_year: 2026, end_month: 8, end_day: 12 }),
       ]);
@@ -2698,31 +2709,35 @@ describe("DayDetailPanel W11", () => {
         }),
       ]);
       fireEvent.click(view.getByTestId("cal-chip-settings-trip"));
-      expect(view.queryByTestId("cal-chip-time-trip")).toBeNull();
-      expect(view.queryByTestId("cal-chip-repeat-trip")).not.toBeNull();
+      expect((view.getByTestId("cal-event-end") as HTMLInputElement).disabled).toBe(true);
+      expect((view.getByTestId("cal-event-date") as HTMLInputElement).disabled).toBe(true);
+      expect(view.getByTestId("cal-event-repeat")).toBeDefined();
     });
 
-    it("펼쳐진 칩은 끌리지 않는다 — 접으면 드래그가 그대로 돌아온다", async () => {
+    it("움직이지 않고 길게 누르면 같은 모달이 뜬다 — 짧게 누르면 안 뜬다", () => {
       mockRows([dbRow({ id: "d-m" })]);
       const view = renderPanel([item({ note_id: "m", kind: "event", start_time: "09:00" })]);
       const chip = view.getByTestId("cal-time-event-m");
-      fireEvent.click(view.getByTestId("cal-chip-settings-m"));
+      const now = vi.spyOn(Date, "now");
+      try {
+        now.mockReturnValue(1_000);
+        fireEvent.pointerDown(chip, { button: 0, pointerId: 1, clientY: 100 });
+        now.mockReturnValue(1_100);
+        fireEvent.pointerUp(chip, { pointerId: 1, clientY: 100 });
+        expect(view.queryByTestId("cal-event-modal")).toBeNull();
 
-      fireEvent.pointerDown(chip, { button: 0, pointerId: 1, clientY: 100 });
-      fireEvent.pointerMove(chip, { pointerId: 1, clientY: 100 + HOUR_ROW_H });
-      fireEvent.pointerUp(chip, { pointerId: 1, clientY: 100 + HOUR_ROW_H });
-      expect(updates()).toHaveLength(0);
-      expect(chip.style.transform).toBe("");
-
-      // 접으면 같은 손짓이 예전처럼 저장까지 간다.
-      fireEvent.click(view.getByTestId("cal-chip-settings-m"));
-      fireEvent.pointerDown(chip, { button: 0, pointerId: 2, clientY: 100 });
-      fireEvent.pointerMove(chip, { pointerId: 2, clientY: 100 + HOUR_ROW_H });
-      fireEvent.pointerUp(chip, { pointerId: 2, clientY: 100 + HOUR_ROW_H });
-      await waitFor(() => expect(lastUpdate()).toMatchObject({ start_time: "10:00" }));
+        now.mockReturnValue(5_000);
+        fireEvent.pointerDown(chip, { button: 0, pointerId: 2, clientY: 100 });
+        now.mockReturnValue(5_600);
+        fireEvent.pointerUp(chip, { pointerId: 2, clientY: 100 });
+        expect(view.getByTestId("cal-event-modal")).toBeDefined();
+        expect(updates()).toHaveLength(0);
+      } finally {
+        now.mockRestore();
+      }
     });
 
-    it("펼친 영역 안에서 시작한 손짓은 칩으로 새지 않는다", () => {
+    it("모달 안에서 시작한 손짓은 축·칩으로 새지 않는다", () => {
       mockRows([dbRow({ id: "d-m" })]);
       const onOpen = vi.fn();
       const view = render(
@@ -2734,11 +2749,11 @@ describe("DayDetailPanel W11", () => {
         />,
       );
       fireEvent.click(view.getByTestId("cal-chip-settings-m"));
-      const menu = view.getByTestId("cal-chip-menu-m");
-      fireEvent.doubleClick(menu);
+      const modal = view.getByTestId("cal-event-modal");
+      fireEvent.doubleClick(modal);
+      fireEvent.pointerDown(modal, { button: 0, pointerId: 3, clientY: 100 });
+      fireEvent.pointerUp(modal, { pointerId: 3, clientY: 180 });
       expect(onOpen).not.toHaveBeenCalled();
-      // ↑/↓ 도 칩의 시각을 바꾸지 않는다(입력 안에서 캐럿을 움직이는 키다).
-      fireEvent.keyDown(menu, { key: "ArrowDown" });
       expect(updates()).toHaveLength(0);
     });
   });
@@ -2756,25 +2771,26 @@ describe("DayDetailPanel W12", () => {
   // 정정(그릴 2026-09-13): 불투명 값이 `--bg` 에서 `--surface-base` 로 바뀌었다 — 색 구조 C1
   // (64c1b269)이 `--bg` 를 캔버스 합성값(질감+글로우 레이어)으로 바꾼 뒤로 작은 칩에 얹으면
   // 배경과 섞여 오히려 더 투명해 보였다(DayDetailPanel.tsx 의 그 위치 주석 참고).
-  it("① 축 칩은 평소 반투명(--hover), 호버·포커스에서 불투명(--surface-base) — D6", () => {
+  // 2026-10-27 — 배경·선택 링·겹침 순서는 인라인이 아니라 `.cal-chip` 클래스(timeChip.css)가 갖는다: 상태 사이를
+  // 이징으로 잇고, 겹친 칩은 호버·포커스·선택 때 맨 위로 올라와 드러난다. jsdom 은 :hover·CSS 를 계산하지 않으므로
+  // 여기서는 "클래스가 주인이고 인라인이 그것을 가리지 않는다"는 계약과 상태 속성만 못 박는다.
+  it("① 축 칩의 배경·선택 링은 .cal-chip 클래스가 갖는다 — 인라인이 가리지 않는다(D6·겹친 칩 정책)", () => {
     const view = renderPanel([item({ note_id: "m", kind: "event", start_time: "09:00" })]);
     const chip = view.getByTestId("cal-time-event-m") as HTMLElement;
-    expect(chip.style.background).toBe("var(--hover)");
+    expect(chip.className).toBe("cal-chip");
+    expect(chip.style.background).toBe("");
+    expect(chip.style.outline).toBe("");
+    expect(chip.style.zIndex).toBe("");
     fireEvent.mouseEnter(chip);
-    expect(chip.style.background).toBe("var(--surface-base)");
-    fireEvent.mouseLeave(chip);
-    expect(chip.style.background).toBe("var(--hover)");
+    expect(chip.style.background).toBe(""); // 호버는 CSS 가 처리한다(JS 로 칠하지 않는다)
+    expect(chip.getAttribute("data-focused")).toBeNull();
   });
 
-  it("① 포커스된 축 칩은 호버가 끝나도 불투명(--surface-base)을 유지한다 — D6", () => {
+  it("① 선택된 칩은 상태 속성으로 표시된다 — 클래스가 그걸로 맨 위·링을 건다(배경은 안 바뀐다)", () => {
     const view = renderPanel([item({ note_id: "m", kind: "event", start_time: "09:00" })], DAY, "m");
     const chip = view.getByTestId("cal-time-event-m") as HTMLElement;
-    // focusedNoteId="m" 이라 처음부터 포커스 상태 — 평소값도 불투명이다.
-    expect(chip.style.background).toBe("var(--surface-base)");
-    fireEvent.mouseEnter(chip);
-    expect(chip.style.background).toBe("var(--surface-base)");
-    fireEvent.mouseLeave(chip);
-    expect(chip.style.background).toBe("var(--surface-base)"); // 포커스가 남아 있으니 --hover 로 안 돌아간다.
+    expect(chip.getAttribute("data-focused")).toBe("true");
+    expect(chip.getAttribute("data-open")).toBeNull();
   });
 
   // ── ② 그립의 조작 신호 ──────────────────────────────────────────────────────
@@ -2790,7 +2806,7 @@ describe("DayDetailPanel W12", () => {
   });
 
   // ── ③ 설정은 칩을 늘리지 않는다 ─────────────────────────────────────────────
-  describe("③ 설정 메뉴는 떠 있고, 칩 크기는 안 바뀐다", () => {
+  describe("③ 수정은 모달로 뜨고, 칩 크기는 안 바뀐다", () => {
     const open = () => {
       const view = renderPanel([item({ note_id: "m", kind: "event", start_time: "09:00" })]);
       const chip = view.getByTestId("cal-time-event-m") as HTMLElement;
@@ -2801,57 +2817,23 @@ describe("DayDetailPanel W12", () => {
 
     it("열어도 칩의 height 는 그 일정의 길이 그대로다 — 'auto' 가 아니다", () => {
       const { view, chip, heightBefore } = open();
-      expect(view.getByTestId("cal-chip-menu-m")).toBeDefined();
+      expect(view.getByTestId("cal-event-modal")).toBeDefined();
       // 30분 = 그 일정의 길이. 늘어나면 "일정이 길어졌다"는 거짓 정보가 된다.
       expect(heightBefore).toBe(`${(30 / 1440) * DAY_AXIS_H}px`);
       expect(chip.style.height).toBe(heightBefore);
-      expect(chip.style.minHeight).toBe(
-        "calc(var(--text-md) * var(--lh-ui) * 3 + var(--space-1) * 2)",
-      );
+      expect(chip.style.minHeight).toBe("");
     });
 
-    it("메뉴는 칩 아래에 **떠서** 뜬다(absolute) — 칩 흐름에 끼어들지 않는다", () => {
+    it("바깥(스크림)을 누르면 닫힌다", () => {
       const { view } = open();
-      const menu = view.getByTestId("cal-chip-menu-m") as HTMLElement;
-      expect(menu.style.position).toBe("absolute");
-      expect(menu.style.top).toBe("100%");
-      // 떠 있으니 불투명 배경 + 그림자, 그리고 칩·현재 시각 선(둘 다 1)보다 위.
-      expect(menu.style.background).toBe("var(--surface-base)");
-      expect(menu.style.boxShadow).toBe("var(--shadow-md)");
-      expect(menu.style.zIndex).toBe("3");
+      fireEvent.click(view.getByTestId("modal-backdrop"));
+      expect(view.queryByTestId("cal-event-modal")).toBeNull();
     });
 
-    it("메뉴 안에서 시작한 pointerdown 은 칩의 드래그 세션을 열지 않는다", () => {
-      const { view, chip } = open();
-      const menu = view.getByTestId("cal-chip-menu-m");
-      fireEvent.pointerDown(menu, { button: 0, pointerId: 11, clientY: 100 });
-      fireEvent.pointerMove(chip, { pointerId: 11, clientY: 100 + HOUR_ROW_H });
-      fireEvent.pointerUp(chip, { pointerId: 11, clientY: 100 + HOUR_ROW_H });
-      expect(chip.style.transform).toBe("");
-      expect(chip.getAttribute("data-moving")).toBeNull();
-    });
-
-    it("바깥을 누르면 닫힌다", () => {
+    it("Escape 로 닫힌다", () => {
       const { view } = open();
-      fireEvent.mouseDown(document.body);
-      expect(view.queryByTestId("cal-chip-menu-m")).toBeNull();
-    });
-
-    it("메뉴 안을 누르는 것은 바깥이 아니다", () => {
-      const { view } = open();
-      fireEvent.mouseDown(view.getByTestId("cal-chip-menu-m"));
-      expect(view.getByTestId("cal-chip-menu-m")).toBeDefined();
-    });
-
-    it("Escape 로 닫힌다 — 메뉴 안에서든 밖에서든", () => {
-      const inside = open();
-      fireEvent.keyDown(inside.view.getByTestId("cal-chip-menu-m"), { key: "Escape" });
-      expect(inside.view.queryByTestId("cal-chip-menu-m")).toBeNull();
-      inside.view.unmount();
-
-      const outside = open();
-      fireEvent.keyDown(document.body, { key: "Escape" });
-      expect(outside.view.queryByTestId("cal-chip-menu-m")).toBeNull();
+      fireEvent.keyDown(window, { key: "Escape" });
+      expect(view.queryByTestId("cal-event-modal")).toBeNull();
     });
   });
 });
@@ -2949,10 +2931,10 @@ describe("달력 W15 — 드래그 손맛과 연동 이동", () => {
     stubRect(chip, 100, 60);
     fireEvent.pointerDown(chip, { button: 0, pointerId: 1, clientY: 130 });
     fireEvent.pointerMove(chip, { pointerId: 1, clientY: 130 + HOUR_ROW_H });
-    expect(chip.style.transform).toBe(`translateY(${HOUR_ROW_H}px)`);
+    expect(chip.style.top).toBe(`${600 * (HOUR_ROW_H / 60)}px`);
 
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(chip.style.transform).toBe("");
+    expect(chip.style.top).toBe(`${540 * (HOUR_ROW_H / 60)}px`);
     expect(chip.textContent).toContain("09:00");
     // 손을 떼도 저장되지 않는다 — 세션 자체가 닫혔다.
     fireEvent.pointerUp(chip, { pointerId: 1, clientY: 130 + HOUR_ROW_H });
@@ -2960,13 +2942,13 @@ describe("달력 W15 — 드래그 손맛과 연동 이동", () => {
     expect(updates()).toHaveLength(0);
   });
 
-  it("① 드래그 전(설정 메뉴만 열린 상태)의 Escape 는 그대로 메뉴만 닫는다 — 회귀", () => {
+  it("① 드래그 전(수정 모달만 열린 상태)의 Escape 는 그대로 모달만 닫는다 — 회귀", () => {
     mockRows([dbRow({ id: "d-a" })]);
     const view = renderPanel([item({ note_id: "a", kind: "event", start_time: "09:00" })]);
     fireEvent.click(view.getByTestId("cal-chip-settings-a"));
-    expect(view.getByTestId("cal-chip-menu-a")).toBeDefined();
+    expect(view.getByTestId("cal-event-modal")).toBeDefined();
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(view.queryByTestId("cal-chip-menu-a")).toBeNull();
+    expect(view.queryByTestId("cal-event-modal")).toBeNull();
   });
 
   // ── ② 지속시간 ──────────────────────────────────────────────────────────────
@@ -2998,33 +2980,35 @@ describe("달력 W15 — 드래그 손맛과 연동 이동", () => {
     expect(view.getByTestId("cal-chip-meta-a").textContent).toBe("09:15");
   });
 
-  // ── ④ 스냅 이징 ─────────────────────────────────────────────────────────────
-  it("④ 트랜지션은 드래그 중에만 걸린다 — 낙관적 자리를 버리는 순간엔 없다", async () => {
-    mockRows([dbRow({ id: "d-a" })], true); // 저장 실패 = 미리보기를 버리는 순간
+  // ── ④ 칩 자체가 스냅 자리 — 화면 = 저장 값 (기하 통일 2026-10-27) ──────────────────────
+  it("④ 드래그 중 칩 자체가 스냅된 자리에 서고(고스트 없음·이징 없음), 놓으면 그 값이 저장된다", async () => {
+    mockRows([dbRow({ id: "d-a", start_time: "09:00", end_time: "10:00" })]);
     const view = renderPanel([
       item({ note_id: "a", kind: "event", start_time: "09:00", end_time: "10:00" }),
     ]);
     const chip = view.getByTestId("cal-time-event-a") as HTMLElement;
     stubRect(chip, 100, 60);
     fireEvent.pointerDown(chip, { button: 0, pointerId: 1, clientY: 130 });
-    fireEvent.pointerMove(chip, { pointerId: 1, clientY: 130 + HOUR_ROW_H });
-    // 커브·지속시간은 `.chip-btn` 이 이미 쓰는 것과 같은 값이다(새 토큰 없음).
-    expect(chip.style.transition).toBe("transform var(--dur-fast) cubic-bezier(0.2, 0, 0, 1)");
-    fireEvent.pointerUp(chip, { pointerId: 1, clientY: 130 + HOUR_ROW_H });
-    await waitFor(() => expect(chip.style.transform).toBe(""));
+    fireEvent.pointerMove(chip, { pointerId: 1, clientY: 130 + 10 }); // 10px ≈ 21분 — 격자(7px)에 안 맞는 값
+    expect(chip.style.top).toBe(`${555 * (HOUR_ROW_H / 60)}px`); // 09:15 칸에 선다
+    expect(chip.style.transform).toBe("");
     expect(chip.style.transition).toBe("");
+    expect(view.queryByTestId("cal-time-drag-ghost")).toBeNull();
+    // 끄는 동안만 스냅 격자가 보인다.
+    expect(view.getByTestId("cal-time-snap-grid")).toBeDefined();
+    fireEvent.pointerUp(chip, { pointerId: 1, clientY: 130 + 10 });
+    await waitFor(() => expect(updates()).toHaveLength(1));
+    expect(updates()[0]).toMatchObject({ start_time: "09:15", end_time: "10:15" });
+    expect(view.queryByTestId("cal-time-snap-grid")).toBeNull();
   });
 
   // ── ⑤ 칩 텍스트 ─────────────────────────────────────────────────────────────
-  it("⑤ 칩 3줄은 좌상단 정렬 + 두 단 큰 글꼴이고, 바닥 높이 식도 같은 토큰이다", () => {
-    const view = renderPanel([item({ note_id: "a", kind: "event", start_time: "09:00" })]);
+  it("⑤ 여러 줄 칩은 좌상단 정렬 + 두 단 큰 글꼴, 바닥 높이는 없다", () => {
+    const view = renderPanel([item({ note_id: "a", kind: "event", start_time: "09:00", end_time: "12:00" })]);
     const chip = view.getByTestId("cal-time-event-a") as HTMLElement;
     expect(chip.style.justifyContent).toBe("flex-start");
     expect(chip.style.fontSize).toBe("var(--text-md)");
-    // 글자를 키웠으면 3줄 바닥도 같이 커져야 한다 — 안 맞추면 커진 글자가 잘린다.
-    expect(chip.style.minHeight).toBe(
-      "calc(var(--text-md) * var(--lh-ui) * 3 + var(--space-1) * 2)",
-    );
+    expect(chip.style.minHeight).toBe("");
   });
 
   // ── ⑥ 연동 이동 ─────────────────────────────────────────────────────────────
@@ -3057,7 +3041,7 @@ describe("달력 W15 — 드래그 손맛과 연동 이동", () => {
     fireEvent.pointerDown(chip, { button: 0, pointerId: 1, clientY: 130 });
     fireEvent.pointerMove(chip, { pointerId: 1, clientY: 130 + HOUR_ROW_H });
     const neighbor = view.getByTestId("cal-time-event-b") as HTMLElement;
-    expect(neighbor.style.transform).toBe(`translateY(${HOUR_ROW_H}px)`);
+    expect(neighbor.style.top).toBe(`${660 * (HOUR_ROW_H / 60)}px`);
     expect(neighbor.getAttribute("data-moving")).toBe("true");
     expect(view.getByTestId("cal-chip-meta-b").textContent).toContain("11:00–12:00");
   });
@@ -3109,16 +3093,16 @@ describe("달력 W15 — 드래그 손맛과 연동 이동", () => {
     expect(undoToastMock).toHaveBeenCalledTimes(1);
   });
 
-  it("⑥ 이웃이 MIN_SLOT_MIN(30분) 아래로 줄지 않게 리사이즈 폭을 다시 죈다", async () => {
-    // b 는 10:00-10:45(45분) — a 의 끝을 1시간 늘리려 해도 b 가 30분 밑으로는 못 준다.
+  it("⑥ 이웃이 최소 길이(15분) 아래로 줄지 않게 리사이즈 폭을 다시 죈다", async () => {
+    // b 는 10:00-10:30(30분) — a 의 끝을 1시간 늘리려 해도 b 가 15분 밑으로는 못 준다.
     // b 가 밀릴 수 있는 한계는 15분(10:15)뿐이라 a 의 끝도 거기서 멈춰야 한다.
     mockRows([
       dbRow({ id: "d-a", note_id: "a", start_time: "09:00", end_time: "10:00" }),
-      dbRow({ id: "d-b", note_id: "b", start_time: "10:00", end_time: "10:45" }),
+      dbRow({ id: "d-b", note_id: "b", start_time: "10:00", end_time: "10:30" }),
     ]);
     const view = renderPanel([
       item({ note_id: "a", kind: "event", start_time: "09:00", end_time: "10:00" }),
-      item({ note_id: "b", kind: "event", start_time: "10:00", end_time: "10:45" }),
+      item({ note_id: "b", kind: "event", start_time: "10:00", end_time: "10:30" }),
     ]);
     dragChip(view.getByTestId("cal-time-handle-end-a"), 0, HOUR_ROW_H); // +1시간 늘리려 함
     await waitFor(() => expect(updates()).toHaveLength(2));
@@ -3127,7 +3111,7 @@ describe("달력 W15 — 드래그 손맛과 연동 이동", () => {
       expect.objectContaining({ id: "d-b", start_time: "10:15" }),
     ]);
     // b 의 끝은 그대로다 — 이동이 아니라 한쪽 경계만 옮기는 리사이즈다.
-    expect(updates()[1]).toMatchObject({ end_time: "10:45" });
+    expect(updates()[1]).toMatchObject({ end_time: "10:30" });
   });
 
   it("⑥ 끝이 없던 이웃은 시작 손잡이 연동에서 빠진다 — 없는 끝을 지어내지 않는다", async () => {
@@ -3147,7 +3131,43 @@ describe("달력 W15 — 드래그 손맛과 연동 이동", () => {
     expect(updates()[0]).toMatchObject({ id: "d-b", start_time: "10:15" });
   });
 
-  it("⑥ 여러 날 span 이웃은 연동에서 빠지고, 잡은 칩만 옮겨진다", async () => {
+  // 오너 2026-10-27 — 일정이 겹치지 않게: 끌거나 늘리면 이웃이 자연스럽게 밀리거나 줄어든다.
+  it("⑥ 간격 있는 이웃 쪽으로 옮겨 겹치면 겹친 만큼만 밀려난다 — 겹침이 생기지 않는다", async () => {
+    mockRows([
+      dbRow({ id: "d-a", note_id: "a", start_time: "09:00", end_time: "10:00" }),
+      dbRow({ id: "d-b", note_id: "b", start_time: "10:30", end_time: "11:30" }),
+    ]);
+    const view = renderPanel([
+      item({ note_id: "a", kind: "event", start_time: "09:00", end_time: "10:00" }),
+      item({ note_id: "b", kind: "event", start_time: "10:30", end_time: "11:30" }),
+    ]);
+    dragChip(view.getByTestId("cal-time-event-a"), 30, HOUR_ROW_H); // +1시간 → 10:00–11:00, b 와 30분 겹침
+    await waitFor(() => expect(updates()).toHaveLength(2));
+    expect(updates()).toEqual([
+      expect.objectContaining({ id: "d-a", start_time: "10:00", end_time: "11:00" }),
+      expect.objectContaining({ id: "d-b", start_time: "11:00", end_time: "12:00" }), // 30분만 밀림, 길이 유지
+    ]);
+  });
+
+  it("⑥ 끝 손잡이를 늘려 이웃과 겹치면 이웃의 시작이 따라오며 줄어든다", async () => {
+    mockRows([
+      dbRow({ id: "d-a", note_id: "a", start_time: "09:00", end_time: "10:00" }),
+      dbRow({ id: "d-b", note_id: "b", start_time: "10:30", end_time: "11:30" }),
+    ]);
+    const view = renderPanel([
+      item({ note_id: "a", kind: "event", start_time: "09:00", end_time: "10:00" }),
+      item({ note_id: "b", kind: "event", start_time: "10:30", end_time: "11:30" }),
+    ]);
+    dragChip(view.getByTestId("cal-time-handle-end-a"), 0, HOUR_ROW_H); // 끝 +1시간 → 11:00, b 시작 10:30 과 겹침
+    await waitFor(() => expect(updates()).toHaveLength(2));
+    expect(updates()).toEqual([
+      expect.objectContaining({ id: "d-a", end_time: "11:00" }),
+      expect.objectContaining({ id: "d-b", start_time: "11:00" }),
+    ]);
+    expect(updates()[1]).toMatchObject({ end_time: "11:30" }); // 이웃의 끝은 그대로(줄어듦)
+  });
+
+  it("⑥ 여러 날 span 이웃은 밀 수 없는 벽이다 — 잡은 칩이 그 앞에서 멈춘다", async () => {
     mockRows([
       dbRow({ id: "d-a", note_id: "a" }),
       dbRow({
@@ -3171,10 +3191,12 @@ describe("달력 W15 — 드래그 손맛과 연동 이동", () => {
         end_time: "18:00",
       }),
     ]);
+    // 10:00 에 시작하는 span 이 벽이라 a 는 맞닿은 채로 더 못 내려간다 — 밀 수 없는 이웃 앞에서 멈춘다.
     dragChip(view.getByTestId("cal-time-event-a"), 30, 7);
-    await waitFor(() => expect(updates()).toHaveLength(1));
-    expect(updates()[0]).toMatchObject({ id: "d-a", start_time: "09:15" });
-    expect(view.getByTestId("cal-time-event-trip").style.transform).toBe("");
+    await new Promise((r) => setTimeout(r, 30));
+    expect(updates()).toHaveLength(0);
+    expect(view.getByTestId("cal-time-event-a").style.top).toBe(`${540 * (HOUR_ROW_H / 60)}px`);
+    expect(view.getByTestId("cal-time-event-trip").style.top).toBe(`${600 * (HOUR_ROW_H / 60)}px`);
   });
 
   it("⑥ 키보드 ↑/↓ 도 연동된다 — 같은 기능이 같은 경험이어야 한다", async () => {
@@ -3220,16 +3242,18 @@ describe("달력 W17 — 가장자리 자동 스크롤", () => {
   /** 보이는 창 400px → 캔버스 672px 중 아래 272px 이 화면 밖(= scrollTop 최대치). */
   const VIEW_H = 400;
   const MAX_SCROLL = DAY_AXIS_H - VIEW_H;
-  /** 구현의 상수와 같은 값. 틱 하나가 7px = **정확히 15분**이다(PX_PER_MIN = 28/60). */
-  const TICK_MS = 16;
-  const TICK_PX = 7;
+  /** 가장자리에 이만큼 머문 뒤에야 흐른다(useAxisAutoScroll). 속도는 깊이 비례라 픽셀 수는 정확히 세지 않고
+   *  방향·멈춤·경계·동기화만 본다. */
+  const DWELL_MS = 250;
   /** 하단 32px 안 / 상단 32px 안 — 그 밖이면 자동 스크롤이 안 걸린다. */
   const BOTTOM_EDGE = VIEW_H - 5;
   const TOP_EDGE = 5;
 
   beforeEach(() => {
     // Date 는 실물 그대로 둔다 — 현재 시각 눈금이 "오늘"을 보는 데 쓰고, 이 블록은 타이머만 민다.
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+    vi.useFakeTimers({
+      toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "requestAnimationFrame", "cancelAnimationFrame", "performance"],
+    });
   });
   afterEach(() => {
     vi.useRealTimers();
@@ -3270,9 +3294,9 @@ describe("달력 W17 — 가장자리 자동 스크롤", () => {
     return { view, axis };
   }
 
-  const ticks = (n: number) =>
+  const flow = (ms: number) =>
     act(() => {
-      vi.advanceTimersByTime(TICK_MS * n);
+      vi.advanceTimersByTime(ms);
     });
 
   /** 09:00–10:00 칩 하나를 가운데(= 이동 모드)로 잡고 clientY 로 옮긴다. 손을 떼지 않는다. */
@@ -3292,14 +3316,15 @@ describe("달력 W17 — 가장자리 자동 스크롤", () => {
     expect(axis.scrollTop).toBe(0);
     expect(chip.textContent).toContain("18:30");
 
-    ticks(2); // 14px = 30분
-    expect(axis.scrollTop).toBe(2 * TICK_PX);
+    flow(DWELL_MS - 50); // 머무름 전 — 스치기만 한 손에는 안 흐른다
+    expect(axis.scrollTop).toBe(0);
+    flow(350);
+    const first = axis.scrollTop;
+    expect(first).toBeGreaterThan(0);
     // 포인터는 그대로인데 축이 흘렀다 — 미리보기가 따라오지 않으면 칩이 커서를 놓친다.
-    expect(chip.textContent).toContain("19:00");
-
-    ticks(4);
-    expect(axis.scrollTop).toBe(6 * TICK_PX);
-    expect(chip.textContent).toContain("20:00");
+    expect(chip.textContent).not.toContain("18:30");
+    flow(300);
+    expect(axis.scrollTop).toBeGreaterThan(first);
     fireEvent.pointerCancel(chip, { pointerId: 1 });
   });
 
@@ -3307,7 +3332,7 @@ describe("달력 W17 — 가장자리 자동 스크롤", () => {
     const { view, axis } = setup(timedItem());
     axis.scrollTop = 10;
     const chip = grabChip(view, TOP_EDGE);
-    ticks(5); // 35px 어치를 밀지만 남은 것은 10px 뿐이다
+    flow(1000); // 남은 것은 10px 뿐이다
     expect(axis.scrollTop).toBe(0);
     fireEvent.pointerCancel(chip, { pointerId: 1 });
   });
@@ -3316,7 +3341,7 @@ describe("달력 W17 — 가장자리 자동 스크롤", () => {
     const { view, axis } = setup(timedItem());
     axis.scrollTop = MAX_SCROLL - 3;
     const chip = grabChip(view, BOTTOM_EDGE);
-    ticks(10);
+    flow(3000);
     expect(axis.scrollTop).toBe(MAX_SCROLL);
     fireEvent.pointerCancel(chip, { pointerId: 1 });
   });
@@ -3324,12 +3349,12 @@ describe("달력 W17 — 가장자리 자동 스크롤", () => {
   it("가장자리를 벗어나 가운데로 돌아오면 멈춘다", () => {
     const { view, axis } = setup(timedItem());
     const chip = grabChip(view, BOTTOM_EDGE);
-    ticks(2);
+    flow(600);
     const stopped = axis.scrollTop;
     expect(stopped).toBeGreaterThan(0);
 
     fireEvent.pointerMove(chip, { pointerId: 1, clientX: 50, clientY: VIEW_H / 2 });
-    ticks(10);
+    flow(500);
     expect(axis.scrollTop).toBe(stopped);
     fireEvent.pointerCancel(chip, { pointerId: 1 });
   });
@@ -3337,20 +3362,22 @@ describe("달력 W17 — 가장자리 자동 스크롤", () => {
   it("손을 떼면 루프가 끊긴다 — 그 뒤로는 시간이 지나도 안 흐른다", () => {
     const { view, axis } = setup(timedItem());
     const chip = grabChip(view, BOTTOM_EDGE);
-    ticks(1);
+    flow(600);
     const stopped = axis.scrollTop;
+    expect(stopped).toBeGreaterThan(0);
     fireEvent.pointerUp(chip, { pointerId: 1, clientX: 50, clientY: BOTTOM_EDGE });
-    ticks(20);
+    flow(500);
     expect(axis.scrollTop).toBe(stopped);
   });
 
   it("Escape 로 취소해도 루프가 끊긴다", () => {
     const { view, axis } = setup(timedItem());
     const chip = grabChip(view, BOTTOM_EDGE);
-    ticks(1);
+    flow(600);
     const stopped = axis.scrollTop;
+    expect(stopped).toBeGreaterThan(0);
     fireEvent.keyDown(window, { key: "Escape" });
-    ticks(20);
+    flow(500);
     expect(axis.scrollTop).toBe(stopped);
     // 미리보기도 걷혔다 — 칩은 행의 값(09:00)으로 돌아간다.
     expect(chip.textContent).toContain("09:00");
@@ -3363,9 +3390,9 @@ describe("달력 W17 — 가장자리 자동 스크롤", () => {
     fireEvent.pointerMove(canvas, { pointerId: 9, clientX: 50, clientY: BOTTOM_EDGE });
     expect(view.getByTestId("cal-time-new-range").textContent).toBe("09:00–14:00");
 
-    ticks(2); // 14px = 30분. 손은 그대로인데 축이 흘렀으니 끝이 30분 더 내려간다.
-    expect(axis.scrollTop).toBe(2 * TICK_PX);
-    expect(view.getByTestId("cal-time-new-range").textContent).toBe("09:00–14:30");
+    flow(600); // 손은 그대로인데 축이 흘렀으니 끝이 더 내려간다.
+    expect(axis.scrollTop).toBeGreaterThan(0);
+    expect(view.getByTestId("cal-time-new-range").textContent).not.toBe("09:00–14:00");
     fireEvent.pointerCancel(canvas, { pointerId: 9 });
   });
 
@@ -3376,11 +3403,12 @@ describe("달력 W17 — 가장자리 자동 스크롤", () => {
     fireEvent.pointerMove(grip, { pointerId: 7, clientX: 50, clientY: BOTTOM_EDGE });
     expect(axis.scrollTop).toBe(0);
 
-    ticks(3);
-    expect(axis.scrollTop).toBe(3 * TICK_PX);
+    flow(600);
+    const flowed = axis.scrollTop;
+    expect(flowed).toBeGreaterThan(0);
     fireEvent.pointerCancel(grip, { pointerId: 7 });
-    ticks(10);
-    expect(axis.scrollTop).toBe(3 * TICK_PX); // 취소로 루프가 끊겼다
+    flow(500);
+    expect(axis.scrollTop).toBe(flowed); // 취소로 루프가 끊겼다
   });
 });
 
@@ -3471,5 +3499,124 @@ describe("달력 축 확대 — Ctrl/Cmd+wheel", () => {
     wheel(axis, -100, true);
     // 여전히 09:00 그대로 시작한다 — 확대가 시각을 바꾸지 않는다.
     expect(chip().textContent).toContain("09:00");
+  });
+});
+
+describe("달력 익일 구간 — 24시 아래에 다음 날 새벽을 잇는다", () => {
+  const NEXT = "2026-08-10";
+
+  function dbRow(p: Partial<NoteDate> & Pick<NoteDate, "id" | "note_id">): NoteDate {
+    return {
+      position: 0,
+      year: 2026,
+      month: 8,
+      day: 9,
+      end_year: null,
+      end_month: null,
+      end_day: null,
+      remind: false,
+      created_at: "2026-08-01T00:00:00Z",
+      start_time: "22:00",
+      end_time: "23:00",
+      remind_offset_min: null,
+      rrule: null,
+      label: null,
+      ...p,
+    };
+  }
+
+  /** dashboard_calendar 는 익일 항목을, note_dates_list/update 는 주어진 행을 돌려주는 목. */
+  function mockWorld(rows: NoteDate[], tailItems: CalendarItem[]) {
+    callMock.mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === "dashboard_calendar") return { year: 2026, month: 8, items: tailItems };
+      if (cmd === "note_dates_list") return { dates: rows.filter((r) => r.note_id === args?.note_id) };
+      if (cmd === "note_date_update") return { ...rows[0], ...args };
+      throw { code: "IO", message: "test" };
+    });
+  }
+  const updatePayload = () =>
+    (callMock.mock.calls.find((c) => c[0] === "note_date_update") ?? [])[1] as Record<string, unknown> | undefined;
+  function drag(el: HTMLElement, dy: number) {
+    fireEvent.pointerDown(el, { button: 0, pointerId: 1, clientY: 100 });
+    fireEvent.pointerMove(el, { pointerId: 1, clientY: 100 + dy });
+    fireEvent.pointerUp(el, { pointerId: 1, clientY: 100 + dy });
+  }
+  const tailItem = (p: Partial<CalendarItem> = {}) =>
+    item({ note_id: "dawn", kind: "event", span_start: NEXT, span_end: NEXT, start_time: "01:00", end_time: "02:00", ...p });
+
+  beforeEach(() => {
+    useSettingsStore.setState({ activeWorkspaceId: "ws1", calendarAxisTailHours: 3 });
+  });
+
+  it("자정 구분선과 다음 날 날짜 라벨, 익일 구간의 일정을 24:00 이후 좌표에 그린다", async () => {
+    mockWorld([], [tailItem()]);
+    const { getByTestId, findByTestId } = renderPanel([]);
+    expect(getByTestId("cal-time-midnight")).toBeTruthy();
+    expect(getByTestId("cal-time-midnight-label").textContent).toContain("08/10");
+    expect(getByTestId("cal-time-axis-canvas").style.height).toBe(`${(HOUR_ROW_H * 27)}px`);
+    const chip = await findByTestId("cal-time-event-dawn");
+    expect(parseFloat(chip.style.top)).toBeCloseTo((1500 * HOUR_ROW_H) / 60, 3);
+  });
+
+  it("설정 0 이면 익일 구간이 없다(당일만) — 구분선 없음, 캔버스는 24시간", () => {
+    useSettingsStore.setState({ calendarAxisTailHours: 0 });
+    mockWorld([], [tailItem()]);
+    const { queryByTestId, getByTestId } = renderPanel([]);
+    expect(queryByTestId("cal-time-midnight")).toBeNull();
+    expect(getByTestId("cal-time-axis-canvas").style.height).toBe(`${HOUR_ROW_H * 24}px`);
+  });
+
+  it("당일 일정을 자정 너머로 끌면 시각과 날짜가 같이 다음 날로 저장된다", async () => {
+    const rows = [dbRow({ id: "d-late", note_id: "late" })];
+    mockWorld(rows, []);
+    const { getByTestId } = renderPanel([
+      item({ note_id: "late", kind: "event", start_time: "22:00", end_time: "23:00" }),
+    ]);
+    drag(getByTestId("cal-time-event-late"), 2 * HOUR_ROW_H); // +2시간 → 24:00
+    await waitFor(() => expect(updatePayload()).toBeDefined());
+    expect(updatePayload()).toMatchObject({
+      id: "d-late",
+      year: 2026,
+      month: 8,
+      day: 10,
+      start_time: "00:00",
+      end_time: "01:00",
+    });
+  });
+
+  it("익일 구간의 일정을 자정 앞으로 끌면 날짜가 당일로 돌아온다", async () => {
+    const rows = [dbRow({ id: "d-dawn", note_id: "dawn", day: 10, start_time: "01:00", end_time: "02:00" })];
+    mockWorld(rows, [tailItem({ date_id: "d-dawn" })]);
+    const { findByTestId } = renderPanel([]);
+    const chip = await findByTestId("cal-time-event-dawn");
+    drag(chip, -2 * HOUR_ROW_H); // −2시간 → 23:00–24:00
+    await waitFor(() => expect(updatePayload()).toBeDefined());
+    expect(updatePayload()).toMatchObject({
+      id: "d-dawn",
+      day: 9,
+      start_time: "23:00",
+      end_time: "23:59", // 자정은 23:59 로 저장(I3)
+    });
+  });
+
+  it("익일 구간 안에서 옮기면 날짜는 그대로, 시각만 바뀐다", async () => {
+    const rows = [dbRow({ id: "d-dawn", note_id: "dawn", day: 10, start_time: "01:00", end_time: "02:00" })];
+    mockWorld(rows, [tailItem({ date_id: "d-dawn" })]);
+    const { findByTestId } = renderPanel([]);
+    const chip = await findByTestId("cal-time-event-dawn");
+    drag(chip, HOUR_ROW_H); // +1시간
+    await waitFor(() => expect(updatePayload()).toBeDefined());
+    expect(updatePayload()).toMatchObject({ day: 10, start_time: "02:00", end_time: "03:00" });
+  });
+
+  it("반복 일정은 날짜를 못 바꾼다 — 자정 앞에서 멈춘다", async () => {
+    const rows = [dbRow({ id: "d-rep", note_id: "rep", start_time: "22:00", end_time: "23:00", rrule: "FREQ=DAILY" })];
+    mockWorld(rows, []);
+    const { getByTestId } = renderPanel([
+      item({ note_id: "rep", kind: "event", start_time: "22:00", end_time: "23:00", rrule: "FREQ=DAILY", date_id: "d-rep" }),
+    ]);
+    drag(getByTestId("cal-time-event-rep"), 4 * HOUR_ROW_H);
+    await waitFor(() => expect(updatePayload()).toBeDefined());
+    expect(updatePayload()).toMatchObject({ day: 9, start_time: "23:00", end_time: "23:59" });
   });
 });
